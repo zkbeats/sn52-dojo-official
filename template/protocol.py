@@ -1,9 +1,10 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 import uuid
+from attr import define, field
 import bittensor as bt
 from pydantic import BaseModel, Field, validator
 
-from commons.utils import get_new_uuid
+from commons.utils import get_epoch_time, get_new_uuid
 
 # TODO(developer): Rewrite with your protocol definition.
 
@@ -77,7 +78,7 @@ class Rank(BaseModel):
     score: float = Field(default=0.0, description="Score of the completion")
 
 
-class Protocol(bt.Synapse):
+class RankingRequest(bt.Synapse):
     """
     A protocol representation which uses bt.Synapse as its base.
     This protocol helps in handling dummy request and response communication between
@@ -85,6 +86,10 @@ class Protocol(bt.Synapse):
     """
 
     # Required request input, filled by sending dendrite caller.
+    epoch_timestamp: int = Field(
+        default=get_epoch_time(),
+        description="Epoch timestamp for the request",
+    )
     request_id: str = Field(
         default=str(get_new_uuid()),
         description="Unique identifier for the request",
@@ -110,3 +115,10 @@ class Protocol(bt.Synapse):
     ranks: List[Rank] = Field(
         default=[], description="List of ranks for each completion"
     )
+
+
+@define(kw_only=True, frozen=True, slots=True)
+class RankingResult:
+    # Each request id has multiple completions, where each miner scores each of these completions.
+    request_id: str
+    cid_to_hotkey_to_score: Dict[str, Dict[str, float]]

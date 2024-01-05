@@ -1,12 +1,14 @@
 import asyncio
 import time
+from typing import List
 
 import bittensor as bt
+from commons.scoring import Scoring
 
 import template
-from commons.utils import get_new_uuid
+from commons.utils import get_epoch_time, get_new_uuid
 from template.base.validator import BaseValidatorNeuron
-from template.protocol import Completion, Protocol
+from template.protocol import Completion, RankingRequest, RankingResult
 from template.utils.uids import get_random_uids
 from template.validator.reward import get_rewards
 
@@ -53,7 +55,7 @@ class Validator(BaseValidatorNeuron):
 
         # construct our synapse
         # TODO change to real data
-        synapse = Protocol(
+        synapse = RankingRequest(
             n_completions=2,
             pid=str(get_new_uuid()),
             prompt="What is your name?",
@@ -68,7 +70,7 @@ class Validator(BaseValidatorNeuron):
         )
 
         # The dendrite client queries the network.
-        responses = await self.dendrite(
+        responses: List[RankingRequest] = await self.dendrite(
             # Send the query to selected miner axons in the network.
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             # Construct a dummy query. This simply contains a single integer.
@@ -81,6 +83,7 @@ class Validator(BaseValidatorNeuron):
         # Log the results for monitoring purposes.
         bt.logging.info(f"Received responses: {responses}")
 
+        # TODO collect responses into a result
         # TODO(developer): Define how the validator scores responses.
         # Adjust the scores based on responses from miners.
         rewards = get_rewards(self, query=self.step, responses=responses)
