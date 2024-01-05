@@ -66,6 +66,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
+        self.moving_averaged_scores = None
 
     def serve_axon(self):
         """Serve axon to enable external connections."""
@@ -213,6 +214,8 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.warning(
                 f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
+        if self.moving_averaged_scores is None:
+            self.moving_averaged_scores = self.scores.clone().detach()
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
