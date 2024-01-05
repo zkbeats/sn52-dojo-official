@@ -56,15 +56,22 @@ class Validator(BaseValidatorNeuron):
         # construct our synapse
         # TODO change to real data
         synapse = RankingRequest(
-            n_completions=2,
+            n_completions=3,
+            request_id=str(get_new_uuid()),
             pid=str(get_new_uuid()),
             prompt="What is your name?",
             completions=[
                 Completion(
-                    text="My name is Assistant, and I am a helpful assisstant created by OpenAI."
+                    cid=str(get_new_uuid()),
+                    text="My name is Assistant, and I am a helpful assisstant created by OpenAI.",
                 ),
                 Completion(
-                    text="My name is Llama, and I am an assistant created by Meta."
+                    cid=str(get_new_uuid()),
+                    text="My name is Llama, and I am an assistant created by Meta.",
+                ),
+                Completion(
+                    cid=str(get_new_uuid()),
+                    text="My name is GPT-3, and I am an AI created by OpenAI.",
                 ),
             ],
         )
@@ -84,6 +91,12 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Received responses: {responses}")
 
         # TODO collect responses into a result
+        print(self.metagraph.axons)
+        for i, r in enumerate(responses):
+            print(f"Index : {i}, hotkey: {r.axon.hotkey}")
+        parsed_result = Scoring._map_responses_to_result(responses)
+        print(f"{parsed_result=}")
+
         # TODO(developer): Define how the validator scores responses.
         # Adjust the scores based on responses from miners.
         rewards = get_rewards(self, query=self.step, responses=responses)

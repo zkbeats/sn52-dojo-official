@@ -4,7 +4,7 @@ from attr import define, field
 import bittensor as bt
 from pydantic import BaseModel, Field, validator
 
-from commons.utils import get_epoch_time, get_new_uuid
+from commons.utils import get_epoch_time
 
 # TODO(developer): Rewrite with your protocol definition.
 
@@ -67,7 +67,6 @@ class Completion(BaseModel):
         allow_mutation = False
 
     cid: str = Field(
-        default=str(get_new_uuid()),
         description="Unique identifier for the completion",
     )
     text: str = Field(description="Text of the completion")
@@ -91,7 +90,6 @@ class RankingRequest(bt.Synapse):
         description="Epoch timestamp for the request",
     )
     request_id: str = Field(
-        default=str(get_new_uuid()),
         description="Unique identifier for the request",
         allow_mutation=False,
     )
