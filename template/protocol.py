@@ -4,7 +4,7 @@ from attr import define, field
 import bittensor as bt
 from pydantic import BaseModel, Field, validator
 
-from commons.utils import get_epoch_time
+from commons.utils import get_epoch_time, get_new_uuid
 
 # TODO(developer): Rewrite with your protocol definition.
 
@@ -67,6 +67,7 @@ class Completion(BaseModel):
         allow_mutation = False
 
     cid: str = Field(
+        default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
     text: str = Field(description="Text of the completion")
@@ -90,10 +91,12 @@ class RankingRequest(bt.Synapse):
         description="Epoch timestamp for the request",
     )
     request_id: str = Field(
+        default_factory=get_new_uuid,
         description="Unique identifier for the request",
         allow_mutation=False,
     )
     pid: str = Field(
+        default_factory=get_new_uuid,
         description="Unique identifier for the prompt",
     )
     prompt: str = Field(
@@ -113,10 +116,3 @@ class RankingRequest(bt.Synapse):
     ranks: List[Rank] = Field(
         default=[], description="List of ranks for each completion"
     )
-
-
-@define(kw_only=True, frozen=True, slots=True)
-class RankingResult:
-    # Each request id has multiple completions, where each miner scores each of these completions.
-    request_id: str
-    cid_to_hotkey_to_score: Dict[str, Dict[str, float]]

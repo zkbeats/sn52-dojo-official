@@ -22,8 +22,10 @@ import argparse
 import bittensor as bt
 from loguru import logger
 
+from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
 
-def check_config(cls, config: "bt.Config"):
+
+def check_config(config: "bt.Config"):
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
@@ -56,14 +58,28 @@ def check_config(cls, config: "bt.Config"):
         )
 
 
-def add_args(cls, parser):
+def add_args(parser):
     """
     Adds relevant arguments to the parser for operation.
     """
     # Netuid Arg: The netuid of the subnet to connect to.
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
 
-    neuron_type = "validator" if "miner" not in cls.__name__.lower() else "miner"
+    parser.add_argument(
+        "--neuron.type",
+        type=str,
+        help="Whether running a miner or validator",
+    )
+    args, unknown = parser.parse_known_args()
+    neuron_type = None
+    if known_args := vars(args):
+        if "neuron.type" not in known_args:
+            raise UnspecifiedNeuronType("neuron.type not specified during runtime")
+        if known_args["neuron.type"] not in ["miner", "validator"]:
+            raise InvalidNeuronType(
+                f"neuron.type must be either 'miner' or 'validator', got {known_args['neuron.type']}"
+            )
+        neuron_type = known_args["neuron.type"]
 
     parser.add_argument(
         "--neuron.name",
@@ -162,7 +178,7 @@ def add_args(cls, parser):
         )
 
 
-def config(cls):
+def config():
     """
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
     """
@@ -171,5 +187,5 @@ def config(cls):
     bt.subtensor.add_args(parser)
     bt.logging.add_args(parser)
     bt.axon.add_args(parser)
-    cls.add_args(parser)
+    add_args(parser)
     return bt.config(parser)

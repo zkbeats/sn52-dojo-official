@@ -114,6 +114,7 @@ class BaseValidatorNeuron(BaseNeuron):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
+        self.load_state()
         # Check that validator is registered on the network.
         self.sync()
 

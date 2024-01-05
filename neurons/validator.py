@@ -1,16 +1,13 @@
 import asyncio
-import time
 from typing import List
 
 import bittensor as bt
 from commons.scoring import Scoring
 
-import template
-from commons.utils import get_epoch_time, get_new_uuid
+from commons.utils import get_new_uuid
 from template.base.validator import BaseValidatorNeuron
-from template.protocol import Completion, RankingRequest, RankingResult
+from template.protocol import Completion, RankingRequest
 from template.utils.uids import get_random_uids
-from template.validator.reward import get_rewards
 
 
 class Validator(BaseValidatorNeuron):
@@ -25,11 +22,6 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
-        bt.logging.info("load_state()")
-        self.load_state()
-
-        # TODO(developer): Anything specific to your use case you can do here
-
     async def forward(self):
         """
         Validator forward pass. Consists of:
@@ -39,17 +31,6 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-        # TODO(developer): Rewrite this function based on your protocol definition.
-        return await self._forward()
-
-    async def _forward(self):
-        """
-        The forward function is called by the validator every time step.
-        It is responsible for querying the network and scoring the responses.
-        Args:
-            self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
-        """
-        # TODO(developer): Define how the validator selects a miner to query, how often, etc.
         # get_random_uids is an example method, but you can replace it with your own.
         miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
 
@@ -57,20 +38,16 @@ class Validator(BaseValidatorNeuron):
         # TODO change to real data
         synapse = RankingRequest(
             n_completions=3,
-            request_id=str(get_new_uuid()),
-            pid=str(get_new_uuid()),
+            pid=get_new_uuid(),
             prompt="What is your name?",
             completions=[
                 Completion(
-                    cid=str(get_new_uuid()),
                     text="My name is Assistant, and I am a helpful assisstant created by OpenAI.",
                 ),
                 Completion(
-                    cid=str(get_new_uuid()),
                     text="My name is Llama, and I am an assistant created by Meta.",
                 ),
                 Completion(
-                    cid=str(get_new_uuid()),
                     text="My name is GPT-3, and I am an AI created by OpenAI.",
                 ),
             ],
@@ -90,33 +67,17 @@ class Validator(BaseValidatorNeuron):
         # Log the results for monitoring purposes.
         bt.logging.info(f"Received responses: {responses}")
 
-        # TODO collect responses into a result
-        print(self.metagraph.axons)
-        for i, r in enumerate(responses):
-            print(f"Index : {i}, hotkey: {r.axon.hotkey}")
-        parsed_result = Scoring._map_responses_to_result(responses)
-        print(f"{parsed_result=}")
-
-        # TODO(developer): Define how the validator scores responses.
         # Adjust the scores based on responses from miners.
-        rewards = get_rewards(self, query=self.step, responses=responses)
-
-        bt.logging.info(f"Scored responses: {rewards}")
+        rewards = Scoring.score_responses(responses=responses)
         # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
+        # TODO refactor to accept dict of hotkey to score
         self.update_scores(rewards, miner_uids)
 
 
-# TODO hook up to fastapi server
 async def main():
-    validator = Validator()
-    await validator.run()
+    await Validator().run()
 
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
     asyncio.run(main())
-
-    # with Validator() as validator:
-    #     while True:
-    #         bt.logging.info("Validator running...", time.time())
-    #         time.sleep(5)
