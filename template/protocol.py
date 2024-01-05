@@ -1,24 +1,9 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
-import typing
+from typing import List, Optional
+import uuid
 import bittensor as bt
+from pydantic import BaseModel, Field, validator
+
+from commons.utils import get_new_uuid
 
 # TODO(developer): Rewrite with your protocol definition.
 
@@ -55,7 +40,7 @@ class Dummy(bt.Synapse):
     dummy_input: int
 
     # Optional request output, filled by recieving axon.
-    dummy_output: typing.Optional[int] = None
+    dummy_output: Optional[int] = None
 
     def deserialize(self) -> int:
         """
@@ -74,3 +59,54 @@ class Dummy(bt.Synapse):
         5
         """
         return self.dummy_output
+
+
+class Completion(BaseModel):
+    class Config:
+        allow_mutation = False
+
+    cid: str = Field(
+        default=str(get_new_uuid()),
+        description="Unique identifier for the completion",
+    )
+    text: str = Field(description="Text of the completion")
+
+
+class Rank(BaseModel):
+    cid: str = Field(description="Unique identifier for the completion")
+    score: float = Field(default=0.0, description="Score of the completion")
+
+
+class Protocol(bt.Synapse):
+    """
+    A protocol representation which uses bt.Synapse as its base.
+    This protocol helps in handling dummy request and response communication between
+    the miner and the validator.
+    """
+
+    # Required request input, filled by sending dendrite caller.
+    request_id: str = Field(
+        default=str(get_new_uuid()),
+        description="Unique identifier for the request",
+        allow_mutation=False,
+    )
+    pid: str = Field(
+        description="Unique identifier for the prompt",
+    )
+    prompt: str = Field(
+        description="Prompt or query from the user sent the LLM",
+        allow_mutation=False,
+    )
+    n_completions: int = Field(
+        description="Number of completions for miner to score/rank",
+        allow_mutation=False,
+    )
+    completions: List[Completion] = Field(
+        description="List of completions for the prompt",
+        allow_mutation=False,
+    )
+    # # Optional request output, filled by recieving axon.
+    # output: Optional[Output] = None
+    ranks: List[Rank] = Field(
+        default=[], description="List of ranks for each completion"
+    )

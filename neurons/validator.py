@@ -1,15 +1,14 @@
 import asyncio
 import time
+
 import bittensor as bt
+
 import template
-
-# from template.validator import forward
+from commons.utils import get_new_uuid
 from template.base.validator import BaseValidatorNeuron
-import bittensor as bt
-
-from template.protocol import Dummy
-from template.validator.reward import get_rewards
+from template.protocol import Completion, Protocol
 from template.utils.uids import get_random_uids
+from template.validator.reward import get_rewards
 
 
 class Validator(BaseValidatorNeuron):
@@ -44,28 +43,41 @@ class Validator(BaseValidatorNeuron):
     async def _forward(self):
         """
         The forward function is called by the validator every time step.
-
         It is responsible for querying the network and scoring the responses.
-
         Args:
             self (:obj:`bittensor.neuron.Neuron`): The neuron object which contains all the necessary state for the validator.
-
         """
         # TODO(developer): Define how the validator selects a miner to query, how often, etc.
         # get_random_uids is an example method, but you can replace it with your own.
         miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
 
+        # construct our synapse
+        # TODO change to real data
+        synapse = Protocol(
+            n_completions=2,
+            pid=str(get_new_uuid()),
+            prompt="What is your name?",
+            completions=[
+                Completion(
+                    text="My name is Assistant, and I am a helpful assisstant created by OpenAI."
+                ),
+                Completion(
+                    text="My name is Llama, and I am an assistant created by Meta."
+                ),
+            ],
+        )
+
         # The dendrite client queries the network.
-        responses = self.dendrite.query(
+        responses = await self.dendrite(
             # Send the query to selected miner axons in the network.
             axons=[self.metagraph.axons[uid] for uid in miner_uids],
             # Construct a dummy query. This simply contains a single integer.
-            synapse=Dummy(dummy_input=self.step),
+            synapse=synapse,
             # All responses have the deserialize function called on them before returning.
             # You are encouraged to define your own deserialization function.
-            deserialize=True,
+            deserialize=False,
+            timeout=30,
         )
-
         # Log the results for monitoring purposes.
         bt.logging.info(f"Received responses: {responses}")
 
@@ -78,6 +90,7 @@ class Validator(BaseValidatorNeuron):
         self.update_scores(rewards, miner_uids)
 
 
+# TODO hook up to fastapi server
 async def main():
     validator = Validator()
     await validator.run()
