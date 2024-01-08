@@ -19,6 +19,7 @@
 
 
 import copy
+import numpy as np
 import torch
 import asyncio
 import threading
@@ -203,7 +204,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def set_weights(self):
         """
-        Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
+        Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners.
+        The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
 
         # Check if self.scores contains any NaN values and log a warning if it does.
@@ -295,29 +297,33 @@ class BaseValidatorNeuron(BaseNeuron):
         # Update the hotkeys.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-    def update_scores(self, rewards: torch.FloatTensor, uids: List[int]):
-        """Performs exponential moving average on the scores based on the rewards received from the miners."""
+    def update_scores(self, hotkey_to_rewards, uids):
+        """Performs exponential moving average on the scores based on the rewards received from the miners,
+        after setting the self.scores variable here, `set_weights` will be called to set the weights on chain."""
 
-        # Check if rewards contains NaN values.
-        if torch.isnan(rewards).any():
-            bt.logging.warning(f"NaN values detected in rewards: {rewards}")
-            # Replace any NaN values in rewards with 0.
-            rewards = torch.nan_to_num(rewards, 0)
+        nan_value_indices = torch.isnan(list(hotkey_to_rewards.values()))
+        if nan_value_indices.any():
+            bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_rewards}")
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
-        # shape: [ metagraph.n ]
-        scattered_rewards: torch.FloatTensor = self.scores.scatter(
-            0, torch.tensor(uids).to(self.device), rewards
-        ).to(self.device)
-        bt.logging.debug(f"Scattered rewards: {rewards}")
+        rewards = torch.zeros((len(uids),))
+        uids_list = list(uids)
+        for index, (key, value) in enumerate(hotkey_to_rewards.items()):
+            # handle nan values
+            if nan_value_indices[index]:
+                rewards[key] = 0.0
+            # search metagraph for hotkey and grab uid
+            uid = self.metagraph.hotkeys.index(key)
+            rewards[uids_list.index(uid)] = value
+        bt.logging.debug(f"Rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * scattered_rewards + (
-            1 - alpha
-        ) * self.scores.to(self.device)
-        bt.logging.debug(f"Updated moving avg scores: {self.scores}")
+        self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores.to(
+            self.device
+        )
+        bt.logging.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
