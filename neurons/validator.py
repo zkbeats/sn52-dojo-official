@@ -32,7 +32,6 @@ class Validator(BaseValidatorNeuron):
         - Updating the scores
         """
 
-        # construct our synapse
         # TODO change to real data
         synapse = RankingRequest(
             n_completions=3,

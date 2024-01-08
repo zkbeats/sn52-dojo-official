@@ -125,7 +125,7 @@ class BaseNeuron(ABC):
         ):
             bt.logging.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
-                f" Please register the hotkey using `btcli subnets register` before trying again"
+                f" Please register the hotkey using `btcli s register` before trying again"
             )
             exit()
 
