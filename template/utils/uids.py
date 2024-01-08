@@ -4,6 +4,11 @@ import bittensor as bt
 from typing import List
 
 
+def get_all_serving_uids(metagraph: bt.metagraph):
+    uids = [uid for uid in range(metagraph.n.item()) if metagraph.axons[uid].is_serving]
+    return uids
+
+
 def check_uid_availability(
     metagraph: bt.metagraph, uid: int, vpermit_tao_limit: int
 ) -> bool:

@@ -29,6 +29,7 @@ from typing import List
 from traceback import print_exception
 
 from template.base.neuron import BaseNeuron
+from template.utils.uids import get_all_serving_uids
 
 
 class BaseValidatorNeuron(BaseNeuron):
@@ -48,7 +49,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
-        self.scores = torch.zeros_like(self.metagraph.S, dtype=torch.float32)
+        # NOTE do not use
+        self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -115,8 +117,6 @@ class BaseValidatorNeuron(BaseNeuron):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
-        self.load_state()
-        # Check that validator is registered on the network.
         self.sync()
 
         bt.logging.info(
@@ -265,56 +265,55 @@ class BaseValidatorNeuron(BaseNeuron):
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("resync_metagraph()")
+        bt.logging.info("checking if we need to resync metagraph...")
 
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
+        # create a copy to freeze it in time
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
+            bt.logging.info("Metagraph unchanged, skipping resync...")
             return
 
-        bt.logging.info(
-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
-        )
-        # Zero out all hotkeys that have been replaced.
-        for uid, hotkey in enumerate(self.hotkeys):
-            if hotkey != self.metagraph.hotkeys[uid]:
-                self.scores[uid] = 0  # hotkey has been replaced
+        bt.logging.info("Metagraph updated, attempting resync...")
+        # hotkey has been replaced, so we reset score
+        preserved_uids = [
+            uid
+            for uid, hotkey in enumerate(previous_metagraph.hotkeys)
+            if hotkey == self.metagraph.hotkeys[uid]
+        ]
 
-        # Check to see if the metagraph has changed size.
-        # If so, we need to add new hotkeys and moving averages.
-        if len(self.hotkeys) < len(self.metagraph.hotkeys):
-            # Update the size of the moving average scores.
-            new_moving_average = torch.zeros((self.metagraph.n)).to(self.device)
-            min_len = min(len(self.hotkeys), len(self.scores))
-            new_moving_average[:min_len] = self.scores[:min_len]
-            self.scores = new_moving_average
+        # create a new score tensor since metagraph size is different
+        updated_scores = torch.zeros(len(self.metagraph.axons)).to(self.device)
+        for uid in preserved_uids:
+            updated_scores[uid] = self.scores[uid]
 
-        # Update the hotkeys.
-        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
+        # Update our states
+        self.scores = updated_scores
+        self.hotkeys = self.metagraph.hotkeys
 
     def update_scores(self, hotkey_to_rewards, uids):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
         after setting the self.scores variable here, `set_weights` will be called to set the weights on chain."""
 
-        nan_value_indices = torch.isnan(list(hotkey_to_rewards.values()))
+        nan_value_indices = np.isnan(list(hotkey_to_rewards.values()))
         if nan_value_indices.any():
             bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_rewards}")
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
-        rewards = torch.zeros((len(uids),))
-        uids_list = list(uids)
+        # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
+        rewards = torch.zeros((len(self.hotkeys),))
         for index, (key, value) in enumerate(hotkey_to_rewards.items()):
             # handle nan values
             if nan_value_indices[index]:
                 rewards[key] = 0.0
             # search metagraph for hotkey and grab uid
-            uid = self.metagraph.hotkeys.index(key)
-            rewards[uids_list.index(uid)] = value
+            uid = self.hotkeys.index(key)
+            rewards[uid] = value
         bt.logging.debug(f"Rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
