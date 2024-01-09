@@ -5,6 +5,7 @@ import time
 import typing
 
 import bittensor as bt
+from torch import _validate_compressed_sparse_indices
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import RankingRequest, Rank
@@ -114,10 +115,23 @@ class Miner(BaseMinerNeuron):
             )
             return True, "Unrecognized hotkey"
 
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
-        return False, "Hotkey recognized!"
+        # check validator stake if it meets minimum threshold
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
+        MIN_VALIDATOR_STAKE = 20_000
+        if (
+            validator_neuron.validator_permit
+            and validator_neuron.stake.tao < MIN_VALIDATOR_STAKE
+        ):
+            bt.logging.trace(
+                f"Blacklisting hotkey: {synapse.dendrite.hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
+            )
+            return True, "Insufficient validator stake"
+
+        if not validator_neuron.validator_permit:
+            return True, "Not a validator"
+
+        return False, "Passed blacklist function"
 
     async def priority(self, synapse: RankingRequest) -> float:
         """
