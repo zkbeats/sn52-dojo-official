@@ -34,34 +34,6 @@ class BaseMinerNeuron(BaseNeuron):
     def __init__(self, config=None):
         super().__init__(config=config)
 
-        # Warn if allowing incoming requests from anyone.
-        if not self.config.blacklist.force_validator_permit:
-            bt.logging.warning(
-                "You are allowing non-validators to send requests to your miner. This is a security risk."
-            )
-        if self.config.blacklist.allow_non_registered:
-            bt.logging.warning(
-                "You are allowing non-registered entities to send requests to your miner. This is a security risk."
-            )
-
-        # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
-
-        # Attach determiners which functions are called when servicing a request.
-        bt.logging.info(f"Attaching forward function to miner axon.")
-        self.axon.attach(
-            forward_fn=self.forward,
-            blacklist_fn=self.blacklist,
-            priority_fn=self.priority,
-        )
-        bt.logging.info(f"Axon created: {self.axon}")
-
-        # Instantiate runners
-        self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
-        self.lock = asyncio.Lock()
-
     def run(self):
         """
         Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.

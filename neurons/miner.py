@@ -1,4 +1,6 @@
+import asyncio
 import random
+import threading
 import time
 import typing
 
@@ -21,6 +23,33 @@ class Miner(BaseMinerNeuron):
         super(Miner, self).__init__(config=config)
 
         # TODO(developer): Anything specific to your use case you can do here
+        # Warn if allowing incoming requests from anyone.
+        if not self.config.blacklist.force_validator_permit:
+            bt.logging.warning(
+                "You are allowing non-validators to send requests to your miner. This is a security risk."
+            )
+        if self.config.blacklist.allow_non_registered:
+            bt.logging.warning(
+                "You are allowing non-registered entities to send requests to your miner. This is a security risk."
+            )
+
+        # The axon handles request processing, allowing validators to send this miner requests.
+        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
+
+        # Attach determiners which functions are called when servicing a request.
+        bt.logging.info(f"Attaching forward function to miner axon.")
+        self.axon.attach(
+            forward_fn=self.forward,
+            blacklist_fn=self.blacklist,
+            priority_fn=self.priority,
+        )
+        bt.logging.info(f"Axon created: {self.axon}")
+
+        # Instantiate runners
+        self.should_exit: bool = False
+        self.is_running: bool = False
+        self.thread: threading.Thread = None
+        self.lock = asyncio.Lock()
 
     async def forward(self, synapse: RankingRequest) -> RankingRequest:
         bt.logging.debug("Miner received forward request...")
@@ -75,6 +104,8 @@ class Miner(BaseMinerNeuron):
 
         Otherwise, allow the request to be processed further.
         """
+
+        bt.logging.info("checking blacklist function")
         # TODO(developer): Define how miners should blacklist requests.
         if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
