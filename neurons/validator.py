@@ -72,9 +72,9 @@ class Validator(BaseValidatorNeuron):
         bt.logging.info(f"Received responses: {responses}")
 
         # Adjust the scores based on responses from miners.
-        rewards = Scoring.score_responses(responses=responses)
+        hotkey_to_scores = Scoring.score_responses(responses=responses)
         # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-        self.update_scores(rewards, miner_uids)
+        self.update_scores(hotkey_to_scores, miner_uids)
 
 
 async def main():

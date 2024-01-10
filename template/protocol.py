@@ -87,8 +87,9 @@ class RankingRequest(bt.Synapse):
 
     # Required request input, filled by sending dendrite caller.
     epoch_timestamp: int = Field(
-        default=get_epoch_time(),
+        default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
+        allow_mutation=False,
     )
     request_id: str = Field(
         default_factory=get_new_uuid,

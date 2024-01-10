@@ -68,14 +68,21 @@ class Scoring:
             for miner_score in miner_scores
         ]
 
-        miner_hotkeys = [r.axon.hotkey for r in responses]
-        return dict(zip(miner_hotkeys, correlations))
+        hotkeys = [r.axon.hotkey for r in responses]
+        return hotkeys, correlations
 
     @staticmethod
     def score_responses(responses: List[RankingRequest]):
-        """Given a list of responses, will only return a dict of hotkey to their unnormalized scores.
+        """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.
         """
-        hotkey_to_scores = Scoring._spearman_correlation(responses)
-        bt.logging.debug(f"Scored responses: {hotkey_to_scores}")
-        return hotkey_to_scores
+        # all_hotkeys = [r.axon.hotkey for r in responses]
+
+        hotkeys, spearman_correlations = Scoring._spearman_correlation(responses)
+        # scale values in the range [-1, 1] to [0, 1]
+        spearman_correlations = 0.5 * (np.array(spearman_correlations) + 1)
+
+        # ensure sum of scores == 1
+        scores = spearman_correlations / spearman_correlations.sum()
+
+        return dict(zip(hotkeys, scores.tolist()))
