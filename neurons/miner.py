@@ -8,7 +8,7 @@ import bittensor as bt
 from torch import _validate_compressed_sparse_indices
 
 from template.base.miner import BaseMinerNeuron
-from template.protocol import RankingRequest, Rank
+from template.protocol import RankingRequest, Rank, RankingResult
 
 
 class Miner(BaseMinerNeuron):
@@ -52,8 +52,11 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
+    async def _forward_process_result(self, synapse: RankingResult):
+        # process results from validator
+        pass
+
     async def forward(self, synapse: RankingRequest) -> RankingRequest:
-        bt.logging.debug("Miner received forward request...")
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
@@ -67,6 +70,11 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
+        bt.logging.debug(f"Miner received request, type={type(synapse)}")
+        if isinstance(synapse, RankingResult):
+            self._forward_process_result(synapse)
+            return
+
         # TODO(developer): Replace with actual implementation logic.
         synapse.ranks = []
         for completion in synapse.completions:
@@ -118,7 +126,8 @@ class Miner(BaseMinerNeuron):
         # check validator stake if it meets minimum threshold
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
-        MIN_VALIDATOR_STAKE = 20_000
+        # MIN_VALIDATOR_STAKE = 20_000
+        MIN_VALIDATOR_STAKE = 0
         if (
             validator_neuron.validator_permit
             and validator_neuron.stake.tao < MIN_VALIDATOR_STAKE

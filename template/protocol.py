@@ -117,3 +117,13 @@ class RankingRequest(bt.Synapse):
     ranks: List[Rank] = Field(
         default=[], description="List of ranks for each completion"
     )
+
+
+class RankingResult(bt.Synapse):
+    request_id: str = Field(
+        description="Unique identifier for the request",
+        allow_mutation=False,
+    )
+    cid_to_consensus: Dict[str, float] = Field(
+        description="Consensus score for each completion", allow_mutation=False
+    )

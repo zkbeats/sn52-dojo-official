@@ -6,8 +6,18 @@ from commons.scoring import Scoring
 
 from commons.utils import get_new_uuid
 from template.base.validator import BaseValidatorNeuron
-from template.protocol import Completion, RankingRequest
+from template.protocol import Completion, RankingRequest, RankingResult
 from template.utils.uids import get_random_uids
+
+
+async def _forward_consesnsus(dendrite, axons, synapse: RankingResult):
+    bt.logging.debug("Sending back consensus to miners")
+    await dendrite(
+        axons=axons,
+        synapse=synapse,
+        deserialize=False,
+        timeout=5,
+    )
 
 
 class Validator(BaseValidatorNeuron):
@@ -70,11 +80,16 @@ class Validator(BaseValidatorNeuron):
         )
         # Log the results for monitoring purposes.
         bt.logging.info(f"Received responses: {responses}")
+        for r in responses:
+            print("process time", r.dendrite.process_time)
 
         # Adjust the scores based on responses from miners.
-        hotkey_to_scores = Scoring.score_responses(responses=responses)
+        hotkey_to_scores, ranking_result = Scoring.score_responses(responses=responses)
         # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
         self.update_scores(hotkey_to_scores, miner_uids)
+
+        # TODO delay sending result to allow adequate time for scoring
+        _forward_consesnsus(dendrite=self.dendrite, axons=axons, synapse=ranking_result)
 
 
 async def main():

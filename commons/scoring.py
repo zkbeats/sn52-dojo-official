@@ -9,14 +9,14 @@ from attr import define, field
 
 from commons.custom_exceptions import InvalidScoreLength
 from commons.utils import DotDict
-from template.protocol import RankingRequest
+from template.protocol import RankingRequest, RankingResult
 
 
 @define(kw_only=True, frozen=True, slots=True)
-class RankingResult:
+class Result:
     # Each request id has multiple completions, where each miner scores each of these completions.
     request_id: str
-    hotkey_to_scores: Dict[str, float] = field(factory=dict)
+    cid_to_hotkey_to_score: Dict[str, Dict[str, float]] = field(factory=dict)
 
 
 class Scoring:
@@ -35,7 +35,7 @@ class Scoring:
                 nested_dict[rank.cid][hotkey] = rank.score
 
         data = json.loads(json.dumps(nested_dict))
-        return DotDict({"request_id": request_id, "cid_to_hotkey_to_score": data})
+        return Result(request_id=request_id, cid_to_hotkey_to_score=data)
 
     @staticmethod
     def _spearman_correlation(responses: List[RankingRequest]):
@@ -44,11 +44,13 @@ class Scoring:
             return {}
 
         result = Scoring._map_responses_to_result(responses)
-        averages = [
-            np.mean(list(hotkey_scores.values()))
-            for hotkey_scores in result.cid_to_hotkey_to_score.values()
-        ]
+        cid_to_average = {
+            cid: np.mean(list(hotkey_scores.values()))
+            for cid, hotkey_scores in result.cid_to_hotkey_to_score.items()
+        }
+        averages = list(cid_to_average.values())
 
+        # shape (num miners, num completions)
         miner_scores = np.array(
             [
                 [
@@ -69,20 +71,28 @@ class Scoring:
         ]
 
         hotkeys = [r.axon.hotkey for r in responses]
-        return hotkeys, correlations
+        return hotkeys, correlations, cid_to_average
 
     @staticmethod
     def score_responses(responses: List[RankingRequest]):
         """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.
         """
-        # all_hotkeys = [r.axon.hotkey for r in responses]
+        if not len(responses):
+            raise ValueError("Responses cannot be empty")
 
-        hotkeys, spearman_correlations = Scoring._spearman_correlation(responses)
+        hotkeys, spearman_correlations, cid_to_average = Scoring._spearman_correlation(
+            responses
+        )
         # scale values in the range [-1, 1] to [0, 1]
         spearman_correlations = 0.5 * (np.array(spearman_correlations) + 1)
 
         # ensure sum of scores == 1
         scores = spearman_correlations / spearman_correlations.sum()
 
-        return dict(zip(hotkeys, scores.tolist()))
+        # store in synapse to be forwarded to miners
+        ranking_result = RankingResult(
+            request_id=responses[0].request_id, cid_to_consensus=cid_to_average
+        )
+
+        return dict(zip(hotkeys, scores.tolist())), ranking_result
