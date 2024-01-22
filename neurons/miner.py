@@ -2,10 +2,9 @@ import asyncio
 import random
 import threading
 import time
-import typing
+from typing import Union, Tuple
 
 import bittensor as bt
-from torch import _validate_compressed_sparse_indices
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import RankingRequest, Rank, RankingResult
@@ -43,7 +42,7 @@ class Miner(BaseMinerNeuron):
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
-        )
+        ).attach(forward_fn=self.forward_result)
         bt.logging.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
@@ -52,9 +51,9 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
 
-    async def _forward_process_result(self, synapse: RankingResult):
-        # process results from validator
-        pass
+    async def forward_result(self, synapse: RankingResult) -> None:
+        bt.logging.info("Received consensus from validators")
+        return
 
     async def forward(self, synapse: RankingRequest) -> RankingRequest:
         """
@@ -70,11 +69,7 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-        bt.logging.debug(f"Miner received request, type={type(synapse)}")
-        if isinstance(synapse, RankingResult):
-            self._forward_process_result(synapse)
-            return
-
+        print(f"Miner received request, type={str(synapse.__class__.__name__)}")
         # TODO(developer): Replace with actual implementation logic.
         synapse.ranks = []
         for completion in synapse.completions:
@@ -83,7 +78,7 @@ class Miner(BaseMinerNeuron):
             )
         return synapse
 
-    async def blacklist(self, synapse: RankingRequest) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: RankingRequest) -> Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.

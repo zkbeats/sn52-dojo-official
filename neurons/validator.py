@@ -10,16 +10,6 @@ from template.protocol import Completion, RankingRequest, RankingResult
 from template.utils.uids import get_random_uids
 
 
-async def _forward_consesnsus(dendrite, axons, synapse: RankingResult):
-    bt.logging.debug("Sending back consensus to miners")
-    await dendrite(
-        axons=axons,
-        synapse=synapse,
-        deserialize=False,
-        timeout=5,
-    )
-
-
 class Validator(BaseValidatorNeuron):
     """
     Your validator neuron class. You should use this class to define your validator's behavior. In particular, you should replace the forward function with your own logic.
@@ -31,6 +21,22 @@ class Validator(BaseValidatorNeuron):
 
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
+
+    async def _forward_consensus(self, synapse: RankingResult):
+        bt.logging.debug("Sending back consensus to miners")
+        # get_random_uids is an example method, but you can replace it with your own.
+        miner_uids = get_random_uids(
+            metagraph=self.metagraph,
+            k=self.config.neuron.sample_size,
+            config=self.config,
+        )
+        axons = [self.metagraph.axons[uid] for uid in miner_uids]
+        await self.dendrite(
+            axons=axons,
+            synapse=synapse,
+            deserialize=False,
+            timeout=5,
+        )
 
     async def forward(self):
         """
@@ -89,7 +95,8 @@ class Validator(BaseValidatorNeuron):
         self.update_scores(hotkey_to_scores, miner_uids)
 
         # TODO delay sending result to allow adequate time for scoring
-        _forward_consesnsus(dendrite=self.dendrite, axons=axons, synapse=ranking_result)
+        bt.logging.info(f"Forwarding consensus back to miners... {ranking_result}")
+        await self._forward_consensus(synapse=ranking_result)
 
 
 async def main():
