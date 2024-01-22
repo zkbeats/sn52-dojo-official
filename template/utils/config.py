@@ -17,6 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
+from pathlib import Path
 import torch
 import argparse
 import bittensor as bt
@@ -118,6 +119,12 @@ def add_args(parser):
 
     if neuron_type == "validator":
         parser.add_argument(
+            "--data_manager.base_path",
+            type=str,
+            help="Base path to store data to.",
+            default=Path.cwd(),
+        )
+        parser.add_argument(
             "--neuron.num_concurrent_forwards",
             type=int,
             help="The number of concurrent forwards running at any time.",
@@ -178,14 +185,22 @@ def add_args(parser):
         )
 
 
-def config():
+# singleton instance
+_config = None
+
+
+def get_config():
+    """Returns the configuration object specific to this miner or validator after adding relevant arguments.
+    Manage a global config instance to allow re-using in other parts of our code.
     """
-    Returns the configuration object specific to this miner or validator after adding relevant arguments.
-    """
+    global _config
+    if _config is not None:
+        return _config
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
     bt.logging.add_args(parser)
     bt.axon.add_args(parser)
     add_args(parser)
-    return bt.config(parser)
+    _config = bt.config(parser)
+    return _config
