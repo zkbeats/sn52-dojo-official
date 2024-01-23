@@ -9,7 +9,7 @@ def get_new_uuid():
 
 
 def get_epoch_time():
-    return int(time.time() * 1000)
+    return time.time()
 
 
 class DotDict(OrderedDict):

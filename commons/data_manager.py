@@ -11,7 +11,7 @@ __LOG_PREFIX__ = "[DataManager]"
 
 class DataManager:
     @staticmethod
-    def get_ranking_data_filepath():
+    def get_ranking_data_filepath() -> Path:
         config = get_config()
         base_path = config.data_manager.base_path
         return base_path / "data" / "ranking" / "data.pkl"
