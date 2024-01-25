@@ -39,10 +39,6 @@ class Scoring:
 
     @staticmethod
     def _spearman_correlation(responses: List[RankingRequest]):
-        responses = [r for r in responses if len(r.ranks) > 0]
-        if not responses or all(len(r.ranks) == 0 for r in responses):
-            return {}
-
         result = Scoring._map_responses_to_result(responses)
         cid_to_average = {
             cid: np.mean(list(hotkey_scores.values()))

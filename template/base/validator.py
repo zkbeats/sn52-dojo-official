@@ -296,7 +296,7 @@ class BaseValidatorNeuron(BaseNeuron):
         self.scores = updated_scores
         self.hotkeys = self.metagraph.hotkeys
 
-    def update_scores(self, hotkey_to_rewards, uids):
+    def update_scores(self, hotkey_to_rewards):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
         after setting the self.scores variable here, `set_weights` will be called to set the weights on chain."""
 
