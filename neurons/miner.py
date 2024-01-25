@@ -2,12 +2,13 @@ import asyncio
 import random
 import threading
 import time
-from typing import Union, Tuple
+from typing import Tuple
 
 import bittensor as bt
 
+from commons.models import ModelUtils, ModelZoo
 from template.base.miner import BaseMinerNeuron
-from template.protocol import RankingRequest, Rank, RankingResult
+from template.protocol import Rank, RankingRequest, RankingResult
 
 
 class Miner(BaseMinerNeuron):
@@ -37,7 +38,7 @@ class Miner(BaseMinerNeuron):
         self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
 
         # Attach determiners which functions are called when servicing a request.
-        bt.logging.info(f"Attaching forward function to miner axon.")
+        bt.logging.info("Attaching forward function to miner axon.")
         self.axon.attach(
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
@@ -70,12 +71,11 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         print(f"Miner received request, type={str(synapse.__class__.__name__)}")
-        # TODO(developer): Replace with actual implementation logic.
-        synapse.ranks = []
         for completion in synapse.completions:
-            synapse.ranks.append(
-                Rank(cid=completion.cid, score=random.uniform(0.0, 1.0))
+            score = ModelUtils.reward_model_score(
+                self.config.reward_model, synapse.prompt, completion.text
             )
+            synapse.ranks.append(Rank(cid=completion.cid, score=score))
         return synapse
 
     async def blacklist(self, synapse: RankingRequest) -> Tuple[bool, str]:

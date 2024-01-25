@@ -24,6 +24,7 @@ import bittensor as bt
 from loguru import logger
 
 from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
+from commons.models import ModelZoo
 
 
 def check_config(config: "bt.Config"):
@@ -169,7 +170,7 @@ def add_args(parser):
             default=4096,
         )
 
-    else:
+    elif neuron_type == "miner":
         parser.add_argument(
             "--blacklist.force_validator_permit",
             action="store_true",
@@ -182,6 +183,12 @@ def add_args(parser):
             action="store_true",
             help="If set, miners will accept queries from non registered entities. (Dangerous!)",
             default=False,
+        )
+        parser.add_argument(
+            "--reward_model",
+            type=str,
+            help="Name of the reward model from huggingface to use",
+            default=ModelZoo.DEBERTA_V3_LARGE_V2,
         )
 
 
