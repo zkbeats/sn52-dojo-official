@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import pickle
 from typing import Any, Dict, Union
-from commons.objects import RankingData
+from commons.objects import DendriteQueryResponse
 import bittensor as bt
 from template.utils.config import check_config, get_config
 
@@ -48,7 +48,7 @@ class DataManager:
             return False
 
     @staticmethod
-    def append_ranking_data(ranking_data: RankingData):
+    def append_responses(response: DendriteQueryResponse):
         path = DataManager.get_ranking_data_filepath()
         # ensure parent path exists
         if not path.exists():
@@ -57,12 +57,12 @@ class DataManager:
         data = DataManager.load(path=path)
         if not data:
             # store initial data
-            DataManager.save(path, [ranking_data])
+            DataManager.save(path, [response])
             return
 
         # append our data
         assert isinstance(data, list)
-        data.append(ranking_data)
+        data.append(response)
         DataManager.save(path, data)
 
         return

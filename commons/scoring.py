@@ -88,7 +88,9 @@ class Scoring:
 
         # store in synapse to be forwarded to miners
         ranking_result = RankingResult(
-            request_id=responses[0].request_id, cid_to_consensus=cid_to_average
+            request_id=responses[0].request_id,
+            cid_to_consensus=cid_to_average,
+            hotkey_to_scores=dict(zip(hotkeys, scores.tolist())),
         )
 
-        return dict(zip(hotkeys, scores.tolist())), ranking_result
+        return ranking_result

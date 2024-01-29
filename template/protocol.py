@@ -24,13 +24,6 @@ class Rank(BaseModel):
 
 
 class RankingRequest(bt.Synapse):
-    """
-    A protocol representation which uses bt.Synapse as its base.
-    This protocol helps in handling dummy request and response communication between
-    the miner and the validator.
-    """
-
-    # Required request input, filled by sending dendrite caller.
     epoch_timestamp: int = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
@@ -71,4 +64,7 @@ class RankingResult(bt.Synapse):
     )
     cid_to_consensus: Dict[str, float] = Field(
         description="Consensus score for each completion", allow_mutation=False
+    )
+    hotkey_to_scores: Dict[str, float] = Field(
+        description="Hotkey to score mapping", allow_mutation=False
     )
