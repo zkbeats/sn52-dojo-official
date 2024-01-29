@@ -1,7 +1,11 @@
+import copy
 import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
+
+import jsonref
+from pydantic import BaseModel
 
 
 def get_new_uuid():
@@ -42,3 +46,35 @@ class DotDict(OrderedDict):
             raise AttributeError(f"No attribute called: {k}") from ex
 
     __setattr__ = OrderedDict.__setitem__
+
+
+def remove_key(input_dict, key, depth=0):
+    """Recursively remove a specified key from a nested dictionary, keeping track of depth."""
+    for k, v in list(input_dict.items()):
+        if k == key:
+            del input_dict[k]
+        elif isinstance(v, dict):
+            remove_key(v, key, depth=depth + 1)
+    return input_dict
+
+
+def _resolve_references(json_str):
+    return jsonref.loads(json_str)
+
+
+class PydanticUtils:
+    @staticmethod
+    def build_response_format(model: BaseModel):
+        """Build a response format for OpenAI API calls."""
+        schema = model.schema_json()
+        resolved_schema = copy.deepcopy(_resolve_references(schema))
+
+        if "definitions" in resolved_schema:
+            resolved_schema.pop("definitions")
+
+        resolved_schema = remove_key(resolved_schema, "title")
+        resolved_schema = remove_key(resolved_schema, "additionalProperties")
+        required = resolved_schema.get("required", [])
+        resolved_schema = remove_key(resolved_schema, "required")
+        resolved_schema["required"] = required
+        return {"type": "json_object", "schema": resolved_schema}

@@ -170,6 +170,13 @@ def add_args(parser):
             default=4096,
         )
 
+        parser.add_argument(
+            "--dendrite_timeout",
+            type=int,
+            help="Timeout for dendrite queries.",
+            default=60,
+        )
+
     elif neuron_type == "miner":
         parser.add_argument(
             "--blacklist.force_validator_permit",

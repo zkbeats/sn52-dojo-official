@@ -72,7 +72,8 @@ class Miner(BaseMinerNeuron):
         """
         print(f"Miner received request, type={str(synapse.__class__.__name__)}")
         for completion in synapse.completions:
-            score = ModelUtils.reward_model_score(
+            # TODO change method of scoring here, see models.ModelUtils for different scoring methods
+            score = ModelUtils._hf_score(
                 self.config.reward_model, synapse.prompt, completion.text
             )
             synapse.ranks.append(Rank(cid=completion.cid, score=score))
