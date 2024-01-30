@@ -4,6 +4,7 @@ from typing import List, Union
 
 import bittensor as bt
 from dotenv import load_dotenv
+import torch
 from torch.nn import functional as F
 from transformers import (
     AutoModelForSequenceClassification,
@@ -15,7 +16,7 @@ from transformers import (
 from commons.llm.openai_proxy import Provider, get_openai_client
 from commons.llm.prompts import PromptBuilder, ScoreRange
 from commons.objects import ScoresResponse
-from commons.utils import PydanticUtils
+from commons.utils import PydanticUtils, get_device
 from template.protocol import Completion
 
 load_dotenv()
@@ -36,14 +37,16 @@ ModelName = Union[str, ModelZoo]
 # adjust cache maxsize depending on however many models you have in your ModelZoo
 @lru_cache(maxsize=10)
 def get_cached_model(model_name: ModelName):
-    return AutoModelForSequenceClassification.from_pretrained(model_name).eval()
+    model = AutoModelForSequenceClassification.from_pretrained(model_name).eval()
+    return model
 
 
 @lru_cache(maxsize=10)
 def get_cached_tokenizer(
     model_name: ModelName,
 ) -> PreTrainedTokenizerFast | PreTrainedTokenizer:
-    return AutoTokenizer.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    return tokenizer
 
 
 class ModelUtils:
@@ -62,9 +65,15 @@ class ModelUtils:
             truncation=True,
         )
         inputs = tokenizer(
-            question_, completion, return_tensors="pt", padding=True, truncation=True
+            question_,
+            completion,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
         )
-        logits = model(**inputs).logits[0].cpu().detach()
+        with torch.no_grad():
+            logits = model(**inputs).logits[0].cpu().detach()
+
         bt.logging.info(f"Raw logits: {logits}")
         # squish logits into range [0, 1]
         score = F.sigmoid(logits)

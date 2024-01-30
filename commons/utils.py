@@ -6,6 +6,7 @@ from collections.abc import Mapping
 
 import jsonref
 from pydantic import BaseModel
+import torch
 
 
 def get_new_uuid():
@@ -14,6 +15,15 @@ def get_new_uuid():
 
 def get_epoch_time():
     return time.time()
+
+
+def get_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    # elif torch.backends.mps.is_available():
+    #     return "mps"
+    else:
+        return "cpu"
 
 
 class DotDict(OrderedDict):

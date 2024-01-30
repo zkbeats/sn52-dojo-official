@@ -24,7 +24,7 @@ import bittensor as bt
 from loguru import logger
 
 from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
-from commons.models import ModelZoo
+from commons.reward_model.models import ModelZoo
 
 
 def check_config(config: "bt.Config"):

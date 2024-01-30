@@ -6,7 +6,7 @@ from typing import Tuple
 
 import bittensor as bt
 
-from commons.models import ModelUtils, ModelZoo
+from commons.reward_model.models import ModelUtils, ModelZoo
 from template.base.miner import BaseMinerNeuron
 from template.protocol import Rank, RankingRequest, RankingResult
 
