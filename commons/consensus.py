@@ -19,7 +19,7 @@ class Result:
     cid_to_hotkey_to_score: Dict[str, Dict[str, float]] = field(factory=dict)
 
 
-class Scoring:
+class Consensus:
     @staticmethod
     def _map_responses_to_result(responses: List[RankingRequest]):
         if len(responses) == 0:
@@ -39,7 +39,7 @@ class Scoring:
 
     @staticmethod
     def _spearman_correlation(responses: List[RankingRequest]):
-        result = Scoring._map_responses_to_result(responses)
+        result = Consensus._map_responses_to_result(responses)
         cid_to_average = {
             cid: np.mean(list(hotkey_scores.values()))
             for cid, hotkey_scores in result.cid_to_hotkey_to_score.items()
@@ -70,16 +70,18 @@ class Scoring:
         return hotkeys, correlations, cid_to_average
 
     @staticmethod
-    def score_responses(responses: List[RankingRequest]):
+    def consensus_score(responses: List[RankingRequest]):
         """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.
         """
         if not len(responses):
             raise ValueError("Responses cannot be empty")
 
-        hotkeys, spearman_correlations, cid_to_average = Scoring._spearman_correlation(
-            responses
-        )
+        (
+            hotkeys,
+            spearman_correlations,
+            cid_to_average,
+        ) = Consensus._spearman_correlation(responses)
         # scale values in the range [-1, 1] to [0, 1]
         spearman_correlations = 0.5 * (np.array(spearman_correlations) + 1)
 

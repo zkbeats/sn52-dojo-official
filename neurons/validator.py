@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import bittensor as bt
 from commons.data_manager import DataManager
 from commons.objects import DendriteQueryResponse
-from commons.scoring import Scoring
+from commons.consensus import Consensus
 
 from commons.utils import get_epoch_time, get_new_uuid
 from template.base.validator import BaseValidatorNeuron
@@ -112,7 +112,7 @@ class Validator(BaseValidatorNeuron):
             bt.logging.warning("No valid responses received from miners.")
             return
 
-        ranking_result = Scoring.score_responses(responses=responses)
+        ranking_result = Consensus.consensus_score(responses=responses)
         DataManager.append_responses(
             response=DendriteQueryResponse(
                 request=request,
