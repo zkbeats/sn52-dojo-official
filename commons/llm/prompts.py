@@ -2,12 +2,13 @@ from typing import List
 from pydantic import BaseModel, validator
 
 from template.protocol import Completion
+import bittensor as bt
 
 
-# TODO place proper scoring prompt once JSON mode works
 system_score_completion_prompt = """
 You are a helpful assistant that provides responses in JSON. Your task is to score the quality of each of the completions with respect to a prompt, where your score must be in the range {range_lower} to {range_upper}, where {range_lower} is the lowest score and {range_upper} is the highest score, and a higher score represents a higher quality response. You must provide your answer in JSON format.
 """
+
 user_score_completion_prompt = """
 Prompt:
 {prompt}
@@ -43,8 +44,7 @@ class PromptBuilder:
 
         # score_range = ScoreRange(lower=1, upper=10)
         completion_prompts = [
-            completion_item_prompt.format(idx=c.cid, text=c)
-            for i, c in enumerate(completions)
+            completion_item_prompt.format(idx=c.cid, text=c.text) for c in completions
         ]
         formatted_prompt = user_score_completion_prompt.format(
             # range_lower=score_range.lower,
@@ -52,7 +52,7 @@ class PromptBuilder:
             prompt=prompt,
             completions_prompt="\n".join(completion_prompts),
         )
-        print(f"User prompt:\n{formatted_prompt}")
+        bt.logging.debug(f"User prompt: {formatted_prompt}")
         return formatted_prompt
 
     @staticmethod
@@ -60,5 +60,5 @@ class PromptBuilder:
         formatted_prompt = system_score_completion_prompt.format(
             range_lower=score_range.lower, range_upper=score_range.upper
         )
-        print("System prompt: \n", formatted_prompt)
+        bt.logging.debug(f"System prompt: {formatted_prompt}")
         return formatted_prompt
