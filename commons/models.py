@@ -76,7 +76,7 @@ class ModelUtils:
         provider: Provider, model_name: str, prompt: str, completions: List[Completion]
     ):
         client = get_openai_client(provider)
-        score_range = ScoreRange(lower=1, upper=10)
+        score_range = ScoreRange(lower=0, upper=1)
         system_prompt = PromptBuilder.build_system_score_completion_prompt(
             score_range=score_range
         )
