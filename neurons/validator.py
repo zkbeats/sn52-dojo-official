@@ -32,6 +32,10 @@ class Validator(BaseValidatorNeuron):
     async def _update_score_and_send_feedback(self):
         bt.logging.debug("Scheduled update score and send feedback triggered...")
         data = DataManager.load(path=DataManager.get_ranking_data_filepath())
+        if not data:
+            bt.logging.debug("Skipping scoring as no data found")
+            return
+
         # get those where request epoch time >X h from current time
         current_time = datetime.fromtimestamp(get_epoch_time())
         print(f"Current time: {current_time}")
@@ -66,7 +70,7 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-        prompt, completions = SeedDataManager.get_prompt_and_completions(n=1)
+        prompt, completions = SeedDataManager.get_prompt_and_completions()
         request = RankingRequest(
             n_completions=len(completions),
             pid=get_new_uuid(),
