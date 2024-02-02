@@ -1,9 +1,11 @@
 from enum import StrEnum
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Tuple
 import random
 import bittensor as bt
 
 from datasets import load_dataset, interleave_datasets
+
+from template.protocol import Completion, RankingRequest
 
 seed = 42
 
@@ -66,42 +68,6 @@ def get_openai_webgpt_comparisons():
     )
 
 
-# NOTE this serves as a start for prompt/completion pairs to be generated because at first there will be no requests coming in
-oasst1 = load_dataset(
-    DatasetName.OPENASSISTANT_OASST1,
-    split="train",
-    streaming=True,
-)
-oasst2 = load_dataset(
-    DatasetName.OPENASSISTANT_OASST2,
-    split="train",
-    streaming=True,
-)
-
-
-def _is_oasst_prompt(row):
-    return not row["parent_id"] and row["role"] == "prompter"
-
-
-# ensure we only grab the 'text' fields from the dataset
-oasst1_prompts = oasst1.filter(lambda row: _is_oasst_prompt(row)).map(
-    lambda row: {"text": row["text"]}
-)
-oasst2_prompts = oasst2.filter(lambda row: _is_oasst_prompt(row)).map(
-    lambda row: {"text": row["text"]}
-)
-ALL_OASST_PROMPTS = "all_oasst_prompts"
-seed_datasets = {
-    ALL_OASST_PROMPTS: iter(
-        interleave_datasets(
-            [oasst1_prompts, oasst2_prompts],
-            probabilities=[0.5, 0.5],
-            seed=seed,
-            stopping_strategy="all_exhausted",
-        )
-    )
-}
-
 eval_datasets = {
     DatasetName.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
     DatasetName.STANFORD_SHP: iter(get_stanford_shp()),
@@ -132,10 +98,69 @@ class EvalDatasetManager:
         return [next_circular(eval_datasets, key) for _ in range(batch_size)]
 
 
+# # NOTE this serves as a start for prompt/completion pairs to be generated because at first there will be no requests coming in
+# oasst1 = load_dataset(
+#     DatasetName.OPENASSISTANT_OASST1,
+#     split="train",
+#     streaming=True,
+# )
+# oasst2 = load_dataset(
+#     DatasetName.OPENASSISTANT_OASST2,
+#     split="train",
+#     streaming=True,
+# )
+
+
+# def _is_oasst_prompt(row):
+#     return not row["parent_id"] and row["role"] == "prompter"
+
+
+# # ensure we only grab the 'text' fields from the dataset
+# oasst1_prompts = oasst1.filter(lambda row: _is_oasst_prompt(row)).map(
+#     lambda row: {"text": row["text"]}
+# )
+# oasst2_prompts = oasst2.filter(lambda row: _is_oasst_prompt(row)).map(
+#     lambda row: {"text": row["text"]}
+# )
+# ALL_OASST_PROMPTS = "all_oasst_prompts"
+# seed_datasets = {
+#     ALL_OASST_PROMPTS: iter(
+#         interleave_datasets(
+#             [oasst1_prompts, oasst2_prompts],
+#             probabilities=[0.5, 0.5],
+#             seed=seed,
+#             stopping_strategy="all_exhausted",
+#         )
+#     )
+# }
+
+# TODO change name to actual datset name
+seed_dataset_name = "prooompt/test_dataset"
+
+
+def get_seed_dataset():
+    return load_dataset(
+        seed_dataset_name,
+        split="train",
+        streaming=True,
+    )
+
+
+seed_dataset = iter(get_seed_dataset())
+
+
 class SeedDataManager:
     @staticmethod
-    def get_prompts(num_prompts=5):
-        return [
-            next_circular(seed_datasets, ALL_OASST_PROMPTS)["text"]
-            for _ in range(num_prompts)
-        ]
+    def get_prompt_and_completions():
+        global seed_dataset
+        try:
+            return SeedDataManager._map_seed_data(next(seed_dataset))
+        except StopIteration:
+            seed_dataset = iter(get_seed_dataset())
+            return SeedDataManager._map_seed_data(next(seed_dataset))
+
+    @staticmethod
+    def _map_seed_data(row: Dict) -> Tuple[str, List[str]]:
+        prompt = row["prompt"]
+        completions = [c["response"] for c in row["responses"]]
+        return prompt, completions

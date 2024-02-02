@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 import bittensor as bt
 from commons.data_manager import DataManager
+from commons.dataset import SeedDataManager
 from commons.objects import DendriteQueryResponse
 from commons.consensus import Consensus
 
@@ -54,7 +55,7 @@ class Validator(BaseValidatorNeuron):
             await self._forward_consensus(
                 synapse=d.result, hotkeys=list(d.hotkey_to_scores.keys())
             )
-            asyncio.sleep(5)
+            await asyncio.sleep(5)
 
     async def forward(self):
         """
@@ -65,24 +66,14 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-
-        # TODO change to real data
+        prompt, completions = SeedDataManager.get_prompt_and_completions(n=1)
         request = RankingRequest(
-            n_completions=3,
+            n_completions=len(completions),
             pid=get_new_uuid(),
-            prompt="What is your name?",
-            completions=[
-                Completion(
-                    text="My name is Assistant, and I am a helpful assisstant created by OpenAI.",
-                ),
-                Completion(
-                    text="My name is Llama, and I am an assistant created by Meta.",
-                ),
-                Completion(
-                    text="My name is GPT-3, and I am an AI created by OpenAI.",
-                ),
-            ],
+            prompt=prompt,
+            completions=[Completion(text=c) for c in completions],
         )
+
         miner_uids = get_random_uids(
             metagraph=self.metagraph,
             k=self.config.neuron.sample_size,
