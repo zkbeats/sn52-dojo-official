@@ -33,7 +33,9 @@ class Validator(BaseValidatorNeuron):
         bt.logging.debug("Scheduled update score and send feedback triggered...")
         data = DataManager.load(path=DataManager.get_ranking_data_filepath())
         if not data:
-            bt.logging.debug("Skipping scoring as no data found")
+            bt.logging.debug(
+                "Skipping scoring as no ranking data found, this means either all have been processed or you are running the validator for the first time."
+            )
             return
 
         # get those where request epoch time >X h from current time
@@ -55,13 +57,13 @@ class Validator(BaseValidatorNeuron):
 
         for d in data:
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            self.update_scores(d.hotkey_to_scores)
+            self.update_scores(d.result.hotkey_to_scores)
             await self._forward_consensus(
-                synapse=d.result, hotkeys=list(d.hotkey_to_scores.keys())
+                synapse=d.result, hotkeys=list(d.result.hotkey_to_scores.keys())
             )
             await asyncio.sleep(5)
 
-    async def forward(self):
+    async def forward(self, synapse: RankingRequest = None) -> DendriteQueryResponse:
         """
         Validator forward pass. Consists of:
         - Generating the query
@@ -70,13 +72,14 @@ class Validator(BaseValidatorNeuron):
         - Rewarding the miners
         - Updating the scores
         """
-        prompt, completions = SeedDataManager.get_prompt_and_completions()
-        request = RankingRequest(
-            n_completions=len(completions),
-            pid=get_new_uuid(),
-            prompt=prompt,
-            completions=[Completion(text=c) for c in completions],
-        )
+        if synapse is None:
+            prompt, completions = SeedDataManager.get_prompt_and_completions()
+            synapse = RankingRequest(
+                n_completions=len(completions),
+                pid=get_new_uuid(),
+                prompt=prompt,
+                completions=[Completion(text=c) for c in completions],
+            )
 
         miner_uids = get_random_uids(
             metagraph=self.metagraph,
@@ -93,7 +96,7 @@ class Validator(BaseValidatorNeuron):
             # Send the query to selected miner axons in the network.
             axons=axons,
             # Construct a dummy query. This simply contains a single integer.
-            synapse=request,
+            synapse=synapse,
             # All responses have the deserialize function called on them before returning.
             # You are encouraged to define your own deserialization function.
             deserialize=False,
@@ -108,19 +111,21 @@ class Validator(BaseValidatorNeuron):
             return
 
         ranking_result = Consensus.consensus_score(responses=responses)
-        DataManager.append_responses(
-            response=DendriteQueryResponse(
-                request=request,
-                result=ranking_result,
-            )
+        response_data = DendriteQueryResponse(
+            request=synapse,
+            result=ranking_result,
         )
+        DataManager.append_responses(response=response_data)
+        return response_data
+
+
+validator = Validator()
 
 
 async def main():
     scheduler = AsyncIOScheduler(
         job_defaults={"max_instances": 1, "misfire_grace_time": 3}
     )
-    validator = Validator()
     scheduler.add_job(validator._update_score_and_send_feedback, "interval", seconds=10)
     scheduler.start()
 
