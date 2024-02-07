@@ -6,14 +6,13 @@ import time
 from typing import List, Optional
 from uuid import uuid4
 from datetime import datetime
-from fastapi.encoders import jsonable_encoder
-import requests
 
 import scaleapi
 from dotenv import load_dotenv
-from scaleapi.exceptions import ScaleDuplicateResource
+from scaleapi.exceptions import ScaleDuplicateResource, ScaleInvalidRequest
 from scaleapi.tasks import TaskType
 from commons.llm.openai_proxy import Provider
+from commons.llm.prompts import ScoreRange
 from commons.objects import ScoreItem, ScoresResponse
 
 from commons.reward_model.models import ModelUtils
@@ -26,7 +25,47 @@ import json
 scale_api_key = os.getenv("SCALE_API_KEY")
 client = scaleapi.ScaleClient(api_key=scale_api_key)
 
-url = "https://api.scale.com/v1/projects"
+import textwrap
+
+
+score_range = ScoreRange(lower=1, upper=10)
+
+
+def _build_project_level_instruction(score_range):
+    instruction = f"""
+    # Instructions
+    Score each prompt and completions, where {score_range.lower} is the lowest score and {score_range.upper} is the highest score.
+    """
+    return textwrap.dedent(instruction)
+
+
+def _build_task_level_instruction(score_range):
+    instruction = f"""
+    # Instructions
+    Score each prompt and completions, where {score_range.lower} is the lowest score and {score_range.upper} is the highest score.
+    """
+    return textwrap.dedent(instruction)
+
+
+def _build_fields_dict(score_range):
+    return (
+        {
+            "type": "number",
+            "field_id": "Quality Score",
+            "title": "Quality Score",
+            "required": True,
+            "use_slider": True,
+            "min": score_range.lower,
+            "max": score_range.upper,
+            # text that labellers will see at "min" part of slider
+            "prefix": "lowest quality",
+            # text that labellers will see at "max" part of slider
+            "suffix": "highest quality",
+            # prompt above slider
+            "description": f"Rate the completions quality compared to the prompt from {score_range.lower} (lowest quality) to {score_range.upper} (highest quality)",
+            # "hint": None,
+        },
+    )
 
 
 def create_project(project_name: str) -> Optional[bool]:
@@ -37,80 +76,28 @@ def create_project(project_name: str) -> Optional[bool]:
     project_payload = {
         "task_type": TaskType.TextCollection,
         "project_name": project_name,
-        "rapid": False,
         "studio": True,
-        "pipeline": "standard_task",
         "params": {
-            "instruction": "# Instructions\n\nScore each prompt and completions, where 1 is the lowest score and 10 is the highest score.",
-            # # specify this so for studio projects
-            "fields": [
-                {
-                    "type": "number",
-                    "field_id": "Quality Score",
-                    "title": "Quality Score",
-                    "required": True,
-                    "use_slider": True,
-                    "min": 1,
-                    "max": 10,
-                    "prefix": "lowest quality",
-                    "suffix": "highest quality",
-                    # prompt that human labellers will see
-                    "description": "Rate the completions quality compared to the prompt from 1 (lowest quality) to 10 (highest quality)",
-                    # "hint": None,
-                },
-            ],
+            "instruction": _build_project_level_instruction(score_range),
+            "fields": [_build_fields_dict(score_range)],
         },
     }
-
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "authorization": "Basic bGl2ZV84YjIxOWMzNDM5MmI0NjVlYTQwZDU1MzQ3ODNjYjVmZTo=",
-    }
     try:
-        response = requests.post(
-            url, headers=headers, json=jsonable_encoder(project_payload)
-        )
-        print(response.status_code)
-        print(response.json())
-        # project = client.create_project(**project_payload)
+        _ = client.create_project(**project_payload)
     except ScaleDuplicateResource as e:
-        # for some reason will get duplicate resource error although project was created
+        # may get duplicate resource error although project was created properly...
         pass
-    is_project_created = project_name in [p.name for p in client.get_projects()]
+
+    if is_project_created := project_name in [p.name for p in client.get_projects()]:
+        batch_name = build_batch_name(project_name)
+        try:
+            # need to create first batch in order to "complete setup"
+            _ = client.create_batch(project=project_name, batch_name=batch_name)
+        except Exception as e:
+            pass
+
     print(f"Successfully created project? {is_project_created}")
     return is_project_created
-
-
-def _ensure_project_setup_completed(project_name: str):
-    project = client.get_project(project_name)
-    print(f"Before: {project=}")
-    payload = {
-        "patch": True,
-        "pipelineName": "standard_task",
-        "numReviews": 0,
-        # "params": {
-        #     "pipeline": "standard_task",
-        #     "fields": [
-        #         {
-        #             "type": "number",
-        #             "field_id": "Quality Score",
-        #             "title": "Quality Score",
-        #             "required": True,
-        #             "use_slider": True,
-        #             "min": 1,
-        #             "max": 10,
-        #             "prefix": "lowest quality",
-        #             "suffix": "highest quality",
-        #             "description": "Rate the completions quality compared to the prompt from 1 (lowest quality) to 10 (highest quality)",
-        #         },
-        #     ],
-        # },
-    }
-    client.update_project(project_name, **payload)
-
-    project = client.get_project(project_name)
-    print(f"After: {project=}")
 
 
 def dedupe_dataset():
@@ -143,124 +130,54 @@ def dedupe_dataset():
     return deduplicated_data
 
 
-def build_batch_name(project_name: str, is_calibration) -> str:
+def build_batch_name(project_name: str) -> str:
     current_date = datetime.now().strftime("%Y_%m_%d")
-    # TODO remove after testing
-    batch_name = f"{project_name}_{current_date}_2"
-    if not is_calibration:
-        return batch_name
-    return batch_name + "_calibration"
+    batch_name = f"{project_name}_{current_date}"
+    return batch_name
 
 
 def create_task(project_name: str):
     batch = None
-    batch_name = build_batch_name(project_name, False)
+    batch_name = build_batch_name(project_name)
     try:
         batch = client.create_batch(project=project_name, batch_name=batch_name)
+        print("Created batch successfully")
     except ScaleDuplicateResource as e:
         print("Batch already exists... skipping creation")
         batch = client.get_batch(batch_name)
         pass
 
-    print(f"Batch json: {batch._json}")
-
-    # # convert  completions into attachments for human to view
-    # def format_prompt_and_completion(prompt: str, completion: Completion) -> dict:
-    #     return {
-    #         "type": "text",
-    #         "content": f"# Prompt: {prompt} # Completion: {completion.text}",
-    #     }
-
-    # attachments = [{"type": "text", "content": c.text} for c in completions]
     payload = {
-        "instruction": "**Instructions:** Please annotate all the things",
+        "instruction": _build_task_level_instruction(score_range),
+        # TODO use multiple prompt / completion pairs
         "attachments": [
             {
                 "type": "text",
                 "content": "# Prompt:\nwhat is your name?\n\n# Completion:\n my name is Alice, nice to meet you!",
             },
+            {
+                "type": "text",
+                "content": "# Prompt:\nwhat is your name?\n\n# Completion:\n my name is Bob",
+            },
         ],
         "responses_required": 1,
         "priority": 30,
         "project": project_name,
         "batch": batch_name,
-        "callback_url": "https://webhook.site/#!/71d292d7-4ef0-41a6-b8d5-b4e1717da367",
+        # TODO
+        "callback_url": "https://webhook.site/71d292d7-4ef0-41a6-b8d5-b4e1717da367",
         "title": "title",
         "description": "desc",
         "unique_id": str(uuid4()),
-        "fields": [
-            {
-                "type": "number",
-                "field_id": "Quality Score",
-                "title": "Quality Score",
-                "description": "Rate the completions quality compared to the prompt from 1 (lowest quality) to 10 (highest quality)",
-                "required": False,
-                "use_slider": True,
-                "min": 1,
-                "max": 10,
-                # "prefix": "lowest quality",
-                # "suffix": "highest quality",
-                # prompt that human labellers will see
-            },
-        ],
-        "isProcessed": False,
+        "fields": [_build_fields_dict(score_range)],
     }
 
-    task_payload = {
-        "project": project_name,
-        "batch": batch_name,
-        "callback_url": "https://webhook.site/#!/71d292d7-4ef0-41a6-b8d5-b4e1717da367",
-        "attachments": [
-            {
-                "type": "text",
-                "content": "# Prompt:what is your name?\n\n# Completion: my name is Alice.",
-            },
-        ],
-        "description": "This project blah blah description",
-        "responses_required": 1,
-        "instruction": "# Instructions\n\nScore each prompt and completions, where 1 is the lowest score and 10 is the highest score.",
-        "fields": [
-            {
-                "type": "number",
-                "field_id": "Quality Score",
-                "title": "Quality Score",
-                "required": True,
-                "use_slider": True,
-                "min": 1,
-                "max": 10,
-                "prefix": "lowest quality",
-                "suffix": "highest quality",
-                # prompt that human labellers will see
-                "description": "Rate the completions quality compared to the prompt from 1 (lowest quality) to 10 (highest quality)",
-                # "hint": None,
-            },
-        ],
-        "priority": 30,
-        # "params": {
-        #     # "fields": [
-        #     #     {
-        #     #         "type": "number",
-        #     #         "field_id": "Quality Score",
-        #     #         "title": "Quality Score",
-        #     #         "required": True,
-        #     #         "use_slider": True,
-        #     #         "min": 1,
-        #     #         "max": 10,
-        #     #         "prefix": "lowest quality",
-        #     #         "suffix": "highest quality",
-        #     #         # prompt that human labellers will see
-        #     #         "description": "Rate the completions quality compared to the prompt from 1 (lowest quality) to 10 (highest quality)",
-        #     #         # "hint": None,
-        #     #     },
-        #     # ],
-        #     # specify this so that we can use num_reviews =
-        #     # "pipeline": "standard_task",
-        # },
-    }
-    # task = client.create_evaluation_task(TaskType.TextCollection, **task_payload)
-    # task = client.create_task(TaskType.TextCollection, **task_payload)
     task = client.create_task(TaskType.TextCollection, **payload)
-    batch.finalize()
+    try:
+        batch.finalize()
+    except ScaleInvalidRequest as e:
+        print(f"Error occured while finalising batch, exception: {str(e)}")
+        pass
 
 
 def create_eval_tasks(project_name):
@@ -269,7 +186,7 @@ def create_eval_tasks(project_name):
         for line in f:
             eval_data.append(json.loads(line))
 
-    batch_name = build_batch_name(project_name, True)
+    batch_name = build_batch_name(project_name) + "_calibration"
     batch = None
     try:
         batch = client.create_batch(
@@ -301,7 +218,7 @@ def create_eval_tasks(project_name):
             task_payload = {
                 "project": project_name,
                 "batch": batch_name,
-                "callback_url": "https://webhook.site/#!/71d292d7-4ef0-41a6-b8d5-b4e1717da367",
+                "callback_url": "https://webhook.site/71d292d7-4ef0-41a6-b8d5-b4e1717da367",
                 "attachments": attachments,
                 "expected_response": {
                     "Quality Score": {
@@ -332,7 +249,7 @@ def create_eval_tasks(project_name):
             )
             print(f"Created task... for {batch_name}")
             count += 1
-    # finalised_res = batch.finalize()
+    finalised_res = batch.finalize()
     # print(f"Finalised batch, response: {finalised_res}")
 
 
@@ -381,7 +298,7 @@ async def add_scores_to_dataset():
 
 def one_time_finalise(project_name):
     batch = None
-    batch_name = build_batch_name(project_name, False)
+    batch_name = build_batch_name(project_name)
     try:
         batch = client.create_batch(project=project_name, batch_name=batch_name)
     except ScaleDuplicateResource as e:
@@ -394,14 +311,12 @@ def one_time_finalise(project_name):
 
 
 if __name__ == "__main__":
-    project_name = "human_feedback23"
-    # print(client.get_projects())
+    project_name = "human_feedback_PLEASE_WORK"
     create_project(project_name)
-    # _ensure_project_setup_completed(project_name)
+    create_task(project_name)
     # dedupe_dataset()
     # asyncio.run(add_scores_to_dataset())
     # create_eval_tasks(project_name)
-    # create_task(project_name)
 
     # one_time_finalise(project_name)
     # print(client.get_projects())
