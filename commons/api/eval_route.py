@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from commons.utils import get_new_uuid
 from template.protocol import Completion, RankingRequest
+from neurons.validator import validator
+import bittensor as bt
 # from sse_starlette.sse import EventSourceResponse
 # from tenacity import (
 #     AsyncRetrying,
@@ -30,18 +32,15 @@ evals_router = APIRouter(prefix="/api/evals")
 
 class EvalsRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
-    prompt: str
-    completions: List[str] = Field("", example="Chat group id")
+    prompt: str = Field(..., description="Prompt that generated the completions")
+    completions: List[str] = Field("", description="Chat group id")
     media_type: str = Field(
-        ..., example="Media type of the request", regex="^(text|image)$"
+        ..., description="Media type of the request", regex="^(text|image)$"
     )
 
 
 @evals_router.post("/text")
 async def eval_text(request: EvalsRequest):
-    from neurons.validator import validator
-
-    # build request
     synapse = RankingRequest(
         n_completions=len(request.completions),
         pid=get_new_uuid(),
@@ -50,6 +49,9 @@ async def eval_text(request: EvalsRequest):
     )
 
     # TODO unsure if we can do this, since it will conflict with synapse
-    response = await validator.forward(synapse)
-    response_json = jsonable_encoder(response)
-    return responses.JSONResponse(content=response_json)
+    try:
+        response = await validator.forward(synapse)
+        response_json = jsonable_encoder(response)
+        return responses.JSONResponse(content=response_json)
+    except Exception as e:
+        bt.logging.error("Encountered e")
