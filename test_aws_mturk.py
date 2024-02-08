@@ -37,8 +37,8 @@ def _build_description(num_completions):
 
 def _build_instruction(num_completions, score_range: ScoreRange):
     instruction = f"""
-    This is a task where you will need to read up to {num_completions} sentences.
-    You will need to score each prompt and sentence and score them on a scale of 1 to 10 in terms of quality.
+    This is a task where you will need to read up to {num_completions} sentences.<br>
+    You will need to score each prompt and sentence and score them on a scale of 1 to 10 in terms of quality.<br>
     Rate the following texts on a scale of {score_range.lower} to {score_range.upper}, where {score_range.lower} is the lowest quality and {score_range.upper} is the highest quality.
     """
     return textwrap.dedent(instruction)
@@ -77,23 +77,23 @@ def build_task_xhtml_content(
 ):
     xhtml_content = f"""
 <HTMLQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2011-11-11/HTMLQuestion.xsd">
-  <HTMLContent><![CDATA[
-    <!DOCTYPE html>
-      <body>
-<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
-<crowd-form>
-    <p><strong>{_build_instruction(num_completions=len(completions), score_range=score_range)}</strong></p>
-    <p><strong>Prompt: </strong>{prompt}</p>
-    {_build_completions_html([completion.text for completion in completions])}
+    <HTMLContent><![CDATA[
+        <!DOCTYPE html>
+        <body>
+            <script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+            <crowd-form>
+                <p><strong>{_build_instruction(num_completions=len(completions), score_range=score_range)}</strong></p>
+                <p><strong>Prompt: </strong>{prompt}</p>
+                {_build_completions_html([completion.text for completion in completions])}
 
-    <p><strong>Score each response here</strong>
-        {_build_sliders_html([completion.cid for completion in completions], score_range)}
-    </p>
-</crowd-form>
-      </body>
-    </html>
-  ]]></HTMLContent>
-  <FrameHeight>0</FrameHeight>
+                <p><strong>Score each response here.</strong>
+                    {_build_sliders_html([completion.cid for completion in completions], score_range)}
+                </p>
+            </crowd-form>
+        </body>
+        </html>
+    ]]></HTMLContent>
+    <FrameHeight>0</FrameHeight>
 </HTMLQuestion>
     """
     return xhtml_content
