@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pickle
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 from commons.objects import DendriteQueryResponse
 import bittensor as bt
 from template.utils.config import check_config, get_config
@@ -66,3 +66,14 @@ class DataManager:
         DataManager.save(path, data)
 
         return
+
+    @staticmethod
+    def get_response_by_request_id(request_id) -> Optional[DendriteQueryResponse]:
+        path = DataManager.get_ranking_data_filepath()
+        data = DataManager.load(path=path)
+        assert isinstance(data, list)
+
+        for d in data:
+            if d.request.pid == request_id:
+                return d
+        return None
