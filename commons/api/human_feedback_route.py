@@ -1,28 +1,19 @@
-from typing import Dict, List
-from dotenv import load_dotenv
-from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict, Field
-
 import bittensor as bt
+from dotenv import load_dotenv
+from fastapi import APIRouter, Request
+
+from commons.human_feedback.aws_mturk import MTurkUtils
 
 load_dotenv()
-
-callback_route = "/api/human_feedback"
 
 human_feedback_router = APIRouter(prefix="/api/human_feedback")
 
 
-class EvalsRequest(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    prompt: str = Field(..., description="Prompt that generated the completions")
-    completions: List[str] = Field("", description="Chat group id")
-    media_type: str = Field(
-        ..., description="Media type of the request", regex="^(text|image)$"
-    )
-
-
-# this callback url gets called when task gets completed
+# process our completed tasks sent to AWS MTurk
 @human_feedback_router.post("/callback")
-async def task_completion_callback(request: Dict):
-    bt.logging.info(f"Received task completion callback with body: {request}")
-    pass
+async def task_completion_callback(request: Request):
+    response_json = await request.json()
+    bt.logging.info(f"Received task completion callback with body: {response_json}")
+    # TODO completions and scores
+    await MTurkUtils.handle_mturk_event(response_json)
+    return

@@ -1,22 +1,22 @@
-import json
-from typing import Any, Dict, List
-import boto3
-
-import textwrap
-from dotenv import load_dotenv
 import os
+import textwrap
+from collections import defaultdict
+from typing import Any, Dict, List
+
+import bittensor as bt
+import boto3
+import botocore.exceptions
+from dotenv import load_dotenv
 
 from commons.llm.prompts import ScoreRange
 from template.protocol import Completion
-import bittensor as bt
-import botocore.exceptions
 
 load_dotenv()
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 US_EAST_REGION = "us-east-1"
-# ensure regions in 'endpoint' key matches
 
+# ensure regions in 'endpoint' key matches
 mturk_env_dict = {
     "production": {
         "endpoint_url": "https://mturk-requester.us-east-1.amazonaws.com",
@@ -31,10 +31,18 @@ mturk_env_dict = {
 
 def get_environment_config(environment: str) -> Dict[str, Any]:
     if environment not in mturk_env_dict:
-        raise ValueError(f"Invalid environment: {environment}")
+        raise ValueError(
+            f"Invalid environment: {environment}, should be one of {mturk_env_dict.keys()}"
+        )
+
+    current_env = mturk_env_dict[environment]
+    if US_EAST_REGION not in current_env["endpoint_url"]:
+        raise ValueError(
+            f"Invalid region in endpoint url: {current_env['endpoint_url']}"
+        )
 
     bt.logging.info("Using AWS environment: " + environment)
-    return mturk_env_dict[environment]
+    return current_env
 
 
 env_config = get_environment_config("sandbox")
@@ -111,36 +119,29 @@ class MTurkUtils:
             )
 
     @staticmethod
-    def handle_mturk_event(payload: Any):
-        # json_payload = None
-        # if isinstance(payload, str):
-        #     json_payload = json.loads(payload)
-        # elif isinstance(payload, dict):
-        #     json_payload = payload
-        # elif isinstance(payload, list):
-        #     json_payload = payload
+    async def handle_mturk_event(event_payload: Dict):
+        if event_payload is None or not event_payload:
+            bt.logging.warning(f"MTurk event is None or empty, {event_payload=}")
+            return
 
-        # assert json_payload is not None, f"Unexpected payload type {type(payload)}"
+        completion_id_to_scores = defaultdict(list)
+        for item in event_payload:
+            answers = item.get("Answer")
+            for answer in answers:
+                task_answers = answer.get("taskAnswers")
+                if task_answers is None:
+                    bt.logging.warning("MTurk event has no task answers")
 
-        # TODO handle this event data
-        # [
-        #     {
-        #         "WorkerId": "A3IEQBE35F5IHB",
-        #         "Answer": [
-        #             {
-        #                 "taskAnswers": [
-        #                     {
-        #                         "cid_a6f41ad1-d8a8-4bf3-a698-1b431bf2edac": 5.68,
-        #                         "cid_f95cae4d-38ed-4911-b97a-f92a0c3bad9a": 7.49,
-        #                     }
-        #                 ]
-        #             }
-        #         ],
-        #     }
-        # ]
-        print(f"Payload: {payload}")
+                for task_answer in task_answers:
+                    for task_key, score in task_answer.items():
+                        completion_id = MTurkUtils.decode_task_key(task_key)
+                        completion_id_to_scores[completion_id].append(score)
 
-        pass
+        completion_id_to_scores = dict(completion_id_to_scores)
+        bt.logging.info(
+            f"Processed MTurk event, completion ID to scores: {completion_id_to_scores}"
+        )
+        return completion_id_to_scores
 
     @staticmethod
     def build_description(num_completions):
