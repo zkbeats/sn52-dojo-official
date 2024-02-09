@@ -9,6 +9,7 @@ import bittensor as bt
 from commons.reward_model.models import ModelUtils, ModelZoo
 from template.base.miner import BaseMinerNeuron
 from template.protocol import Rank, RankingRequest, RankingResult
+import uvicorn
 
 
 class Miner(BaseMinerNeuron):
@@ -171,9 +172,36 @@ class Miner(BaseMinerNeuron):
         return prirority
 
 
-# This is the main function, which runs the miner.
+async def log_miner_status():
+    while True:
+        bt.logging.info(f"Miner running... {time.time()}")
+        await asyncio.sleep(5)
+
+
+async def main():
+    miner = Miner()
+    with miner as m:
+        log_task = asyncio.create_task(log_miner_status())
+
+    config = uvicorn.Config(
+        app="main_miner:app",
+        host="0.0.0.0",
+        port=5003,
+        workers=4,
+        log_level="info",
+        # NOTE should only be used in development.
+        reload=False,
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+    # once the server is closed, cancel the logging task
+    log_task.cancel()
+    try:
+        await log_task
+    except asyncio.CancelledError:
+        pass
+
+
 if __name__ == "__main__":
-    with Miner() as miner:
-        while True:
-            bt.logging.info("Miner running...", time.time())
-            time.sleep(5)
+    asyncio.run(main())
