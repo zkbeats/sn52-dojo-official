@@ -8,21 +8,6 @@ from commons.utils import get_new_uuid
 from template.protocol import Completion, RankingRequest
 from neurons.validator import validator
 import bittensor as bt
-# from sse_starlette.sse import EventSourceResponse
-# from tenacity import (
-#     AsyncRetrying,
-#     RetryError,
-#     retry_if_exception_cause_type,
-#     retry_if_exception_type,
-#     stop_after_attempt,
-# )
-
-# from commons.exceptions import ResponseFalselyMarkedAsCompletedException
-# from commons.llm.agent import Agent
-# from commons.llm.observability import Observability
-# from commons.orm.chat_history_orm import ChatHistoryORM
-# from commons.utils.environment import get_environment_name
-# from commons.utils.logging import log_retry_info
 
 load_dotenv()
 
