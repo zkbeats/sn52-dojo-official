@@ -1,26 +1,13 @@
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-from logging.config import dictConfig
 
-from commons.routes.evals import evals_router
+from commons.api.eval_route import evals_router
+from commons.api.middleware import LimitContentLengthMiddleware
 
 load_dotenv()
 
-MAX_CONTENT_LENGTH = 1 * 1024 * 1024
 
-
-class LimitContentLengthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        content_length = int(request.headers.get("content-length", 0))
-        if content_length <= MAX_CONTENT_LENGTH:
-            return await call_next(request)
-        return Response(status_code=413)
-
-
-# dictConfig(uvicorn_logging_config)
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
