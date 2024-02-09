@@ -27,7 +27,7 @@ from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
 from commons.reward_model.models import ModelZoo
 
 
-def check_config(config: "bt.Config"):
+def check_config(config: bt.config):
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 

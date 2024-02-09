@@ -224,7 +224,7 @@ Here is a full example for reference:
 
 ```python
 class StreamingTemplateMiner(prompting.Miner):
-    def config(self) -> "bt.Config":
+    def config(self) -> "bt.config":
         """
         Returns the configuration object specific to this miner.
 
@@ -232,7 +232,7 @@ class StreamingTemplateMiner(prompting.Miner):
         Currently, it sets up a basic configuration parser.
 
         Returns:
-            bt.Config: A configuration object with the miner's operational parameters.
+            bt.config: A configuration object with the miner's operational parameters.
         """
         parser = argparse.ArgumentParser(description="Streaming Miner Configs")
         self.add_args(parser)
