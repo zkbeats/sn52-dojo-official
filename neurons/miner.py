@@ -5,6 +5,7 @@ import time
 from typing import Tuple
 
 import bittensor as bt
+from commons.llm.openai_proxy import Provider
 
 from commons.reward_model.models import ModelUtils, ModelZoo
 from template.base.miner import BaseMinerNeuron
@@ -72,12 +73,43 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         print(f"Miner received request, type={str(synapse.__class__.__name__)}")
-        for completion in synapse.completions:
-            # TODO change method of scoring here, see models.ModelUtils for different scoring methods
-            score = ModelUtils._hf_score(
-                self.config.reward_model, synapse.prompt, completion.text
+
+        # TODO make this a param in the miner config
+        scoring_method = "huggingface_model"
+        if scoring_method.casefold() == "huggingface_model":
+            for completion in synapse.completions:
+                # TODO change method of scoring here, see models.ModelUtils for different scoring methods
+                score = ModelUtils._hf_score(
+                    self.config.reward_model, synapse.prompt, completion.text
+                )
+                synapse.ranks.append(Rank(cid=completion.cid, score=score))
+
+        elif scoring_method.casefold() == "llm_api":
+            scores_response = await ModelUtils._llm_api_score(
+                provider=Provider.TOGETHER_AI,
+                model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
+                prompt=synapse.prompt,
+                completions=synapse.completions,
             )
-            synapse.ranks.append(Rank(cid=completion.cid, score=score))
+            for completion in synapse.completions:
+                matching_score_item = next(
+                    (
+                        item
+                        for item in scores_response.scores
+                        if item.completion_id == completion.cid
+                    ),
+                    [None],
+                )
+
+                if matching_score_item:
+                    synapse.ranks.append(
+                        Rank(cid=completion.cid, score=matching_score_item.score)
+                    )
+
+        elif scoring_method.casefold() == "human_feedback":
+            # TODO implement human feedback scoring, more complex since it cannot be immediately received
+            pass
+
         return synapse
 
     async def blacklist(self, synapse: RankingRequest) -> Tuple[bool, str]:
