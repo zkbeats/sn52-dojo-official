@@ -71,4 +71,4 @@ class RankingResult(bt.Synapse):
 
 
 class MTurkResponse(bt.Synapse):
-    completion_id_to_scores: Dict[str, float]
+    completion_id_to_score: Dict[str, float]

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 import pickle
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from commons.objects import DendriteQueryResponse
 import bittensor as bt
 from template.utils.config import check_config, get_config
@@ -17,7 +17,7 @@ class DataManager:
         return base_path / "data" / "ranking" / "data.pkl"
 
     @staticmethod
-    def load(path):
+    def load(path) -> List[DendriteQueryResponse]:
         try:
             # Load the list of Pydantic objects from the pickle file
             with open(str(path), "rb") as file:

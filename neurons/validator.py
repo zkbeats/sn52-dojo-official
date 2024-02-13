@@ -1,6 +1,7 @@
 import asyncio
-from typing import List
+from typing import List, Tuple
 from datetime import datetime, timedelta
+import copy
 
 import bittensor as bt
 from commons.data_manager import DataManager
@@ -10,9 +11,19 @@ from commons.consensus import Consensus
 
 from commons.utils import get_epoch_time, get_new_uuid
 from template.base.validator import BaseValidatorNeuron
-from template.protocol import Completion, MTurkResponse, RankingRequest, RankingResult
+from template.protocol import (
+    Completion,
+    MTurkResponse,
+    Rank,
+    RankingRequest,
+    RankingResult,
+)
 from template.utils.uids import get_random_uids
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+
+def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
+    return [response for response in responses if len(response.ranks) > 0]
 
 
 class Validator(BaseValidatorNeuron):
@@ -22,20 +33,74 @@ class Validator(BaseValidatorNeuron):
         self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
 
         self.axon.attach(
-            forward_fn=self.receive_mturk_response,
-            # blacklist_fn=self.blacklist,
-            # priority_fn=self.priority,
+            forward_fn=self.forward_mturk_response,
+            blacklist_fn=self.blacklist_mturk_response,
         )
         bt.logging.info(f"Axon created: {self.axon}")
 
-    async def receive_mturk_response(self, synapse: MTurkResponse):
-        # TODO
+    async def blacklist_mturk_response(
+        self, synapse: MTurkResponse
+    ) -> Tuple[bool, str]:
+        bt.logging.info("checking blacklist function")
+        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
+            # Ignore requests from unrecognized entities.
+            bt.logging.trace(
+                f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
+            )
+            return True, "Unrecognized hotkey"
+
+        # check request is only from a miner
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
+        if neuron.validator_permit:
+            bt.logging.trace(
+                f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
+            )
+            return True, "Validators not allowed"
+
+        return False, "Passed blacklist function"
+
+    async def forward_mturk_response(self, synapse: MTurkResponse):
         """Allows miners to have a delayed response to certain RankingRequest to allow for human feedback loop"""
         # 1. check request from RankingRequest
         # 2. append completion scores to request
         # 3. persist on disk via DataManager
 
-        pass
+        path = DataManager.get_ranking_data_filepath()
+        data = DataManager.load(path=path)
+        mturk_cids = set(synapse.completion_id_to_score.keys())
+
+        miner_hotkey = synapse.dendrite.hotkey
+        for d in data:
+            request_cids = set([completion.cid for completion in d.request.completions])
+
+            if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
+                bt.logging.warning(
+                    "Miner is attempting to send feedback for a wrong completion ID..."
+                )
+                continue
+
+            if (
+                miner_participants := [r.axon.hotkey for r in d.responses]
+            ) and miner_hotkey in miner_participants:
+                bt.logging.warning("Miner already sent response for this request...")
+                continue
+
+            request_copy = copy.deepcopy(d.request)
+            for cid in found_cids:
+                # simulate scoring method in Miner.forward(...)
+                request_copy.ranks.append(
+                    Rank(cid=cid, score=synapse.completion_id_to_score[cid])
+                )
+                # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
+                # function expects axon.hotkey to be the miner's hotkey
+                request_copy.axon.hotkey = miner_hotkey
+                d.responses.append(request_copy)
+
+            d.responses = _filter_valid_responses(d.responses)
+
+        DataManager.save(path, data)
+        return
 
     async def _forward_consensus(self, synapse: RankingResult, hotkeys: List[str]):
         bt.logging.debug("Sending back consensus to miners")
@@ -63,6 +128,8 @@ class Validator(BaseValidatorNeuron):
             print(
                 f"Request epoch time: {datetime.fromtimestamp(d.request.epoch_timestamp)}, raw: {d.request.epoch_timestamp}"
             )
+
+        # TODO @dev change this to ensure enough time for human feedback!!!
         data: List[DendriteQueryResponse] = [
             d
             for d in data
@@ -74,10 +141,12 @@ class Validator(BaseValidatorNeuron):
             return
 
         for d in data:
+            ranking_result = Consensus.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            self.update_scores(d.result.hotkey_to_scores)
+            self.update_scores(ranking_result.hotkey_to_scores)
             await self._forward_consensus(
-                synapse=d.result, hotkeys=list(d.result.hotkey_to_scores.keys())
+                synapse=ranking_result,
+                hotkeys=list(ranking_result.hotkey_to_scores.keys()),
             )
             await asyncio.sleep(5)
 
@@ -123,15 +192,14 @@ class Validator(BaseValidatorNeuron):
         # Log the results for monitoring purposes.
         bt.logging.info(f"Received responses: {responses}")
 
-        valid_responses = [r for r in responses if len(r.ranks) > 0]
+        valid_responses = _filter_valid_responses(responses)
         if not len(valid_responses):
             bt.logging.warning("No valid responses received from miners.")
             return
 
-        ranking_result = Consensus.consensus_score(responses=responses)
         response_data = DendriteQueryResponse(
             request=synapse,
-            result=ranking_result,
+            responses=valid_responses,
         )
         DataManager.append_responses(response=response_data)
         return response_data

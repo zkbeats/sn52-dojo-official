@@ -124,10 +124,10 @@ class Miner(BaseMinerNeuron):
     async def send_mturk_response(self, synapse: MTurkResponse):
         """After receiving a response from MTurk, send the response back to the calling validator"""
         # 1. figure out which validator hotkey sent the original request
-        hotkey = Miner._find_hotkey_by_completions(synapse.completion_id_to_scores)
+        hotkey = Miner._find_hotkey_by_completions(synapse.completion_id_to_score)
         if not hotkey:
             bt.logging.error(
-                f"No hotkey found for completion ids: {synapse.completion_id_to_scores.keys()}"
+                f"No hotkey found for completion ids: {synapse.completion_id_to_score.keys()}"
             )
             return
 

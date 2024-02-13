@@ -19,7 +19,7 @@ async def task_completion_callback(request: Request):
     completion_id_to_scores = await MTurkUtils.handle_mturk_event(response_json)
     try:
         await miner.send_mturk_response(
-            MTurkResponse(completion_id_to_scores=completion_id_to_scores)
+            MTurkResponse(completion_id_to_score=completion_id_to_scores)
         )
     except Exception as e:
         bt.logging.error(f"Failed to send MTurk response: {e}")
