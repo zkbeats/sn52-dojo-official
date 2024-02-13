@@ -1,5 +1,4 @@
 import asyncio
-import random
 import threading
 import time
 from typing import Dict, Tuple
@@ -8,9 +7,12 @@ import bittensor as bt
 from commons.llm.openai_proxy import Provider
 from commons.human_feedback.aws_mturk import MTurkUtils
 from commons.reward_model.models import ModelUtils
+
 from template.base.miner import BaseMinerNeuron
 from template.protocol import MTurkResponse, Rank, RankingRequest, RankingResult
 import uvicorn
+
+from template.utils.config import ScoringMethod
 
 
 class Miner(BaseMinerNeuron):
@@ -79,8 +81,8 @@ class Miner(BaseMinerNeuron):
         self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
         # TODO make this a param in the miner config
-        scoring_method = "huggingface_model"
-        if scoring_method.casefold() == "huggingface_model":
+        scoring_method = self.config.scoring_method
+        if scoring_method.casefold() == ScoringMethod.HF_MODEL:
             for completion in synapse.completions:
                 # TODO change method of scoring here, see models.ModelUtils for different scoring methods
                 score = ModelUtils._hf_score(
@@ -88,7 +90,7 @@ class Miner(BaseMinerNeuron):
                 )
                 synapse.ranks.append(Rank(cid=completion.cid, score=score))
 
-        elif scoring_method.casefold() == "llm_api":
+        elif scoring_method.casefold() == ScoringMethod.LLM_API:
             scores_response = await ModelUtils._llm_api_score(
                 provider=Provider.TOGETHER_AI,
                 model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
@@ -110,8 +112,7 @@ class Miner(BaseMinerNeuron):
                         Rank(cid=completion.cid, score=matching_score_item.score)
                     )
 
-        elif scoring_method.casefold() == "human_feedback":
-            # TODO implement human feedback scoring, more complex since it cannot be immediately received
+        elif scoring_method.casefold() == ScoringMethod.HUMAN_FEEDBACK:
             create_mturk_status = MTurkUtils.create_mturk_task(
                 prompt=synapse.prompt,
                 completions=synapse.completions,

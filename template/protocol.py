@@ -65,7 +65,7 @@ class RankingResult(bt.Synapse):
     cid_to_consensus: Dict[str, float] = Field(
         description="Consensus score for each completion", allow_mutation=False
     )
-    hotkey_to_scores: Dict[str, float] = Field(
+    hotkey_to_score: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
 

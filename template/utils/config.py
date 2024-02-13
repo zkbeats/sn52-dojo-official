@@ -16,6 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+from enum import StrEnum
 import os
 from pathlib import Path
 import torch
@@ -27,8 +28,14 @@ from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
 from commons.reward_model.models import ModelZoo
 
 
+class ScoringMethod(StrEnum):
+    HF_MODEL = "hf_model"
+    LLM_API = "llm_api"
+    HUMAN_FEEDBACK = "human_feedback"
+
+
 def check_config(config: bt.config):
-    r"""Checks/validates the config namespace object."""
+    """Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
     full_path = os.path.expanduser(
@@ -40,24 +47,9 @@ def check_config(config: bt.config):
             config.neuron.name,
         )
     )
-    print("full path:", full_path)
     config.neuron.full_path = os.path.expanduser(full_path)
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
-
-    if not config.neuron.dont_save_events:
-        # Add custom event logger for the events.
-        logger.level("EVENTS", no=38, icon="📝")
-        logger.add(
-            os.path.join(config.neuron.full_path, "events.log"),
-            rotation=config.neuron.events_retention_size,
-            serialize=True,
-            enqueue=True,
-            backtrace=False,
-            diagnose=False,
-            level="EVENTS",
-            format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-        )
 
 
 def add_args(parser):
@@ -69,19 +61,22 @@ def add_args(parser):
 
     parser.add_argument(
         "--neuron.type",
+        choices=["miner", "validator"],
         type=str,
         help="Whether running a miner or validator",
     )
     args, unknown = parser.parse_known_args()
     neuron_type = None
     if known_args := vars(args):
-        if "neuron.type" not in known_args:
-            raise UnspecifiedNeuronType("neuron.type not specified during runtime")
-        if known_args["neuron.type"] not in ["miner", "validator"]:
-            raise InvalidNeuronType(
-                f"neuron.type must be either 'miner' or 'validator', got {known_args['neuron.type']}"
-            )
+        # if "neuron.type" not in known_args:
+        #     raise UnspecifiedNeuronType("neuron.type not specified during runtime")
+        # if known_args["neuron.type"] not in ["miner", "validator"]:
+        #     raise InvalidNeuronType(
+        #         f"neuron.type must be either 'miner' or 'validator', got {known_args['neuron.type']}"
+        #     )
         neuron_type = known_args["neuron.type"]
+
+    print("neuron_type:", neuron_type)
 
     parser.add_argument(
         "--neuron.name",
@@ -109,13 +104,6 @@ def add_args(parser):
         type=str,
         help="Events retention size.",
         default="2 GB",
-    )
-
-    parser.add_argument(
-        "--neuron.dont_save_events",
-        action="store_true",
-        help="If set, we dont save events to a log file.",
-        default=False,
     )
 
     if neuron_type == "validator":
@@ -178,6 +166,11 @@ def add_args(parser):
         )
 
     elif neuron_type == "miner":
+        parser.add_argument(
+            "--scoring_method",
+            help="Method to use for scoring completions.",
+            choices=[str(method) for method in ScoringMethod],
+        )
         parser.add_argument(
             "--blacklist.force_validator_permit",
             action="store_true",

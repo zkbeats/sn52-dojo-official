@@ -143,10 +143,10 @@ class Validator(BaseValidatorNeuron):
         for d in data:
             ranking_result = Consensus.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            self.update_scores(ranking_result.hotkey_to_scores)
+            self.update_scores(ranking_result.hotkey_to_score)
             await self._forward_consensus(
                 synapse=ranking_result,
-                hotkeys=list(ranking_result.hotkey_to_scores.keys()),
+                hotkeys=list(ranking_result.hotkey_to_score.keys()),
             )
             await asyncio.sleep(5)
 
