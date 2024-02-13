@@ -2,11 +2,10 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from commons.api.eval_route import evals_router
+from commons.api.human_feedback_route import human_feedback_router
 from commons.api.middleware import LimitContentLengthMiddleware
 
 load_dotenv()
-
 
 app = FastAPI()
 app.add_middleware(
@@ -15,6 +14,5 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# app.add_middleware(RemoveNginxHeadersMiddleware)
 app.add_middleware(LimitContentLengthMiddleware)
-app.include_router(evals_router)
+app.include_router(human_feedback_router)

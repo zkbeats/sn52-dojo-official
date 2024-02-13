@@ -3,10 +3,33 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
+from typing import Tuple
 
+import bittensor as bt
 import jsonref
-from pydantic import BaseModel
+import requests
 import torch
+from pydantic import BaseModel
+
+
+def initialise(
+    config: bt.config,
+) -> Tuple[bt.wallet, bt.subtensor, bt.metagraph, bt.axon]:
+    # The wallet holds the cryptographic key pairs for the miner.
+    wallet = bt.wallet(config=config)
+    # The subtensor is our connection to the Bittensor blockchain.
+    subtensor = bt.subtensor(config=config)
+    # The metagraph holds the state of the network, letting us know about other validators and miners.
+    metagraph = subtensor.metagraph(config.netuid)
+    # The axon handles request processing, allowing validators to send this miner requests.
+    axon = bt.axon(wallet=wallet, port=config.axon.port)
+    return wallet, subtensor, metagraph, axon
+
+
+def get_external_ip() -> str:
+    response = requests.get("https://ifconfig.me/ip")
+    response.raise_for_status()
+    return response.text.strip()
 
 
 def get_new_uuid():

@@ -27,7 +27,7 @@ from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
 from commons.reward_model.models import ModelZoo
 
 
-def check_config(config: "bt.Config"):
+def check_config(config: bt.config):
     r"""Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
@@ -182,7 +182,7 @@ def add_args(parser):
             "--blacklist.force_validator_permit",
             action="store_true",
             help="If set, we will force incoming requests to have a permit.",
-            default=False,
+            default=True,
         )
 
         parser.add_argument(

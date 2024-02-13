@@ -2,15 +2,15 @@
 from typing import List
 from pydantic import BaseModel
 
-from template.protocol import RankingRequest, RankingResult
+from template.protocol import RankingRequest
 
 
 class DendriteQueryResponse(BaseModel):
     class Config:
-        allow_mutation = False
+        allow_mutation = True
 
     request: RankingRequest
-    result: RankingResult
+    responses: List[RankingRequest]
 
 
 class ScoreItem(BaseModel):

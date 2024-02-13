@@ -123,6 +123,16 @@ class BaseValidatorNeuron(BaseNeuron):
             f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
 
+        # Serve passes the axon information to the network + netuid we are hosting on.
+        # This will auto-update if the axon port of external ip have changed.
+        bt.logging.info(
+            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+        )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+
+        # Start  starts the miner's axon, making it active on the network.
+        self.axon.start()
+
         bt.logging.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
