@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import List, Tuple
 from datetime import datetime, timedelta
 import copy
@@ -31,7 +32,6 @@ class Validator(BaseValidatorNeuron):
         super(Validator, self).__init__(config=config)
 
         self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
-
         self.axon.attach(
             forward_fn=self.forward_mturk_response,
             blacklist_fn=self.blacklist_mturk_response,
@@ -41,15 +41,13 @@ class Validator(BaseValidatorNeuron):
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
     ) -> Tuple[bool, str]:
-        bt.logging.info("checking blacklist function")
         if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
-            bt.logging.trace(
+            bt.logging.debug(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
 
-        # check request is only from a miner
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
         if neuron.validator_permit:
@@ -61,7 +59,7 @@ class Validator(BaseValidatorNeuron):
         return False, "Passed blacklist function"
 
     async def forward_mturk_response(self, synapse: MTurkResponse):
-        """Allows miners to have a delayed response to certain RankingRequest to allow for human feedback loop"""
+        """Allows miners to have a delayed response to allow for human feedback loop"""
         # 1. check request from RankingRequest
         # 2. append completion scores to request
         # 3. persist on disk via DataManager
@@ -76,19 +74,21 @@ class Validator(BaseValidatorNeuron):
 
             if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
                 bt.logging.warning(
-                    "Miner is attempting to send feedback for a wrong completion ID..."
+                    "Miner is attempting to send feedback for a wrong completion id..."
                 )
                 continue
 
             if (
                 miner_participants := [r.axon.hotkey for r in d.responses]
             ) and miner_hotkey in miner_participants:
-                bt.logging.warning("Miner already sent response for this request...")
+                bt.logging.warning(
+                    f"Miner already sent response for request id: {d.request.request_id}"
+                )
                 continue
 
             request_copy = copy.deepcopy(d.request)
             for cid in found_cids:
-                # simulate scoring method in Miner.forward(...)
+                # similar to scoring method in Miner.forward(...)
                 request_copy.ranks.append(
                     Rank(cid=cid, score=synapse.completion_id_to_score[cid])
                 )
@@ -98,22 +98,21 @@ class Validator(BaseValidatorNeuron):
                 d.responses.append(request_copy)
 
             d.responses = _filter_valid_responses(d.responses)
-
         DataManager.save(path, data)
         return
 
-    async def _forward_consensus(self, synapse: RankingResult, hotkeys: List[str]):
-        bt.logging.debug("Sending back consensus to miners")
-        axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
-        await self.dendrite(
-            axons=axons,
-            synapse=synapse,
-            deserialize=False,
-            timeout=5,
+    async def send_consensus(self, synapse: RankingResult, hotkeys: List[str]):
+        """Send consensus score back to miners who participated in the request."""
+        bt.logging.debug(
+            f"Sending back consensus to miners for request id: {synapse.request_id}"
         )
+        axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
+        await self.dendrite(axons=axons, synapse=synapse, deserialize=False, timeout=12)
 
-    async def _update_score_and_send_feedback(self):
-        bt.logging.debug("Scheduled update score and send feedback triggered...")
+    async def update_score_and_send_feedback(self):
+        bt.logging.debug(
+            f"Scheduled update score and send feedback triggered at time: {time.time()}"
+        )
         data = DataManager.load(path=DataManager.get_ranking_data_filepath())
         if not data:
             bt.logging.debug(
@@ -144,7 +143,7 @@ class Validator(BaseValidatorNeuron):
             ranking_result = Consensus.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
-            await self._forward_consensus(
+            await self.send_consensus(
                 synapse=ranking_result,
                 hotkeys=list(ranking_result.hotkey_to_score.keys()),
             )
@@ -217,7 +216,7 @@ async def main():
     scheduler = AsyncIOScheduler(
         job_defaults={"max_instances": 1, "misfire_grace_time": 3}
     )
-    scheduler.add_job(validator._update_score_and_send_feedback, "interval", seconds=10)
+    scheduler.add_job(validator.update_score_and_send_feedback, "interval", seconds=10)
     scheduler.start()
 
     await validator.run()

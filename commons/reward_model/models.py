@@ -74,10 +74,10 @@ class ModelUtils:
         with torch.no_grad():
             logits = model(**inputs).logits[0].cpu().detach()
 
-        bt.logging.info(f"Raw logits: {logits}")
+        # bt.logging.info(f"Raw logits: {logits}")
         # squish logits into range [0, 1]
         score = F.sigmoid(logits)
-        bt.logging.info(f"Score: {score}, question: {prompt}, answer: {completion}")
+        # bt.logging.info(f"Score: {score}, question: {prompt}, answer: {completion}")
         return score
 
     @staticmethod
