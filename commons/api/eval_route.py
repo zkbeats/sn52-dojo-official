@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from commons.utils import get_new_uuid
 from template.protocol import Completion, RankingRequest
-from neurons.validator import validator
+from neurons.validator import Validator
 import bittensor as bt
 
 load_dotenv()
@@ -33,8 +33,8 @@ async def eval_text(request: EvalsRequest):
         completions=[Completion(text=c) for c in request.completions],
     )
 
-    # TODO unsure if we can do this, since it will conflict with synapse
     try:
+        validator = Validator()
         response = await validator.forward(synapse)
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)

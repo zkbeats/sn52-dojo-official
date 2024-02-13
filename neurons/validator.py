@@ -20,7 +20,6 @@ from template.protocol import (
     RankingResult,
 )
 from template.utils.uids import get_random_uids
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
 def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
@@ -28,6 +27,8 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 
 
 class Validator(BaseValidatorNeuron):
+    """Singleton class for validator."""
+
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -216,19 +217,7 @@ class Validator(BaseValidatorNeuron):
         return response_data
 
 
-validator = Validator()
-
-
-async def main():
-    scheduler = AsyncIOScheduler(
-        job_defaults={"max_instances": 1, "misfire_grace_time": 3}
-    )
-    scheduler.add_job(validator.update_score_and_send_feedback, "interval", seconds=10)
-    scheduler.start()
-
-    await validator.run()
-
-
-# The main function parses the configuration and runs the validator.
-if __name__ == "__main__":
-    asyncio.run(main())
+async def log_validator_status():
+    while True:
+        bt.logging.info(f"Validator running... {time.time()}")
+        await asyncio.sleep(5)
