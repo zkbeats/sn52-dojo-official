@@ -28,6 +28,13 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 
 
 class Validator(BaseValidatorNeuron):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(Validator, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
