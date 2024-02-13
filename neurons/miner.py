@@ -67,7 +67,7 @@ class Miner(BaseMinerNeuron):
 
     async def forward_result(self, synapse: RankingResult) -> None:
         bt.logging.info("Received consensus from validators")
-        return
+        return synapse
 
     async def forward(self, synapse: RankingRequest) -> RankingRequest:
         """
