@@ -1,9 +1,12 @@
+import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 from commons.api.human_feedback_route import human_feedback_router
 from commons.api.middleware import LimitContentLengthMiddleware
+from neurons.miner import Miner, log_miner_status
 
 load_dotenv()
 
@@ -16,3 +19,30 @@ app.add_middleware(
 )
 app.add_middleware(LimitContentLengthMiddleware)
 app.include_router(human_feedback_router)
+
+
+async def main():
+    miner = Miner()
+    with miner as m:
+        log_task = asyncio.create_task(log_miner_status())
+
+    config = uvicorn.run(
+        app=app,
+        host="0.0.0.0",
+        port=5003,
+        workers=1,
+        log_level="info",
+        # NOTE should only be used in development.
+        reload=False,
+    )
+
+    # once the server is closed, cancel the logging task
+    log_task.cancel()
+    try:
+        await log_task
+    except asyncio.CancelledError:
+        pass
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

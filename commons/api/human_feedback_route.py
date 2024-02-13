@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Request
 
 from commons.human_feedback.aws_mturk import MTurkUtils
-from neurons.miner import miner
+from neurons.miner import Miner
 from template.protocol import MTurkResponse
 
 load_dotenv()
@@ -18,6 +18,7 @@ async def task_completion_callback(request: Request):
     bt.logging.info(f"Received task completion callback with body: {response_json}")
     completion_id_to_scores = await MTurkUtils.handle_mturk_event(response_json)
     try:
+        miner = Miner()
         await miner.send_mturk_response(
             MTurkResponse(completion_id_to_score=completion_id_to_scores)
         )

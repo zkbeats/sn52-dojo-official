@@ -10,7 +10,6 @@ from commons.reward_model.models import ModelUtils
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import MTurkResponse, Rank, RankingRequest, RankingResult
-import uvicorn
 
 from template.utils.config import ScoringMethod
 
@@ -23,6 +22,13 @@ class Miner(BaseMinerNeuron):
 
     This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom
     """
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(Miner, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
@@ -257,34 +263,3 @@ async def log_miner_status():
     while True:
         bt.logging.info(f"Miner running... {time.time()}")
         await asyncio.sleep(5)
-
-
-miner = Miner()
-
-
-async def main():
-    with miner as m:
-        log_task = asyncio.create_task(log_miner_status())
-
-    config = uvicorn.Config(
-        app="main_miner:app",
-        host="0.0.0.0",
-        port=5003,
-        workers=4,
-        log_level="info",
-        # NOTE should only be used in development.
-        reload=False,
-    )
-    server = uvicorn.Server(config)
-    await server.serve()
-
-    # once the server is closed, cancel the logging task
-    log_task.cancel()
-    try:
-        await log_task
-    except asyncio.CancelledError:
-        pass
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
