@@ -10,7 +10,7 @@ from commons.consensus import Consensus
 
 from commons.utils import get_epoch_time, get_new_uuid
 from template.base.validator import BaseValidatorNeuron
-from template.protocol import Completion, RankingRequest, RankingResult
+from template.protocol import Completion, MTurkResponse, RankingRequest, RankingResult
 from template.utils.uids import get_random_uids
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -18,6 +18,24 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
+
+        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
+
+        self.axon.attach(
+            forward_fn=self.receive_mturk_response,
+            # blacklist_fn=self.blacklist,
+            # priority_fn=self.priority,
+        )
+        bt.logging.info(f"Axon created: {self.axon}")
+
+    async def receive_mturk_response(self, synapse: MTurkResponse):
+        # TODO
+        """Allows miners to have a delayed response to certain RankingRequest to allow for human feedback loop"""
+        # 1. check request from RankingRequest
+        # 2. append completion scores to request
+        # 3. persist on disk via DataManager
+
+        pass
 
     async def _forward_consensus(self, synapse: RankingResult, hotkeys: List[str]):
         bt.logging.debug("Sending back consensus to miners")

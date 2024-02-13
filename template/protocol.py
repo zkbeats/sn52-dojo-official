@@ -68,3 +68,7 @@ class RankingResult(bt.Synapse):
     hotkey_to_scores: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
+
+
+class MTurkResponse(bt.Synapse):
+    completion_id_to_scores: Dict[str, float]

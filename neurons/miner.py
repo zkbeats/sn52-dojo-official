@@ -2,14 +2,14 @@ import asyncio
 import random
 import threading
 import time
-from typing import Tuple
+from typing import Dict, Tuple
 
 import bittensor as bt
 from commons.llm.openai_proxy import Provider
-
-from commons.reward_model.models import ModelUtils, ModelZoo
+from commons.human_feedback.aws_mturk import MTurkUtils
+from commons.reward_model.models import ModelUtils
 from template.base.miner import BaseMinerNeuron
-from template.protocol import Rank, RankingRequest, RankingResult
+from template.protocol import MTurkResponse, Rank, RankingRequest, RankingResult
 import uvicorn
 
 
@@ -36,6 +36,8 @@ class Miner(BaseMinerNeuron):
                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
             )
 
+        # Dendrite lets us send messages to other nodes (axons) in the network.
+        self.dendrite = bt.dendrite(wallet=self.wallet)
         # The axon handles request processing, allowing validators to send this miner requests.
         self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
 
@@ -53,6 +55,7 @@ class Miner(BaseMinerNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
+        self.hotkey_to_request: Dict[str, RankingRequest] = {}
 
     async def forward_result(self, synapse: RankingResult) -> None:
         bt.logging.info("Received consensus from validators")
@@ -73,6 +76,7 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
         print(f"Miner received request, type={str(synapse.__class__.__name__)}")
+        self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
         # TODO make this a param in the miner config
         scoring_method = "huggingface_model"
@@ -108,9 +112,53 @@ class Miner(BaseMinerNeuron):
 
         elif scoring_method.casefold() == "human_feedback":
             # TODO implement human feedback scoring, more complex since it cannot be immediately received
-            pass
+            create_mturk_status = MTurkUtils.create_mturk_task(
+                prompt=synapse.prompt,
+                completions=synapse.completions,
+                reward_in_dollars=0.01,
+            )
+            # TODO send off to MTurk workers... therefore will timeout... need to handle gracefully
 
         return synapse
+
+    async def send_mturk_response(self, synapse: MTurkResponse):
+        """After receiving a response from MTurk, send the response back to the calling validator"""
+        # 1. figure out which validator hotkey sent the original request
+        hotkey = Miner._find_hotkey_by_completions(synapse.completion_id_to_scores)
+        if not hotkey:
+            bt.logging.error(
+                f"No hotkey found for completion ids: {synapse.completion_id_to_scores.keys()}"
+            )
+            return
+
+        # 2. call method using dendrite.__acall__ to query validator axon
+        bt.logging.info(f"Dendrite: {self.dendrite}")
+
+        uid = self.metagraph.hotkeys.index(hotkey)
+        axon = self.metagraph.axons[uid]
+        await self.dendrite(
+            axons=[axon],
+            synapse=synapse,
+            deserialize=False,
+            timeout=60,
+        )
+        return
+
+    @staticmethod
+    def _find_hotkey_by_completions(self, completion_id_to_scores: Dict[str, float]):
+        if not self.hotkey_to_request:
+            bt.logging.warning(
+                "No requests received yet... therefore no validator hotkeys to find"
+            )
+            return None
+        mturk_completion_ids = set(completion_id_to_scores.keys())
+        for k, v in self.hotkey_to_request.items():
+            completion_ids = set([completion.cid for completion in v.completions])
+            if (
+                common_cids := completion_ids.intersection(mturk_completion_ids)
+            ) and len(common_cids):
+                return k
+        return None
 
     async def blacklist(self, synapse: RankingRequest) -> Tuple[bool, str]:
         """
@@ -210,8 +258,10 @@ async def log_miner_status():
         await asyncio.sleep(5)
 
 
+miner = Miner()
+
+
 async def main():
-    miner = Miner()
     with miner as m:
         log_task = asyncio.create_task(log_miner_status())
 

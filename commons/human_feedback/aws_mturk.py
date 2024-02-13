@@ -113,10 +113,12 @@ class MTurkUtils:
             bt.logging.info(
                 "HITID = " + new_hit["HIT"]["HITId"] + " (Use to Get Results)"
             )
+            return True
         except botocore.exceptions.ClientError as e:
             bt.logging.error(
                 f"Error occurred while trying to create hit... exception: {e}"
             )
+            return False
 
     @staticmethod
     async def handle_mturk_event(event_payload: Dict):
