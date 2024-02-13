@@ -173,7 +173,12 @@ class Validator(BaseValidatorNeuron):
             k=self.config.neuron.sample_size,
             config=self.config,
         )
-        axons = [self.metagraph.axons[uid] for uid in miner_uids]
+        axons = [
+            self.metagraph.axons[uid]
+            for uid in miner_uids
+            if self.metagraph.axons[uid].hotkey.casefold()
+            != self.wallet.hotkey.ss58_address.casefold()
+        ]
         if not len(axons):
             bt.logging.warning("No axons to query ... skipping")
             return
