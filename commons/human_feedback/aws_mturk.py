@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from commons.llm.prompts import ScoreRange
 from template.protocol import Completion
+import markdown
 
 load_dotenv()
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
@@ -166,7 +167,7 @@ class MTurkUtils:
     def _build_completions_html(completions: List[str]) -> str:
         html_repr = "\n".join(
             [
-                f"<p><strong>Response #{index + 1}: </strong>{completion}</p>"
+                f"<p><strong>Response #{index + 1}: </strong>{markdown.markdown(completion, output_format='xhtml')}</p>"
                 for index, completion in enumerate(completions)
             ]
         )
