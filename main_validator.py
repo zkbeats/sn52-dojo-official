@@ -30,11 +30,11 @@ async def main():
     )
     scheduler.add_job(validator.update_score_and_send_feedback, "interval", seconds=10)
     scheduler.start()
-    validator_task = asyncio.create_task(validator.run())
+
     with validator as v:
         log_task = asyncio.create_task(log_validator_status())
 
-    config = uvicorn.Config(
+    config = uvicorn.run(
         app=app,
         host="0.0.0.0",
         port=5004,
@@ -43,8 +43,6 @@ async def main():
         # NOTE should only be used in development.
         reload=False,
     )
-    server_task = uvicorn.Server(config).serve()
-    await asyncio.gather(validator_task, log_task, server_task)
 
     log_task.cancel()
     try:
