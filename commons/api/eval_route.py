@@ -35,7 +35,7 @@ async def eval_text(request: EvalsRequest):
 
     try:
         validator = Validator()
-        response = await validator.forward(synapse)
+        response = await validator.send_request(synapse)
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)
     except Exception as e:

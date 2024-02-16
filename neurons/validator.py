@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import time
 from traceback import print_exception
 from typing import List, Tuple
@@ -6,15 +7,15 @@ from datetime import datetime, timedelta
 import copy
 
 import bittensor as bt
+import numpy as np
 import torch
 from commons.data_manager import DataManager
 from commons.dataset import SeedDataManager
 from commons.objects import DendriteQueryResponse
 from commons.consensus import Consensus
 
-from commons.utils import check_registered, get_epoch_time, get_new_uuid, initialise
+from commons.utils import get_epoch_time, get_new_uuid
 from template.base.neuron import BaseNeuron
-from template.base.validator import BaseValidatorNeuron
 from template.protocol import (
     Completion,
     MTurkResponse,
@@ -22,7 +23,6 @@ from template.protocol import (
     RankingRequest,
     RankingResult,
 )
-from template.utils.config import check_config, get_config
 from template.utils.uids import get_random_uids
 
 
@@ -31,45 +31,41 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 
 
 class Validator(BaseNeuron):
-    """Singleton class for validator."""
+    """Singleton class for validator, this means that trying to instantiate the
+    same validator class will always return the same instance. This prevents
+    trying to maintain multiple metagraphs, subtensors, etc.
+
+    """
 
     _instance = None
 
     def __new__(cls, *args, **kwargs):
+        """Create a singleton instance of the Validator class."""
         if cls._instance is None:
             cls._instance = super(Validator, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, config=None):
-        super(Validator, self).__init__(config=config)
+    def __init__(self):
+        super(Validator, self).__init__()
 
-        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
         self.axon.attach(
             forward_fn=self.forward_mturk_response,
             blacklist_fn=self.blacklist_mturk_response,
         )
-        bt.logging.info(f"Axon created: {self.axon}")
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
 
         ##### FROM BaseValidatorNeuron ########################################
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
-
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
-
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
-
-        # Serve axon to enable external connections.
-        if not self.config.neuron.axon_off:
-            self.serve_axon()
-        else:
-            bt.logging.warning("axon off, not serving ip to chain.")
 
         # Create asyncio event loop to manage async tasks.
         self.loop = asyncio.get_event_loop()
@@ -199,7 +195,7 @@ class Validator(BaseNeuron):
             )
             await asyncio.sleep(1)
 
-    async def forward_request(
+    async def send_request(
         self, synapse: RankingRequest = None
     ) -> DendriteQueryResponse:
         # typically the request may come from an extsernal source however,
@@ -250,32 +246,12 @@ class Validator(BaseNeuron):
         DataManager.append_responses(response=response_data)
         return response_data
 
-    def serve_axon(self):
-        """Serve axon to enable external connections."""
-
-        bt.logging.info("serving ip to chain...")
-        try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
-
-            try:
-                self.subtensor.serve_axon(
-                    netuid=self.config.netuid,
-                    axon=self.axon,
-                )
-            except Exception as e:
-                bt.logging.error(f"Failed to serve Axon with exception: {e}")
-                pass
-
-        except Exception as e:
-            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
-            pass
-
-    async def concurrent_forward(self):
-        coroutines = [
-            self.forward_request()
-            for _ in range(self.config.neuron.num_concurrent_forwards)
-        ]
-        await asyncio.gather(*coroutines)
+    # async def concurrent_forward(self):
+    #     coroutines = [
+    #         self.forward_request()
+    #         for _ in range(self.config.neuron.num_concurrent_forwards)
+    #     ]
+    #     await asyncio.gather(*coroutines)
 
     def run(self):
         """
@@ -306,11 +282,9 @@ class Validator(BaseNeuron):
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
         bt.logging.info(
-            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+            f"Serving validator axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
-
-        # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
@@ -321,9 +295,9 @@ class Validator(BaseNeuron):
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
                 # Run multiple forwards concurrently.
-                self.loop.run_until_complete(self.concurrent_forward())
+                self.loop.run_until_complete(self.send_request())
 
-                # Check if we should exit.
+                # # Check if we should exit.
                 if self.should_exit:
                     break
 
@@ -357,16 +331,16 @@ class Validator(BaseNeuron):
             self.is_running = True
             bt.logging.debug("Started")
 
-    def stop_run_thread(self):
-        """
-        Stops the validator's operations that are running in the background thread.
-        """
-        if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
-            self.should_exit = True
-            self.thread.join(5)
-            self.is_running = False
-            bt.logging.debug("Stopped")
+    # def stop_run_thread(self):
+    #     """
+    #     Stops the validator's operations that are running in the background thread.
+    #     """
+    #     if self.is_running:
+    #         bt.logging.debug("Stopping validator in background thread.")
+    #         self.should_exit = True
+    #         self.thread.join(5)
+    #         self.is_running = False
+    #         bt.logging.debug("Stopped")
 
     def __enter__(self):
         self.run_in_background_thread()
@@ -392,7 +366,6 @@ class Validator(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
-
     def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners.
@@ -402,7 +375,7 @@ class Validator(BaseNeuron):
         # Check if self.scores contains any NaN values and log a warning if it does.
         if torch.isnan(self.scores).any():
             bt.logging.warning(
-                f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
+                "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
         if self.moving_averaged_scores is None:
             self.moving_averaged_scores = self.scores.clone().detach()
@@ -513,7 +486,7 @@ class Validator(BaseNeuron):
         self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores.to(
             self.device
         )
-        bt.logging.debug(f"Updated scores: {self.scores}"
+        bt.logging.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
