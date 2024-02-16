@@ -25,7 +25,7 @@ from commons.utils import initialise
 
 # Sync calls set weights and also resyncs the metagraph.
 from template.utils.config import check_config, get_config
-from template.utils.misc import ttl_get_block
+from commons.utils import ttl_get_block
 from template import __spec_version__ as spec_version
 
 
@@ -85,6 +85,14 @@ class BaseNeuron(ABC):
 
     @abstractmethod
     def run(self):
+        ...
+
+    @abstractmethod
+    def resync_metagraph(self):
+        ...
+
+    @abstractmethod
+    def set_weights(self):
         ...
 
     def sync(self):
