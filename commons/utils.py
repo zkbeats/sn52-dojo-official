@@ -15,6 +15,8 @@ from pydantic import BaseModel
 def initialise(
     config: bt.config,
 ) -> Tuple[bt.wallet, bt.subtensor, bt.metagraph, bt.axon]:
+    # Build Bittensor objects
+    # These are core Bittensor classes to interact with the network.
     bt.logging.info("Setting up bittensor objects....")
     # The wallet holds the cryptographic key pairs for the miner.
     wallet = bt.wallet(config=config)
