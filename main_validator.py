@@ -34,21 +34,21 @@ async def main():
     with validator as v:
         log_task = asyncio.create_task(log_validator_status())
 
-    config = uvicorn.run(
-        app=app,
-        host="0.0.0.0",
-        port=5004,
-        workers=1,
-        log_level="info",
-        # NOTE should only be used in development.
-        reload=False,
-    )
+        config = uvicorn.run(
+            app=app,
+            host="0.0.0.0",
+            port=5004,
+            workers=1,
+            log_level="info",
+            # NOTE should only be used in development.
+            reload=False,
+        )
 
-    log_task.cancel()
-    try:
-        await log_task
-    except asyncio.CancelledError:
-        pass
+        log_task.cancel()
+        try:
+            await log_task
+        except asyncio.CancelledError:
+            pass
 
 
 if __name__ == "__main__":
