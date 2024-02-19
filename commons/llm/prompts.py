@@ -42,13 +42,10 @@ class PromptBuilder:
         if not len(completions):
             raise ValueError("Cannot build prompt without any completions")
 
-        # score_range = ScoreRange(lower=1, upper=10)
         completion_prompts = [
             completion_item_prompt.format(idx=c.cid, text=c.text) for c in completions
         ]
         formatted_prompt = user_score_completion_prompt.format(
-            # range_lower=score_range.lower,
-            # range_upper=score_range.upper,
             prompt=prompt,
             completions_prompt="\n".join(completion_prompts),
         )
