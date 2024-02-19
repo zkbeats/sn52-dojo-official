@@ -19,7 +19,7 @@ class Result:
     cid_to_hotkey_to_score: Dict[str, Dict[str, float]] = field(factory=dict)
 
 
-class Consensus:
+class Scoring:
     @staticmethod
     def _map_responses_to_result(responses: List[RankingRequest]):
         if len(responses) == 0:
@@ -39,7 +39,7 @@ class Consensus:
 
     @staticmethod
     def _spearman_correlation(responses: List[RankingRequest]):
-        result = Consensus._map_responses_to_result(responses)
+        result = Scoring._map_responses_to_result(responses)
         cid_to_average = {
             cid: np.mean(list(hotkey_scores.values()))
             for cid, hotkey_scores in result.cid_to_hotkey_to_score.items()
@@ -81,7 +81,7 @@ class Consensus:
             hotkeys,
             spearman_correlations,
             cid_to_average,
-        ) = Consensus._spearman_correlation(responses)
+        ) = Scoring._spearman_correlation(responses)
         # scale values in the range [-1, 1] to [0, 1]
         spearman_correlations = 0.5 * (np.array(spearman_correlations) + 1)
 

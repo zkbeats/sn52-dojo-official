@@ -12,7 +12,7 @@ import torch
 from commons.data_manager import DataManager
 from commons.dataset import SeedDataManager
 from commons.objects import DendriteQueryResponse
-from commons.consensus import Consensus
+from commons.scoring import Scoring
 
 from commons.utils import get_epoch_time, get_new_uuid
 from template.base.neuron import BaseNeuron
@@ -191,7 +191,7 @@ class Validator(BaseNeuron):
             return
 
         for d in data:
-            ranking_result = Consensus.consensus_score(responses=d.responses)
+            ranking_result = Scoring.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
             await self.send_consensus(
