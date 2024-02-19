@@ -215,4 +215,4 @@ class Miner(BaseMinerNeuron):
 async def log_miner_status():
     while True:
         bt.logging.info(f"Miner running... {time.time()}")
-        await asyncio.sleep(5)
+        await asyncio.sleep(20)

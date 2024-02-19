@@ -521,4 +521,4 @@ class Validator(BaseNeuron):
 async def log_validator_status():
     while True:
         bt.logging.info(f"Validator running... {time.time()}")
-        await asyncio.sleep(5)
+        await asyncio.sleep(20)
