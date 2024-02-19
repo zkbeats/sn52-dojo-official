@@ -22,6 +22,7 @@ from template.protocol import (
     Rank,
     RankingRequest,
     RankingResult,
+    ScoringMethod,
 )
 from template.utils.uids import get_random_uids
 
@@ -136,7 +137,11 @@ class Validator(BaseNeuron):
             for cid in found_cids:
                 # similar to scoring method in Miner.forward(...)
                 request_copy.ranks.append(
-                    Rank(cid=cid, score=synapse.completion_id_to_score[cid])
+                    Rank(
+                        cid=cid,
+                        score=synapse.completion_id_to_score[cid],
+                        scoring_method=ScoringMethod.AWS_MTURK,
+                    )
                 )
                 # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
                 # function expects axon.hotkey to be the miner's hotkey
