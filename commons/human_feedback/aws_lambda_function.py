@@ -13,6 +13,7 @@ MTURK_ENDPOINT_URL = os.environ["MTURK_ENDPOINT_URL"]
 def lambda_handler(event, context):
     http = urllib3.PoolManager()
     try:
+        answers = []
         for record in event["Records"]:
             notification = json.loads(record["Sns"]["Message"])
 
@@ -21,13 +22,12 @@ def lambda_handler(event, context):
                     "mturk", region_name="us-east-1", endpoint_url=MTURK_ENDPOINT_URL
                 )
 
-                if mturk_event["EventType"] == "HITReviewable":
+                if mturk_event["EventType"] in ["HITReviewable", "AssignmentSubmitted"]:
                     # Retrieve the answers that were provided by Workers
                     response = mturk.list_assignments_for_hit(
                         HITId=mturk_event["HITId"]
                     )
                     assignments = response["Assignments"]
-                    answers = []
                     for assignment in assignments:
                         answers.append(parse_answers(assignment))
 
