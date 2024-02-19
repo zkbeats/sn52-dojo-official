@@ -7,9 +7,7 @@ import numpy as np
 import scipy
 from attr import define, field
 
-from commons.custom_exceptions import InvalidScoreLength
-from commons.utils import DotDict
-from template.protocol import RankingRequest, RankingResult
+from template.protocol import RankingRequest, RankingResult, ScoringMethod
 
 
 @define(kw_only=True, frozen=True, slots=True)
@@ -65,6 +63,14 @@ class Scoring:
             np.nan_to_num(scipy.stats.spearmanr(miner_score, averages)[0])
             for miner_score in miner_scores
         ]
+
+        for i, response in enumerate(responses):
+            if any(
+                rank.scoring_method == ScoringMethod.AWS_MTURK
+                for rank in response.ranks
+            ):
+                # TODO verify this so that there are no work arounds
+                correlations[i] *= 1.2
 
         hotkeys = [r.axon.hotkey for r in responses]
         return hotkeys, correlations, cid_to_average
