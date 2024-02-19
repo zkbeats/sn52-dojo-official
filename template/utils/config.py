@@ -16,22 +16,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from enum import StrEnum
 import os
 from pathlib import Path
-import torch
 import argparse
 import bittensor as bt
-from loguru import logger
 
-from commons.custom_exceptions import InvalidNeuronType, UnspecifiedNeuronType
 from commons.reward_model.models import ModelZoo
-
-
-class ScoringMethod(StrEnum):
-    HF_MODEL = "hf_model"
-    LLM_API = "llm_api"
-    HUMAN_FEEDBACK = "human_feedback"
 
 
 def check_config(config: bt.config):
@@ -53,6 +43,8 @@ def check_config(config: bt.config):
 
 
 def add_args(parser):
+    from template.protocol import ScoringMethod
+
     """
     Adds relevant arguments to the parser for operation.
     """
@@ -125,13 +117,6 @@ def add_args(parser):
             type=int,
             help="The number of miners to query in a single step.",
             default=10,
-        )
-
-        parser.add_argument(
-            "--neuron.disable_set_weights",
-            action="store_true",
-            help="Disables setting weights.",
-            default=False,
         )
 
         parser.add_argument(

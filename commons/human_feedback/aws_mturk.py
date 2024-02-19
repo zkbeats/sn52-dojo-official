@@ -61,12 +61,14 @@ class MTurkUtils:
     @staticmethod
     def encode_task_key(completion_id: str):
         """Simple method to take Completion.cid and encode it in a way that we can receive it from AWS Lambda"""
-        return f"cid_{completion_id}"
+        # return f"cid_{completion_id}"
+        return completion_id
 
     @staticmethod
     def decode_task_key(encoded_key: str) -> str:
         """Simple method to decode the key from AWS Lambda, to get the corresponding completion UUID as string"""
-        return encoded_key.split("_")[1]
+        # return encoded_key.split("_")[1]
+        return encoded_key
 
     @staticmethod
     def get_balance():

@@ -15,17 +15,48 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import copy
-import typing
+import inspect
+import os
 
 import bittensor as bt
 
 from abc import ABC, abstractmethod
 
+from commons.utils import initialise
+from bittensor.btlogging import logging as bt_logging
+# from bittensor.btlogging import logger as bt_logger
+
+
 # Sync calls set weights and also resyncs the metagraph.
 from template.utils.config import check_config, get_config
-from template.utils.misc import ttl_get_block
+from commons.utils import ttl_get_block
 from template import __spec_version__ as spec_version
+
+original_format = bt_logging._format
+
+
+# TODO this is for logging and is not really a priority atm
+def custom_format(cls, prefix: object, sufix: object = None):
+    frame = inspect.currentframe().f_back.f_back
+    (
+        filename,
+        line_number,
+        func_name,
+        lines,
+        index,
+    ) = inspect.getframeinfo(frame)
+    filename, _ = os.path.splitext(os.path.basename(filename))
+    if func_name.startswith("<") or func_name.endswith(">"):
+        func_name = "\\" + func_name
+    context = f"<cyan>{filename}.{func_name}@{line_number}<cyan>".center(30)
+    log_msg = f"{context} | {prefix}"
+    if sufix is not None:
+        log_msg += f" | {sufix}"
+    return log_msg
+
+
+# monkey-patch
+# bt_logging._format = classmethod(custom_format)
 
 
 class BaseNeuron(ABC):
@@ -35,28 +66,18 @@ class BaseNeuron(ABC):
     In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network state via a basic checkpointing mechanism based on epoch length.
     """
 
-    @classmethod
-    def check_config(cls, config: "bt.config"):
-        check_config(config)
-
-    @classmethod
-    def config(cls):
-        return get_config()
-
-    subtensor: "bt.subtensor"
-    wallet: "bt.wallet"
-    metagraph: "bt.metagraph"
+    subtensor: bt.subtensor
+    wallet: bt.wallet
+    metagraph: bt.metagraph
     spec_version: int = spec_version
 
     @property
     def block(self):
-        return ttl_get_block(self)
+        return ttl_get_block(self.subtensor)
 
-    def __init__(self, config=None):
-        base_config = copy.deepcopy(config or BaseNeuron.config())
-        self.config = self.config()
-        self.config.merge(base_config)
-        self.check_config(self.config)
+    def __init__(self):
+        self.config = get_config()
+        check_config(self.config)
 
         # Set up logging with the provided configuration and directory.
         bt.logging(config=self.config, logging_dir=self.config.full_path)
@@ -67,21 +88,7 @@ class BaseNeuron(ABC):
         # Log the configuration for reference.
         bt.logging.info(self.config)
 
-        # Build Bittensor objects
-        # These are core Bittensor classes to interact with the network.
-        bt.logging.info("Setting up bittensor objects.")
-
-        # The wallet holds the cryptographic key pairs for the miner.
-        self.wallet = bt.wallet(config=self.config)
-        bt.logging.info(f"Wallet: {self.wallet}")
-
-        # The subtensor is our connection to the Bittensor blockchain.
-        self.subtensor = bt.subtensor(config=self.config)
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-
-        # The metagraph holds the state of the network, letting us know about other validators and miners.
-        self.metagraph = self.subtensor.metagraph(self.config.netuid)
-        bt.logging.info(f"Metagraph: {self.metagraph}")
+        self.wallet, self.subtensor, self.metagraph, self.axon = initialise(self.config)
 
         # Check if the miner is registered on the Bittensor network before proceeding further.
         self.check_registered()
@@ -94,11 +101,15 @@ class BaseNeuron(ABC):
         self.step = 0
 
     @abstractmethod
-    async def forward(self, synapse: bt.Synapse) -> bt.Synapse:
+    def run(self):
         ...
 
     @abstractmethod
-    def run(self):
+    def resync_metagraph(self):
+        ...
+
+    @abstractmethod
+    def set_weights(self):
         ...
 
     def sync(self):
@@ -142,19 +153,13 @@ class BaseNeuron(ABC):
         if self.step == 0:
             return False
 
-        # Check if enough epoch blocks have elapsed since the last epoch.
-        if self.config.neuron.disable_set_weights:
-            return False
-
         # Define appropriate logic for when set weights.
         return (
             self.block - self.metagraph.last_update[self.uid]
         ) > self.config.neuron.epoch_length
 
     def save_state(self):
-        bt.logging.warning(
-            "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
-        )
+        pass
 
     def load_state(self):
         bt.logging.warning(

@@ -50,7 +50,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
-        # NOTE do not use
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
 
         # Init sync with the network. Updates the metagraph.
@@ -94,7 +93,8 @@ class BaseValidatorNeuron(BaseNeuron):
 
     async def concurrent_forward(self):
         coroutines = [
-            self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)
+            self.forward_request()
+            for _ in range(self.config.neuron.num_concurrent_forwards)
         ]
         await asyncio.gather(*coroutines)
 
