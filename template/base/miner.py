@@ -31,8 +31,8 @@ class BaseMinerNeuron(BaseNeuron):
     Base class for Bittensor miners.
     """
 
-    def __init__(self, config=None):
-        super().__init__(config=config)
+    def __init__(self):
+        super(BaseMinerNeuron, self).__init__()
 
     def run(self):
         """

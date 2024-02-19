@@ -1,21 +1,32 @@
 import os
 import textwrap
 from collections import defaultdict
+from enum import Enum, StrEnum
 from typing import Any, Dict, List
 
 import bittensor as bt
 import boto3
 import botocore.exceptions
+import markdown
 from dotenv import load_dotenv
 
 from commons.llm.prompts import ScoreRange
 from template.protocol import Completion
-import markdown
 
 load_dotenv()
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 US_EAST_REGION = "us-east-1"
+
+
+class MTurkEventTypes(StrEnum):
+    AssignmentAccepted = "AssignmentAccepted"
+    AssignmentSubmitted = "AssignmentSubmitted"
+    AssignmentReturned = "AssignmentReturned"
+    AssignmentAbandoned = "AssignmentAbandoned"
+    HITReviewable = "HITReviewable"
+    HITExpired = "HITExpired"
+
 
 # ensure regions in 'endpoint' key matches
 mturk_env_dict = {
@@ -93,6 +104,7 @@ class MTurkUtils:
     ):
         """Create a human intellgence task to send to AWS MTurk workers."""
         payout_auto_approval_seconds = 3600 * 24
+        success = False
         try:
             new_hit = mturk_client.create_hit(
                 Title=title,
@@ -107,16 +119,37 @@ class MTurkUtils:
                     prompt, completions, score_range
                 ),
             )
+            success = True
             hit_url = (
                 f"{env_config['preview_url']}?groupId={new_hit['HIT']['HITGroupId']}"
             )
-            bt.logging.info(
+            bt.logging.success(
                 f"A new HIT has been created. You can preview it here:\n{hit_url}"
             )
-            bt.logging.info(
+            bt.logging.success(
                 "HITID = " + new_hit["HIT"]["HITId"] + " (Use to Get Results)"
             )
-            return True
+
+            try:
+                hit_type_id = new_hit["HIT"]["HITTypeId"]
+                mturk_client.update_notification_settings(
+                    HITTypeId=hit_type_id,
+                    Notification={
+                        "Destination": "arn:aws:sns:us-east-1:364251527502:test_topic",
+                        "Transport": "SNS",
+                        "Version": "2006-05-05",
+                        "EventTypes": [
+                            "AssignmentSubmitted",
+                        ],
+                    },
+                    Active=True,
+                )
+            except Exception as e:
+                success = False
+                bt.logging.error("Failed to update notification settings: " + str(e))
+                pass
+
+            return success
         except botocore.exceptions.ClientError as e:
             bt.logging.error(
                 f"Error occurred while trying to create hit... exception: {e}"
@@ -136,6 +169,7 @@ class MTurkUtils:
                 task_answers = answer.get("taskAnswers")
                 if task_answers is None:
                     bt.logging.warning("MTurk event has no task answers")
+                    continue
 
                 for task_answer in task_answers:
                     for task_key, score in task_answer.items():
@@ -145,6 +179,12 @@ class MTurkUtils:
         completion_id_to_scores = dict(completion_id_to_scores)
         bt.logging.info(
             f"Processed MTurk event, completion ID to scores: {completion_id_to_scores}"
+        )
+        for k, v in completion_id_to_scores.items():
+            completion_id_to_scores[k] = float(sum(v) / len(v))
+
+        bt.logging.info(
+            f"Taking the average of set of scores: {completion_id_to_scores}"
         )
         return completion_id_to_scores
 

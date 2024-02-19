@@ -28,8 +28,8 @@ class Miner(BaseMinerNeuron):
             cls._instance = super(Miner, cls).__new__(cls)
         return cls._instance
 
-    def __init__(self, config=None):
-        super(Miner, self).__init__(config=config)
+    def __init__(self):
+        super(Miner, self).__init__()
 
         # TODO(developer): Anything specific to your use case you can do here
         # Warn if allowing incoming requests from anyone.
@@ -124,7 +124,7 @@ class Miner(BaseMinerNeuron):
     async def send_mturk_response(self, synapse: MTurkResponse):
         """After receiving a response from MTurk, send the response back to the calling validator"""
         # 1. figure out which validator hotkey sent the original request
-        hotkey = Miner._find_hotkey_by_completions(synapse.completion_id_to_score)
+        hotkey = self._find_hotkey_by_completions(synapse.completion_id_to_score)
         if not hotkey and not self.hotkey_to_request:
             bt.logging.error(
                 f"No hotkey found for completion ids: {synapse.completion_id_to_score.keys()}"
@@ -141,7 +141,6 @@ class Miner(BaseMinerNeuron):
         )
         return
 
-    @staticmethod
     def _find_hotkey_by_completions(self, completion_id_to_scores: Dict[str, float]):
         if not self.hotkey_to_request:
             bt.logging.warning(
