@@ -1,39 +1,174 @@
 import asyncio
-from typing import List
+import threading
+import time
+from traceback import print_exception
+from typing import List, Tuple
 from datetime import datetime, timedelta
+import copy
 
 import bittensor as bt
+import numpy as np
+import torch
 from commons.data_manager import DataManager
 from commons.dataset import SeedDataManager
 from commons.objects import DendriteQueryResponse
 from commons.consensus import Consensus
 
 from commons.utils import get_epoch_time, get_new_uuid
-from template.base.validator import BaseValidatorNeuron
-from template.protocol import Completion, RankingRequest, RankingResult
+from template.base.neuron import BaseNeuron
+from template.protocol import (
+    Completion,
+    MTurkResponse,
+    Rank,
+    RankingRequest,
+    RankingResult,
+    ScoringMethod,
+)
 from template.utils.uids import get_random_uids
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 
-class Validator(BaseValidatorNeuron):
-    def __init__(self, config=None):
-        super(Validator, self).__init__(config=config)
+def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
+    return [response for response in responses if len(response.ranks) > 0]
 
-    async def _forward_consensus(self, synapse: RankingResult, hotkeys: List[str]):
-        bt.logging.debug("Sending back consensus to miners")
-        axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
-        await self.dendrite(
-            axons=axons,
-            synapse=synapse,
-            deserialize=False,
-            timeout=5,
+
+class Validator(BaseNeuron):
+    """Singleton class for validator, this means that trying to instantiate the
+    same validator class will always return the same instance. This prevents
+    trying to maintain multiple metagraphs, subtensors, etc.
+
+    """
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        """Create a singleton instance of the Validator class."""
+        if cls._instance is None:
+            cls._instance = super(Validator, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        super(Validator, self).__init__()
+
+        self.axon.attach(
+            forward_fn=self.forward_mturk_response,
+            blacklist_fn=self.blacklist_mturk_response,
         )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
 
-    async def _update_score_and_send_feedback(self):
-        bt.logging.debug("Scheduled update score and send feedback triggered...")
+        ##### FROM BaseValidatorNeuron ########################################
+        # Save a copy of the hotkeys to local memory.
+        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
+        # Dendrite lets us send messages to other nodes (axons) in the network.
+        self.dendrite = bt.dendrite(wallet=self.wallet)
+        bt.logging.info(f"Dendrite: {self.dendrite}")
+        # Set up initial scoring weights for validation
+        bt.logging.info("Building validation weights.")
+        self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
+
+        # Init sync with the network. Updates the metagraph.
+        self.sync()
+
+        # Create asyncio event loop to manage async tasks.
+        self.loop = asyncio.get_event_loop()
+
+        # Instantiate runners
+        self.should_exit: bool = False
+        self.is_running: bool = False
+        self.thread: threading.Thread = None
+        self.lock = asyncio.Lock()
+        self.moving_averaged_scores = None
+
+    async def blacklist_mturk_response(
+        self, synapse: MTurkResponse
+    ) -> Tuple[bool, str]:
+        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
+            # Ignore requests from unrecognized entities.
+            bt.logging.debug(
+                f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
+            )
+            return True, "Unrecognized hotkey"
+
+        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
+        if neuron.validator_permit:
+            bt.logging.trace(
+                f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
+            )
+            return True, "Validators not allowed"
+
+        return False, "Passed blacklist function"
+
+    async def forward_mturk_response(self, synapse: MTurkResponse):
+        """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
+        # 1. check request from RankingRequest
+        # 2. append completion scores to request
+        # 3. persist on disk via DataManager
+
+        path = DataManager.get_ranking_data_filepath()
+        data = DataManager.load(path=path)
+        miner_hotkey = synapse.dendrite.hotkey
+        if not data:
+            bt.logging.error(
+                f"Received MTurk response from miner {miner_hotkey} but no requests persisted on disk."
+            )
+            return
+
+        mturk_cids = set(synapse.completion_id_to_score.keys())
+
+        for d in data:
+            request_cids = set([completion.cid for completion in d.request.completions])
+
+            if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
+                continue
+
+            bt.logging.info(
+                f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
+            )
+
+            if (
+                miner_participants := [r.axon.hotkey for r in d.responses]
+            ) and miner_hotkey in miner_participants:
+                bt.logging.warning(
+                    f"Miner already sent response for request id: {d.request.request_id}, skipping..."
+                )
+                continue
+
+            request_copy = copy.deepcopy(d.request)
+            for cid in found_cids:
+                # similar to scoring method in Miner.forward(...)
+                request_copy.ranks.append(
+                    Rank(
+                        cid=cid,
+                        score=synapse.completion_id_to_score[cid],
+                        scoring_method=ScoringMethod.AWS_MTURK,
+                    )
+                )
+                # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
+                # function expects axon.hotkey to be the miner's hotkey
+                request_copy.axon.hotkey = miner_hotkey
+                d.responses.append(request_copy)
+
+            d.responses = _filter_valid_responses(d.responses)
+        DataManager.save(path, data)
+        return
+
+    async def send_consensus(self, synapse: RankingResult, hotkeys: List[str]):
+        """Send consensus score back to miners who participated in the request."""
+        bt.logging.debug(
+            f"Sending back consensus to miners for request id: {synapse.request_id}"
+        )
+        axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
+        await self.dendrite(axons=axons, synapse=synapse, deserialize=False, timeout=12)
+
+    async def update_score_and_send_feedback(self):
+        bt.logging.debug(
+            f"Scheduled update score and send feedback triggered at time: {time.time()}"
+        )
         data = DataManager.load(path=DataManager.get_ranking_data_filepath())
         if not data:
-            bt.logging.debug("Skipping scoring as no data found")
+            bt.logging.debug(
+                "Skipping scoring as no ranking data found, this means either all have been processed or you are running the validator for the first time."
+            )
             return
 
         # get those where request epoch time >X h from current time
@@ -43,6 +178,8 @@ class Validator(BaseValidatorNeuron):
             print(
                 f"Request epoch time: {datetime.fromtimestamp(d.request.epoch_timestamp)}, raw: {d.request.epoch_timestamp}"
             )
+
+        # TODO @dev change this to ensure enough time for human feedback!!!
         data: List[DendriteQueryResponse] = [
             d
             for d in data
@@ -54,79 +191,334 @@ class Validator(BaseValidatorNeuron):
             return
 
         for d in data:
+            ranking_result = Consensus.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            self.update_scores(d.hotkey_to_scores)
-            await self._forward_consensus(
-                synapse=d.result, hotkeys=list(d.hotkey_to_scores.keys())
+            self.update_scores(ranking_result.hotkey_to_score)
+            await self.send_consensus(
+                synapse=ranking_result,
+                hotkeys=list(ranking_result.hotkey_to_score.keys()),
             )
-            await asyncio.sleep(5)
+            await asyncio.sleep(1)
 
-    async def forward(self):
-        """
-        Validator forward pass. Consists of:
-        - Generating the query
-        - Querying the miners
-        - Getting the responses
-        - Rewarding the miners
-        - Updating the scores
-        """
-        prompt, completions = SeedDataManager.get_prompt_and_completions()
-        request = RankingRequest(
-            n_completions=len(completions),
-            pid=get_new_uuid(),
-            prompt=prompt,
-            completions=[Completion(text=c) for c in completions],
-        )
+    async def send_request(
+        self, synapse: RankingRequest = None
+    ) -> DendriteQueryResponse:
+        # typically the request may come from an extsernal source however,
+        # initially we will seed it with some data to provide data for miners
+        # to use
+        if synapse is None:
+            prompt, completions = SeedDataManager.get_prompt_and_completions()
+            synapse = RankingRequest(
+                n_completions=len(completions),
+                pid=get_new_uuid(),
+                prompt=prompt,
+                completions=[Completion(text=c) for c in completions],
+            )
 
         miner_uids = get_random_uids(
             metagraph=self.metagraph,
             k=self.config.neuron.sample_size,
             config=self.config,
         )
-        axons = [self.metagraph.axons[uid] for uid in miner_uids]
+        axons = [
+            self.metagraph.axons[uid]
+            for uid in miner_uids
+            if self.metagraph.axons[uid].hotkey.casefold()
+            != self.wallet.hotkey.ss58_address.casefold()
+        ]
         if not len(axons):
             bt.logging.warning("No axons to query ... skipping")
             return
 
         # The dendrite client queries the network.
         responses: List[RankingRequest] = await self.dendrite(
-            # Send the query to selected miner axons in the network.
             axons=axons,
-            # Construct a dummy query. This simply contains a single integer.
-            synapse=request,
-            # All responses have the deserialize function called on them before returning.
-            # You are encouraged to define your own deserialization function.
+            synapse=synapse,
             deserialize=False,
             timeout=self.config.dendrite_timeout,
         )
-        # Log the results for monitoring purposes.
         bt.logging.info(f"Received responses: {responses}")
 
-        valid_responses = [r for r in responses if len(r.ranks) > 0]
+        valid_responses = _filter_valid_responses(responses)
         if not len(valid_responses):
             bt.logging.warning("No valid responses received from miners.")
             return
 
-        ranking_result = Consensus.consensus_score(responses=responses)
-        DataManager.append_responses(
-            response=DendriteQueryResponse(
-                request=request,
-                result=ranking_result,
-            )
+        response_data = DendriteQueryResponse(
+            request=synapse,
+            responses=valid_responses,
+        )
+        DataManager.append_responses(response=response_data)
+        return response_data
+
+    # async def concurrent_forward(self):
+    #     coroutines = [
+    #         self.forward_request()
+    #         for _ in range(self.config.neuron.num_concurrent_forwards)
+    #     ]
+    #     await asyncio.gather(*coroutines)
+
+    def run(self):
+        """
+        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+
+        This function performs the following primary tasks:
+        1. Check for registration on the Bittensor network.
+        2. Continuously forwards queries to the miners on the network, rewarding their responses and updating the scores accordingly.
+        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
+
+        The essence of the validator's operations is in the forward function, which is called every step. The forward function is responsible for querying the network and scoring the responses.
+
+        Note:
+            - The function leverages the global configurations set during the initialization of the miner.
+            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
+
+        Raises:
+            KeyboardInterrupt: If the miner is stopped by a manual interruption.
+            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
+        """
+
+        self.sync()
+
+        bt.logging.info(
+            f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
 
+        # Serve passes the axon information to the network + netuid we are hosting on.
+        # This will auto-update if the axon port of external ip have changed.
+        bt.logging.info(
+            f"Serving validator axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+        )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        self.axon.start()
 
-async def main():
-    scheduler = AsyncIOScheduler(
-        job_defaults={"max_instances": 1, "misfire_grace_time": 3}
-    )
-    validator = Validator()
-    scheduler.add_job(validator._update_score_and_send_feedback, "interval", seconds=10)
-    scheduler.start()
+        bt.logging.info(f"Validator starting at block: {self.block}")
 
-    await validator.run()
+        # This loop maintains the validator's operations until intentionally stopped.
+        try:
+            while True:
+                bt.logging.info(f"step({self.step}) block({self.block})")
+
+                # Run multiple forwards concurrently.
+                self.loop.run_until_complete(self.send_request())
+
+                # # Check if we should exit.
+                if self.should_exit:
+                    break
+
+                # Sync metagraph and potentially set weights.
+                self.sync()
+
+                self.step += 1
+                time.sleep(30)
+
+        # If someone intentionally stops the validator, it'll safely terminate operations.
+        except KeyboardInterrupt:
+            self.axon.stop()
+            bt.logging.success("Validator killed by keyboard interrupt.")
+            exit()
+
+        # In case of unforeseen errors, the validator will log the error and continue operations.
+        except Exception as err:
+            bt.logging.error("Error during validation", str(err))
+            bt.logging.debug(print_exception(type(err), err, err.__traceback__))
+
+    def run_in_background_thread(self):
+        """
+        Starts the validator's operations in a background thread upon entering the context.
+        This method facilitates the use of the validator in a 'with' statement.
+        """
+        if not self.is_running:
+            bt.logging.debug("Starting validator in background thread.")
+            self.should_exit = False
+            self.thread = threading.Thread(target=self.run, daemon=True)
+            self.thread.start()
+            self.is_running = True
+            bt.logging.debug("Started")
+
+    # def stop_run_thread(self):
+    #     """
+    #     Stops the validator's operations that are running in the background thread.
+    #     """
+    #     if self.is_running:
+    #         bt.logging.debug("Stopping validator in background thread.")
+    #         self.should_exit = True
+    #         self.thread.join(5)
+    #         self.is_running = False
+    #         bt.logging.debug("Stopped")
+
+    def __enter__(self):
+        self.run_in_background_thread()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Stops the validator's background operations upon exiting the context.
+        This method facilitates the use of the validator in a 'with' statement.
+
+        Args:
+            exc_type: The type of the exception that caused the context to be exited.
+                      None if the context was exited without an exception.
+            exc_value: The instance of the exception that caused the context to be exited.
+                       None if the context was exited without an exception.
+            traceback: A traceback object encoding the stack trace.
+                       None if the context was exited without an exception.
+        """
+        if self.is_running:
+            bt.logging.debug("Stopping validator in background thread.")
+            self.should_exit = True
+            self.thread.join(5)
+            self.is_running = False
+            bt.logging.debug("Stopped")
+
+    def set_weights(self):
+        """
+        Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners.
+        The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
+        """
+
+        # Check if self.scores contains any NaN values and log a warning if it does.
+        if torch.isnan(self.scores).any():
+            bt.logging.warning(
+                "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
+            )
+        if self.moving_averaged_scores is None:
+            self.moving_averaged_scores = self.scores.clone().detach()
+
+        # Calculate the average reward for each uid across non-zero values.
+        # Replace any NaN values with 0.
+        raw_weights = torch.nn.functional.normalize(
+            self.moving_averaged_scores, p=1, dim=0
+        )
+
+        bt.logging.debug("raw_weights", raw_weights)
+        bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
+        # Process the raw weights to final_weights via subtensor limitations.
+        (
+            processed_weight_uids,
+            processed_weights,
+        ) = bt.utils.weight_utils.process_weights_for_netuid(
+            uids=self.metagraph.uids.to("cpu"),
+            weights=raw_weights.to("cpu"),
+            netuid=self.config.netuid,
+            subtensor=self.subtensor,
+            metagraph=self.metagraph,
+        )
+        bt.logging.debug("processed_weights", processed_weights)
+        bt.logging.debug("processed_weight_uids", processed_weight_uids)
+
+        # Convert to uint16 weights and uids.
+        (
+            uint_uids,
+            uint_weights,
+        ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
+            uids=processed_weight_uids, weights=processed_weights
+        )
+        bt.logging.debug("uint_weights", uint_weights)
+        bt.logging.debug("uint_uids", uint_uids)
+
+        # Set the weights on chain via our subtensor connection.
+        result = self.subtensor.set_weights(
+            wallet=self.wallet,
+            netuid=self.config.netuid,
+            uids=uint_uids,
+            weights=uint_weights,
+            wait_for_finalization=False,
+            wait_for_inclusion=True,
+            version_key=self.spec_version,
+        )
+        if result is True:
+            bt.logging.info("set_weights on chain successfully!")
+        else:
+            bt.logging.error("set_weights failed")
+
+    def resync_metagraph(self):
+        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+        bt.logging.info("checking if we need to resync metagraph...")
+
+        # Copies state of metagraph before syncing.
+        previous_metagraph = copy.deepcopy(self.metagraph)
+
+        # Sync the metagraph.
+        self.metagraph.sync(subtensor=self.subtensor)
+        # create a copy to freeze it in time
+
+        # Check if the metagraph axon info has changed.
+        if previous_metagraph.axons == self.metagraph.axons:
+            bt.logging.info("Metagraph unchanged, skipping resync...")
+            return
+
+        bt.logging.info("Metagraph updated, attempting resync...")
+        # hotkey has been replaced, so we reset score
+        preserved_uids = [
+            uid
+            for uid, hotkey in enumerate(previous_metagraph.hotkeys)
+            if hotkey == self.metagraph.hotkeys[uid]
+        ]
+
+        # create a new score tensor since metagraph size is different
+        updated_scores = torch.zeros(len(self.metagraph.axons)).to(self.device)
+        for uid in preserved_uids:
+            updated_scores[uid] = self.scores[uid]
+
+        # Update our states
+        self.scores = updated_scores
+        self.hotkeys = self.metagraph.hotkeys
+
+    def update_scores(self, hotkey_to_rewards):
+        """Performs exponential moving average on the scores based on the rewards received from the miners,
+        after setting the self.scores variable here, `set_weights` will be called to set the weights on chain."""
+
+        nan_value_indices = np.isnan(list(hotkey_to_rewards.values()))
+        if nan_value_indices.any():
+            bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_rewards}")
+
+        # Compute forward pass rewards, assumes uids are mutually exclusive.
+        # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
+        rewards = torch.zeros((len(self.hotkeys),))
+        for index, (key, value) in enumerate(hotkey_to_rewards.items()):
+            # handle nan values
+            if nan_value_indices[index]:
+                rewards[key] = 0.0
+            # search metagraph for hotkey and grab uid
+            uid = self.hotkeys.index(key)
+            rewards[uid] = value
+        bt.logging.debug(f"Rewards: {rewards}")
+
+        # Update scores with rewards produced by this step.
+        # shape: [ metagraph.n ]
+        alpha: float = self.config.neuron.moving_average_alpha
+        self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores.to(
+            self.device
+        )
+        bt.logging.debug(f"Updated scores: {self.scores}")
+
+    def save_state(self):
+        """Saves the state of the validator to a file."""
+        bt.logging.info("Saving validator state.")
+
+        # Save the state of the validator to file.
+        torch.save(
+            {
+                "step": self.step,
+                "scores": self.scores,
+                "hotkeys": self.hotkeys,
+            },
+            self.config.neuron.full_path + "/state.pt",
+        )
+
+    def load_state(self):
+        """Loads the state of the validator from a file."""
+        bt.logging.info("Loading validator state.")
+
+        # Load the state of the validator from file.
+        state = torch.load(self.config.neuron.full_path + "/state.pt")
+        self.step = state["step"]
+        self.scores = state["scores"]
+        self.hotkeys = state["hotkeys"]
 
 
-# The main function parses the configuration and runs the validator.
-if __name__ == "__main__":
-    asyncio.run(main())
+async def log_validator_status():
+    while True:
+        bt.logging.info(f"Validator running... {time.time()}")
+        await asyncio.sleep(5)

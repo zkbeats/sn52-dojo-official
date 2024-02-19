@@ -14,8 +14,10 @@ class DatasetName(StrEnum):
     ANTHROPIC_HHRLHF = "Anthropic/hh-rlhf"
     STANFORD_SHP = "stanfordnlp/SHP"
     OPENAI_WEBGPT_COMPARISONS = "openai/webgpt_comparisons"
-    OPENASSISTANT_OASST1 = "OpenAssistant/oasst1"
-    OPENASSISTANT_OASST2 = "OpenAssistant/oasst2"
+    # OPENASSISTANT_OASST1 = "OpenAssistant/oasst1"
+    # OPENASSISTANT_OASST2 = "OpenAssistant/oasst2"
+    YITINGXIE_RLHF_REWARD_DATASETS = "yitingxie/rlhf-reward-datasets"
+    DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE = "Dahoas/synthetic-instruct-gptj-pairwise"
 
 
 def get_anthropic_hhrlhf():
@@ -72,6 +74,18 @@ eval_datasets = {
     DatasetName.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
     DatasetName.STANFORD_SHP: iter(get_stanford_shp()),
     DatasetName.OPENAI_WEBGPT_COMPARISONS: iter(get_openai_webgpt_comparisons()),
+    DatasetName.YITINGXIE_RLHF_REWARD_DATASETS: iter(
+        load_dataset(
+            DatasetName.YITINGXIE_RLHF_REWARD_DATASETS, split="train", streaming=True
+        )
+    ),
+    DatasetName.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
+        load_dataset(
+            DatasetName.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
+            split="train",
+            streaming=True,
+        )
+    ),
 }
 
 
@@ -85,6 +99,9 @@ def next_circular(dataset_dict: Dict[str, Iterable], key: str):
             dataset_dict[key] = iter(get_stanford_shp())
         elif key == DatasetName.ANTHROPIC_HHRLHF:
             dataset_dict[key] = iter(get_anthropic_hhrlhf())
+        else:
+            dataset_dict[key] = iter(load_dataset(key, split="train", streaming=True))
+
         return next(dataset_dict[key])
 
 

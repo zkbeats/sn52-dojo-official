@@ -77,7 +77,7 @@ class StreamMiner(ABC):
         self.request_timestamps: Dict = {}
 
     @abstractmethod
-    def config(self) -> "bt.Config":
+    def config(self) -> "bt.config":
         ...
 
     @classmethod
@@ -271,7 +271,7 @@ class StreamMiner(ABC):
 
 
 class StreamingTemplateMiner(StreamMiner):
-    def config(self) -> "bt.Config":
+    def config(self) -> "bt.config":
         """
         Returns the configuration object specific to this miner.
 
@@ -279,7 +279,7 @@ class StreamingTemplateMiner(StreamMiner):
         Currently, it sets up a basic configuration parser.
 
         Returns:
-            bt.Config: A configuration object with the miner's operational parameters.
+            bt.config: A configuration object with the miner's operational parameters.
         """
         parser = argparse.ArgumentParser(description="Streaming Miner Configs")
         self.add_args(parser)

@@ -92,7 +92,7 @@ class Consensus:
         ranking_result = RankingResult(
             request_id=responses[0].request_id,
             cid_to_consensus=cid_to_average,
-            hotkey_to_scores=dict(zip(hotkeys, scores.tolist())),
+            hotkey_to_score=dict(zip(hotkeys, scores.tolist())),
         )
 
         return ranking_result

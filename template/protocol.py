@@ -1,8 +1,7 @@
-from typing import Dict, List, Optional
-import uuid
-from attr import define, field
+from enum import StrEnum
+from typing import Dict, List
 import bittensor as bt
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 from commons.utils import get_epoch_time, get_new_uuid
 
@@ -21,6 +20,7 @@ class Completion(BaseModel):
 class Rank(BaseModel):
     cid: str = Field(description="Unique identifier for the completion")
     score: float = Field(default=0.0, description="Score of the completion")
+    scoring_method: str
 
 
 class RankingRequest(bt.Synapse):
@@ -65,6 +65,16 @@ class RankingResult(bt.Synapse):
     cid_to_consensus: Dict[str, float] = Field(
         description="Consensus score for each completion", allow_mutation=False
     )
-    hotkey_to_scores: Dict[str, float] = Field(
+    hotkey_to_score: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
+
+
+class MTurkResponse(bt.Synapse):
+    completion_id_to_score: Dict[str, float]
+
+
+class ScoringMethod(StrEnum):
+    HF_MODEL = "hf_model"
+    LLM_API = "llm_api"
+    AWS_MTURK = "aws_mturk"

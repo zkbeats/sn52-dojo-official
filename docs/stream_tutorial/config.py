@@ -3,7 +3,7 @@ import argparse
 import os
 
 
-def check_config(cls, config: "bt.Config"):
+def check_config(cls, config: "bt.config"):
     bt.axon.check_config(config)
     bt.logging.check_config(config)
     full_path = os.path.expanduser(
@@ -19,7 +19,7 @@ def check_config(cls, config: "bt.Config"):
         os.makedirs(config.miner.full_path)
 
 
-def get_config() -> "bt.Config":
+def get_config() -> "bt.config":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--axon.port", type=int, default=8098, help="Port to run the axon on."

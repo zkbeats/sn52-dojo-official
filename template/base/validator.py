@@ -19,6 +19,7 @@
 
 
 import copy
+import time
 import numpy as np
 import torch
 import asyncio
@@ -49,7 +50,6 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
-        # NOTE do not use
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
 
         # Init sync with the network. Updates the metagraph.
@@ -93,11 +93,12 @@ class BaseValidatorNeuron(BaseNeuron):
 
     async def concurrent_forward(self):
         coroutines = [
-            self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)
+            self.forward_request()
+            for _ in range(self.config.neuron.num_concurrent_forwards)
         ]
         await asyncio.gather(*coroutines)
 
-    async def run(self):
+    def run(self):
         """
         Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
 
@@ -123,6 +124,16 @@ class BaseValidatorNeuron(BaseNeuron):
             f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
 
+        # Serve passes the axon information to the network + netuid we are hosting on.
+        # This will auto-update if the axon port of external ip have changed.
+        bt.logging.info(
+            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+        )
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+
+        # Start  starts the miner's axon, making it active on the network.
+        self.axon.start()
+
         bt.logging.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
@@ -141,7 +152,7 @@ class BaseValidatorNeuron(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                await asyncio.sleep(5)
+                time.sleep(30)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -154,18 +165,18 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.error("Error during validation", str(err))
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
 
-    # def run_in_background_thread(self):
-    #     """
-    #     Starts the validator's operations in a background thread upon entering the context.
-    #     This method facilitates the use of the validator in a 'with' statement.
-    #     """
-    #     if not self.is_running:
-    #         bt.logging.debug("Starting validator in background thread.")
-    #         self.should_exit = False
-    #         self.thread = threading.Thread(target=self.run, daemon=True)
-    #         self.thread.start()
-    #         self.is_running = True
-    #         bt.logging.debug("Started")
+    def run_in_background_thread(self):
+        """
+        Starts the validator's operations in a background thread upon entering the context.
+        This method facilitates the use of the validator in a 'with' statement.
+        """
+        if not self.is_running:
+            bt.logging.debug("Starting validator in background thread.")
+            self.should_exit = False
+            self.thread = threading.Thread(target=self.run, daemon=True)
+            self.thread.start()
+            self.is_running = True
+            bt.logging.debug("Started")
 
     def stop_run_thread(self):
         """
@@ -178,9 +189,9 @@ class BaseValidatorNeuron(BaseNeuron):
             self.is_running = False
             bt.logging.debug("Stopped")
 
-    # def __enter__(self):
-    #     # self.run_in_background_thread()
-    #     return self
+    def __enter__(self):
+        self.run_in_background_thread()
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
