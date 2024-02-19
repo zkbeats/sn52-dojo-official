@@ -163,18 +163,20 @@ def get_seed_dataset():
     )
 
 
-seed_dataset = iter(get_seed_dataset())
-
-
 class SeedDataManager:
     @staticmethod
     def get_prompt_and_completions():
-        global seed_dataset
+        from commons.factory import Factory
+
         try:
-            return SeedDataManager._map_seed_data(next(seed_dataset))
+            return SeedDataManager._map_seed_data(
+                next(Factory.get_seed_dataset_iterator())
+            )
         except StopIteration:
-            seed_dataset = iter(get_seed_dataset())
-            return SeedDataManager._map_seed_data(next(seed_dataset))
+            Factory.new_seed_dataset_iterator()
+            return SeedDataManager._map_seed_data(
+                next(Factory.get_seed_dataset_iterator())
+            )
 
     @staticmethod
     def _map_seed_data(row: Dict) -> Tuple[str, List[str]]:

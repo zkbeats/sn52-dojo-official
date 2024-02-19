@@ -60,15 +60,16 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
     return current_env
 
 
-env_config = get_environment_config("sandbox")
-
-mturk_client = boto3.client(
-    "mturk",
-    aws_access_key_id=AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=AWS_SECRET_KEY,
-    region_name=US_EAST_REGION,
-    endpoint_url=env_config["endpoint_url"],
-)
+def get_aws_client(environment_name):
+    env_config = get_environment_config(environment_name)
+    mturk_client = boto3.client(
+        "mturk",
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_KEY,
+        region_name=US_EAST_REGION,
+        endpoint_url=env_config["endpoint_url"],
+    )
+    return mturk_client
 
 
 class MTurkUtils:

@@ -3,10 +3,10 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, responses
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field
+from commons.factory import Factory
 
 from commons.utils import get_new_uuid
 from template.protocol import Completion, RankingRequest
-from neurons.validator import Validator
 import bittensor as bt
 
 load_dotenv()
@@ -34,7 +34,7 @@ async def eval_text(request: EvalsRequest):
     )
 
     try:
-        validator = Validator()
+        validator = Factory.get_validator()
         response = await validator.send_request(synapse)
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)

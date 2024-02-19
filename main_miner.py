@@ -6,7 +6,7 @@ import uvicorn
 
 from commons.api.human_feedback_route import human_feedback_router
 from commons.api.middleware import LimitContentLengthMiddleware
-from commons.factory import MinerFactory
+from commons.factory import Factory
 from neurons.miner import log_miner_status
 
 load_dotenv()
@@ -23,7 +23,7 @@ app.include_router(human_feedback_router)
 
 
 async def main():
-    miner = MinerFactory.get_miner()
+    miner = Factory.get_miner()
     with miner as m:
         log_task = asyncio.create_task(log_miner_status())
 

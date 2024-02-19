@@ -1,7 +1,7 @@
 import bittensor as bt
 from dotenv import load_dotenv
 from fastapi import APIRouter, Request
-from commons.factory import MinerFactory
+from commons.factory import Factory
 
 from commons.human_feedback.aws_mturk import MTurkUtils
 from neurons.miner import Miner
@@ -22,7 +22,7 @@ async def task_completion_callback(request: Request):
         return
 
     try:
-        miner = MinerFactory.get_miner()
+        miner = Factory.get_miner()
         await miner.send_mturk_response(
             MTurkResponse(completion_id_to_score=completion_id_to_scores)
         )

@@ -6,7 +6,8 @@ import uvicorn
 
 from commons.api.eval_route import evals_router
 from commons.api.middleware import LimitContentLengthMiddleware
-from neurons.validator import Validator, log_validator_status
+from commons.factory import Factory
+from neurons.validator import log_validator_status
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 load_dotenv()
@@ -24,7 +25,7 @@ app.include_router(evals_router)
 
 
 async def main():
-    validator = Validator()
+    validator = Factory.get_validator()
     scheduler = AsyncIOScheduler(
         job_defaults={"max_instances": 1, "misfire_grace_time": 3}
     )
