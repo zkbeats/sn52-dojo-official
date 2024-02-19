@@ -22,7 +22,7 @@ def lambda_handler(event, context):
                     "mturk", region_name="us-east-1", endpoint_url=MTURK_ENDPOINT_URL
                 )
 
-                if mturk_event["EventType"] in ["HITReviewable", "AssignmentSubmitted"]:
+                if mturk_event["EventType"] in ["AssignmentSubmitted"]:
                     # Retrieve the answers that were provided by Workers
                     response = mturk.list_assignments_for_hit(
                         HITId=mturk_event["HITId"]
