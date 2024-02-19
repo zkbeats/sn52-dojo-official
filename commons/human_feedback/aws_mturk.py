@@ -14,9 +14,12 @@ from commons.llm.prompts import ScoreRange
 from template.protocol import Completion
 
 load_dotenv()
+
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 US_EAST_REGION = "us-east-1"
+# should look like the form: arn:aws:sns:us-east-1:1234567890:sns_topic_name
+AWS_SNS_ARN_ID = os.getenv("AWS_SNS_ARN_ID")
 
 
 class MTurkEventTypes(StrEnum):
@@ -124,7 +127,7 @@ class MTurkUtils:
                 f"{env_config['preview_url']}?groupId={new_hit['HIT']['HITGroupId']}"
             )
             bt.logging.success(
-                f"A new HIT has been created. You can preview it here:\n{hit_url}"
+                f"A new HIT has been created. You can preview it here: {hit_url}"
             )
             bt.logging.success(
                 "HITID = " + new_hit["HIT"]["HITId"] + " (Use to Get Results)"
@@ -135,7 +138,7 @@ class MTurkUtils:
                 mturk_client.update_notification_settings(
                     HITTypeId=hit_type_id,
                     Notification={
-                        "Destination": "arn:aws:sns:us-east-1:364251527502:test_topic",
+                        "Destination": AWS_SNS_ARN_ID,
                         "Transport": "SNS",
                         "Version": "2006-05-05",
                         "EventTypes": [
