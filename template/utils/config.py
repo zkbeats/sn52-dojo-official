@@ -22,6 +22,7 @@ import argparse
 import bittensor as bt
 
 from commons.reward_model.models import ModelZoo
+from commons.utils import get_device
 
 
 def check_config(config: bt.config):
@@ -51,24 +52,17 @@ def add_args(parser):
     # Netuid Arg: The netuid of the subnet to connect to.
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
 
+    neuron_types = ["miner", "validator"]
     parser.add_argument(
         "--neuron.type",
-        choices=["miner", "validator"],
+        choices=neuron_types,
         type=str,
         help="Whether running a miner or validator",
     )
     args, unknown = parser.parse_known_args()
     neuron_type = None
     if known_args := vars(args):
-        # if "neuron.type" not in known_args:
-        #     raise UnspecifiedNeuronType("neuron.type not specified during runtime")
-        # if known_args["neuron.type"] not in ["miner", "validator"]:
-        #     raise InvalidNeuronType(
-        #         f"neuron.type must be either 'miner' or 'validator', got {known_args['neuron.type']}"
-        #     )
         neuron_type = known_args["neuron.type"]
-
-    print("neuron_type:", neuron_type)
 
     parser.add_argument(
         "--neuron.name",
@@ -77,11 +71,9 @@ def add_args(parser):
         default=neuron_type,
     )
 
+    device = get_device()
     parser.add_argument(
-        "--neuron.device",
-        type=str,
-        help="Device to run on.",
-        default="cpu",
+        "--neuron.device", type=str, help="Device to run on.", default=device
     )
 
     parser.add_argument(
@@ -105,17 +97,11 @@ def add_args(parser):
             help="Base path to store data to.",
             default=Path.cwd(),
         )
-        parser.add_argument(
-            "--neuron.num_concurrent_forwards",
-            type=int,
-            help="The number of concurrent forwards running at any time.",
-            default=1,
-        )
 
         parser.add_argument(
             "--neuron.sample_size",
             type=int,
-            help="The number of miners to query in a single step.",
+            help="The number of miners to query per dendrite call.",
             default=10,
         )
 
@@ -126,49 +112,13 @@ def add_args(parser):
             default=0.05,
         )
 
-        parser.add_argument(
-            "--neuron.axon_off",
-            "--axon_off",
-            action="store_true",
-            # Note: the validator needs to serve an Axon with their IP or they may
-            #   be blacklisted by the firewall of serving peers on the network.
-            help="Set this flag to not attempt to serve an Axon.",
-            default=False,
-        )
-
-        parser.add_argument(
-            "--neuron.vpermit_tao_limit",
-            type=int,
-            help="The maximum number of TAO allowed to query a validator with a vpermit.",
-            default=4096,
-        )
-
-        parser.add_argument(
-            "--dendrite_timeout",
-            type=int,
-            help="Timeout for dendrite queries.",
-            default=60,
-        )
-
     elif neuron_type == "miner":
         parser.add_argument(
             "--scoring_method",
             help="Method to use for scoring completions.",
             choices=[str(method) for method in ScoringMethod],
         )
-        parser.add_argument(
-            "--blacklist.force_validator_permit",
-            action="store_true",
-            help="If set, we will force incoming requests to have a permit.",
-            default=True,
-        )
 
-        parser.add_argument(
-            "--blacklist.allow_non_registered",
-            action="store_true",
-            help="If set, miners will accept queries from non registered entities. (Dangerous!)",
-            default=False,
-        )
         parser.add_argument(
             "--reward_model",
             type=str,

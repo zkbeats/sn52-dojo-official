@@ -23,22 +23,8 @@ class Miner(BaseMinerNeuron):
 
     def __init__(self):
         super(Miner, self).__init__()
-
-        # TODO(developer): Anything specific to your use case you can do here
-        # Warn if allowing incoming requests from anyone.
-        if not self.config.blacklist.force_validator_permit:
-            bt.logging.warning(
-                "You are allowing non-validators to send requests to your miner. This is a security risk."
-            )
-        if self.config.blacklist.allow_non_registered:
-            bt.logging.warning(
-                "You are allowing non-registered entities to send requests to your miner. This is a security risk."
-            )
-
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
-        # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(wallet=self.wallet, port=self.config.axon.port)
 
         # Attach determiners which functions are called when servicing a request.
         bt.logging.info("Attaching forward function to miner axon.")
@@ -47,7 +33,6 @@ class Miner(BaseMinerNeuron):
             blacklist_fn=self.blacklist_ranking_request,
             priority_fn=self.priority,
         ).attach(forward_fn=self.forward_result)
-        bt.logging.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
         self.should_exit: bool = False

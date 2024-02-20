@@ -216,9 +216,7 @@ class Validator(BaseNeuron):
             )
 
         miner_uids = get_random_uids(
-            metagraph=self.metagraph,
-            k=self.config.neuron.sample_size,
-            config=self.config,
+            metagraph=self.metagraph, k=self.config.neuron.sample_size
         )
         axons = [
             self.metagraph.axons[uid]
@@ -232,10 +230,7 @@ class Validator(BaseNeuron):
 
         # The dendrite client queries the network.
         responses: List[RankingRequest] = await self.dendrite(
-            axons=axons,
-            synapse=synapse,
-            deserialize=False,
-            timeout=self.config.dendrite_timeout,
+            axons=axons, synapse=synapse, deserialize=False, timeout=60
         )
         bt.logging.info(f"Received responses: {responses}")
 
