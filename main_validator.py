@@ -9,6 +9,8 @@ from commons.api.middleware import LimitContentLengthMiddleware
 from commons.factory import Factory
 from neurons.validator import log_validator_status
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.combining import OrTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 load_dotenv()
 
@@ -30,7 +32,8 @@ async def main():
     scheduler = AsyncIOScheduler(
         job_defaults={"max_instances": 1, "misfire_grace_time": 3}
     )
-    scheduler.add_job(validator.update_score_and_send_feedback, "interval", seconds=10)
+    trigger = OrTrigger([CronTrigger(second=0), CronTrigger(second=30)])
+    scheduler.add_job(validator.update_score_and_send_feedback, trigger=trigger)
     scheduler.start()
 
     config = uvicorn.Config(
