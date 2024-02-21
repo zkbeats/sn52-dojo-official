@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from commons.api.eval_route import evals_router
+from commons.api.reward_route import reward_router
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.factory import Factory
 from neurons.validator import log_validator_status
@@ -23,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(LimitContentLengthMiddleware)
-app.include_router(evals_router)
+app.include_router(reward_router)
 
 
 async def main():
