@@ -10,15 +10,20 @@ load_dotenv()
 
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
 TOGETHER_API_BASE_URL = "https://api.together.xyz/v1"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_BASE_URL = "https://api.openai.com/v1"
 
 
 class Provider(StrEnum):
     TOGETHER_AI = "togetherai"
+    OPENAI = "openai"
 
 
 def get_openai_kwargs(provider: Provider):
     if provider == Provider.TOGETHER_AI:
         return {"api_key": TOGETHER_API_KEY, "base_url": TOGETHER_API_BASE_URL}
+    elif provider == Provider.OPENAI:
+        return {"api_key": OPENAI_API_KEY, "base_url": OPENAI_API_BASE_URL}
     raise ValueError(f"Unknown provider specified , provider: {provider}")
 
 
