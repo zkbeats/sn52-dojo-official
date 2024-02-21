@@ -15,9 +15,9 @@ from transformers import (
 
 from commons.llm.openai_proxy import Provider, get_openai_client
 from commons.llm.prompts import PromptBuilder, ScoreRange
-from commons.objects import ScoresResponse
+from commons.objects import PreferenceResponse, ScoresResponse
 from commons.utils import PydanticUtils, get_device
-from template.protocol import Completion
+from template.protocol import Completion, LLMConfig
 
 load_dotenv()
 
@@ -110,6 +110,41 @@ class ModelUtils:
             for score_item in response.scores:
                 score_item.score = score_item.score / score_range.upper
 
+        except Exception as e:
+            bt.logging.error(f"Error occurred while trying to parsing response: {e}")
+        bt.logging.info(f"Response: {response}")
+        return response
+
+    @staticmethod
+    async def llm_eval_human_preference(
+        llm_config: LLMConfig, chosen: str, rejected: str
+    ):
+        client = get_openai_client(llm_config.provider)
+        system_prompt = PromptBuilder.build_system_eval_human_preference_prompt()
+        chosen_idx, rejected_idx = 1, 2
+        user_prompt = PromptBuilder.build_user_eval_human_preference_prompt(
+            chosen, rejected, chosen_idx, rejected_idx
+        )
+        bt.logging.warning(f"System prompt: {system_prompt}")
+        bt.logging.warning(f"User prompt: {user_prompt}")
+        response = await client.chat.completions.create(
+            model=llm_config.model_name,
+            temperature=0,
+            stream=False,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format=PydanticUtils.build_response_format(PreferenceResponse),
+        )
+        try:
+            content = response.choices[0].message.content
+            bt.logging.info("LLM Human pref response: " + content)
+            response = PreferenceResponse.parse_raw(content)
+            # NOTE @validator see prompts.py, as this depends on text IDs assigned
+            is_chosen = response.preference_text == chosen_idx
+
+            return is_chosen
         except Exception as e:
             bt.logging.error(f"Error occurred while trying to parsing response: {e}")
         bt.logging.info(f"Response: {response}")

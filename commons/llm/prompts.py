@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, validator
 
 from template.protocol import Completion
@@ -23,8 +23,20 @@ Completion #{idx}
 {text}
 """
 
+system_eval_human_preference_prompt = """
+You are a helpful assistant that provides responses in JSON. Your task is to choose one of two pieces of texts in terms of your preference. You must provide your answer in JSON format.
+"""
 
-# NOTE here you should either use ranges [0,1] or [1,10], do not use [-1,1] as LLMs will perform poorly
+user_eval_human_preference_prompt = """
+Text {chosen_idx}:
+{chosen}
+
+Text {rejected_idx}:
+{rejected}
+"""
+
+
+# NOTE @miner here you should either use ranges [0,1] or [1,10], do not use [-1,1] as LLMs will perform poorly
 class ScoreRange(BaseModel):
     lower: int
     upper: int
@@ -58,4 +70,25 @@ class PromptBuilder:
             range_lower=score_range.lower, range_upper=score_range.upper
         )
         bt.logging.debug(f"System prompt: {formatted_prompt}")
+        return formatted_prompt
+
+    @staticmethod
+    def build_system_eval_human_preference_prompt():
+        return system_eval_human_preference_prompt
+
+    @staticmethod
+    def build_user_eval_human_preference_prompt(
+        chosen: str,
+        rejected: str,
+        chosen_idx,
+        rejected_idx,
+        prompt: Optional[str] = None,
+    ):
+        formatted_prompt = user_eval_human_preference_prompt.format(
+            chosen=chosen,
+            rejected=rejected,
+            chosen_idx=chosen_idx,
+            rejected_idx=rejected_idx,
+        )
+        bt.logging.debug(f"User prompt: {formatted_prompt}")
         return formatted_prompt

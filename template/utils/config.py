@@ -129,23 +129,34 @@ def add_args(parser):
 
         args, unknown = parser.parse_known_args()
         scoring_method = None
-
         if known_args := vars(args):
             scoring_method = known_args["scoring_method"]
-            if scoring_method == ScoringMethod.HF_MODEL:
-                parser.add_argument(
-                    "--reward_model",
-                    type=str,
-                    help="Name of the reward model from huggingface to use",
-                    default=ModelZoo.DEBERTA_V3_LARGE_V2,
-                )
-            elif scoring_method == ScoringMethod.AWS_MTURK:
-                parser.add_argument(
-                    "--aws_mturk_environment",
-                    choices=["sandbox", "production"],
-                    type=str,
-                    help="AWS MTurk environment to use",
-                )
+
+        default_model_name = (
+            ModelZoo.DEBERTA_V3_LARGE_V2
+            if scoring_method == ScoringMethod.HF_MODEL
+            else "mistralai/Mixtral-8x7B-Instruct-v0.1"
+        )
+        parser.add_argument(
+            "--model_name",
+            type=str,
+            help="Name of the reward model to use, either from Huggingface or LLM API provider such as TogetherAI.",
+            default=default_model_name,
+        )
+
+        parser.add_argument(
+            "--llm_provider",
+            type=str,
+            help="LLM provider to use for scoring completions.",
+            default="togetherai",
+        )
+
+        parser.add_argument(
+            "--aws_mturk_environment",
+            choices=["sandbox", "production"],
+            type=str,
+            help="AWS MTurk environment to use",
+        )
 
 
 def get_config():

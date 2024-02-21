@@ -2,6 +2,7 @@ from enum import StrEnum
 from typing import Dict, List, Optional
 import bittensor as bt
 from pydantic import BaseModel, Field
+from commons.llm.openai_proxy import Provider
 
 from commons.utils import get_epoch_time, get_new_uuid
 
@@ -26,6 +27,11 @@ class Completion(BaseModel):
 class Rank(BaseModel):
     cid: str = Field(description="Unique identifier for the completion")
     score: float = Field(default=0.0, description="Score of the completion")
+
+
+class LLMConfig(BaseModel):
+    provider: Provider
+    model_name: str
 
 
 class RankingRequest(bt.Synapse):
@@ -62,6 +68,9 @@ class RankingRequest(bt.Synapse):
     )
     scoring_method: Optional[ScoringMethod] = Field(
         decscription="Method to use for scoring completions"
+    )
+    llm_config: Optional[LLMConfig] = Field(
+        description="Model configuration for LLM scoring"
     )
 
 

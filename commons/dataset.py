@@ -10,7 +10,7 @@ from template.protocol import Completion, RankingRequest
 seed = 42
 
 
-class DatasetName(StrEnum):
+class EvalDataset(StrEnum):
     ANTHROPIC_HHRLHF = "Anthropic/hh-rlhf"
     STANFORD_SHP = "stanfordnlp/SHP"
     OPENAI_WEBGPT_COMPARISONS = "openai/webgpt_comparisons"
@@ -22,7 +22,7 @@ class DatasetName(StrEnum):
 
 def get_anthropic_hhrlhf():
     return load_dataset(
-        DatasetName.ANTHROPIC_HHRLHF,
+        EvalDataset.ANTHROPIC_HHRLHF,
         split="train",
         streaming=True,
     )
@@ -31,7 +31,7 @@ def get_anthropic_hhrlhf():
 def get_stanford_shp():
     return (
         load_dataset(
-            DatasetName.STANFORD_SHP,
+            EvalDataset.STANFORD_SHP,
             split="train",
             streaming=True,
         )
@@ -47,7 +47,7 @@ def get_stanford_shp():
 def get_openai_webgpt_comparisons():
     return (
         load_dataset(
-            DatasetName.OPENAI_WEBGPT_COMPARISONS,
+            EvalDataset.OPENAI_WEBGPT_COMPARISONS,
             split="train",
             streaming=True,
         )
@@ -71,17 +71,17 @@ def get_openai_webgpt_comparisons():
 
 
 eval_datasets = {
-    DatasetName.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
-    DatasetName.STANFORD_SHP: iter(get_stanford_shp()),
-    DatasetName.OPENAI_WEBGPT_COMPARISONS: iter(get_openai_webgpt_comparisons()),
-    DatasetName.YITINGXIE_RLHF_REWARD_DATASETS: iter(
+    EvalDataset.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
+    EvalDataset.STANFORD_SHP: iter(get_stanford_shp()),
+    EvalDataset.OPENAI_WEBGPT_COMPARISONS: iter(get_openai_webgpt_comparisons()),
+    EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS: iter(
         load_dataset(
-            DatasetName.YITINGXIE_RLHF_REWARD_DATASETS, split="train", streaming=True
+            EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS, split="train", streaming=True
         )
     ),
-    DatasetName.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
+    EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
         load_dataset(
-            DatasetName.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
+            EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
             split="train",
             streaming=True,
         )
@@ -93,11 +93,11 @@ def next_circular(dataset_dict: Dict[str, Iterable], key: str):
     try:
         return next(dataset_dict[key])
     except StopIteration:
-        if key == DatasetName.OPENAI_WEBGPT_COMPARISONS:
+        if key == EvalDataset.OPENAI_WEBGPT_COMPARISONS:
             dataset_dict[key] = iter(get_openai_webgpt_comparisons())
-        elif key == DatasetName.STANFORD_SHP:
+        elif key == EvalDataset.STANFORD_SHP:
             dataset_dict[key] = iter(get_stanford_shp())
-        elif key == DatasetName.ANTHROPIC_HHRLHF:
+        elif key == EvalDataset.ANTHROPIC_HHRLHF:
             dataset_dict[key] = iter(get_anthropic_hhrlhf())
         else:
             dataset_dict[key] = iter(load_dataset(key, split="train", streaming=True))
@@ -110,7 +110,7 @@ class EvalDatasetManager:
     def get_batch() -> List[Dict]:
         dataset_names = list(eval_datasets.keys())
         key = random.choice(dataset_names)
-        bt.logging.info(f"Using dataset: {key}")
+        bt.logging.info(f"Using dataset: {key}, for evaluation")
         batch_size = 32
         return [next_circular(eval_datasets, key) for _ in range(batch_size)]
 

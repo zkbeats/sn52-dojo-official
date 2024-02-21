@@ -21,3 +21,7 @@ class ScoreItem(BaseModel):
 # meant to be used with JSON mode
 class ScoresResponse(BaseModel):
     scores: List[ScoreItem]
+
+
+class PreferenceResponse(BaseModel):
+    preference_text: int
