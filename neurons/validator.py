@@ -38,14 +38,6 @@ class Validator(BaseNeuron):
 
     """
 
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        """Create a singleton instance of the Validator class."""
-        if cls._instance is None:
-            cls._instance = super(Validator, cls).__new__(cls)
-        return cls._instance
-
     def __init__(self):
         super(Validator, self).__init__()
 
