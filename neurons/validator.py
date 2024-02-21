@@ -195,9 +195,8 @@ class Validator(BaseNeuron):
     async def send_request(
         self, synapse: RankingRequest = None
     ) -> DendriteQueryResponse:
-        # typically the request may come from an extsernal source however,
-        # initially we will seed it with some data to provide data for miners
-        # to use
+        # typically the request may come from an external source however,
+        # initially will seed it with some data for miners to get started
         if synapse is None:
             prompt, completions = SeedDataManager.get_prompt_and_completions()
             synapse = RankingRequest(
