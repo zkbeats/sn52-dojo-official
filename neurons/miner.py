@@ -7,6 +7,7 @@ import bittensor as bt
 from commons.llm.openai_proxy import Provider
 from commons.human_feedback.aws_mturk import MTurkUtils
 from commons.reward_model.models import ModelUtils
+from commons.scoring import Scoring
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
@@ -59,9 +60,9 @@ class Miner(BaseMinerNeuron):
                     Rank(
                         cid=completion.cid,
                         score=score,
-                        scoring_method=ScoringMethod.HF_MODEL,
                     )
                 )
+            synapse.scoring_method = ScoringMethod.HF_MODEL
 
         elif scoring_method.casefold() == ScoringMethod.LLM_API:
             scores_response = await ModelUtils._llm_api_score(
@@ -85,9 +86,9 @@ class Miner(BaseMinerNeuron):
                         Rank(
                             cid=completion.cid,
                             score=matching_score_item.score,
-                            scoring_method=ScoringMethod.LLM_API,
                         )
                     )
+            synapse.scoring_method = ScoringMethod.LLM_API
 
         elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
             # send off to MTurk workers... will timeout on validator side

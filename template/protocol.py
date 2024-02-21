@@ -1,9 +1,15 @@
 from enum import StrEnum
-from typing import Dict, List
+from typing import Dict, List, Optional
 import bittensor as bt
 from pydantic import BaseModel, Field
 
 from commons.utils import get_epoch_time, get_new_uuid
+
+
+class ScoringMethod(StrEnum):
+    HF_MODEL = "hf_model"
+    LLM_API = "llm_api"
+    AWS_MTURK = "aws_mturk"
 
 
 class Completion(BaseModel):
@@ -20,10 +26,10 @@ class Completion(BaseModel):
 class Rank(BaseModel):
     cid: str = Field(description="Unique identifier for the completion")
     score: float = Field(default=0.0, description="Score of the completion")
-    scoring_method: str
 
 
 class RankingRequest(bt.Synapse):
+    # filled in by validator
     epoch_timestamp: int = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
@@ -50,10 +56,12 @@ class RankingRequest(bt.Synapse):
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    # # Optional request output, filled by recieving axon.
-    # output: Optional[Output] = None
+    # filled in by miners
     ranks: List[Rank] = Field(
         default=[], description="List of ranks for each completion"
+    )
+    scoring_method: Optional[ScoringMethod] = Field(
+        decscription="Method to use for scoring completions"
     )
 
 
@@ -72,9 +80,3 @@ class RankingResult(bt.Synapse):
 
 class MTurkResponse(bt.Synapse):
     completion_id_to_score: Dict[str, float]
-
-
-class ScoringMethod(StrEnum):
-    HF_MODEL = "hf_model"
-    LLM_API = "llm_api"
-    AWS_MTURK = "aws_mturk"
