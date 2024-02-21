@@ -35,15 +35,16 @@ async def main():
     with validator as v:
         log_task = asyncio.create_task(log_validator_status())
 
-        config = uvicorn.run(
+        config = uvicorn.Config(
             app=app,
             host="0.0.0.0",
             port=5004,
             workers=1,
             log_level="info",
-            # NOTE should only be used in development.
             reload=False,
         )
+        server = uvicorn.Server(config)
+        await server.serve()
 
         log_task.cancel()
         try:
