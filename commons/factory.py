@@ -1,26 +1,30 @@
 from commons.dataset import get_seed_dataset
 from commons.human_feedback.aws_mturk import get_aws_client
-from neurons.miner import Miner
-from neurons.validator import Validator
+from template.utils.config import get_config
 
 
 class Factory:
-    _miner_instance = None
-    _validator_instance = None
+    _miner = None
+    _validator = None
     _aws_client = None
     _seed_dataset_iter = None
+    _config = None
 
     @classmethod
     def get_miner(cls):
-        if cls._miner_instance is None:
-            cls._miner_instance = Miner()
-        return cls._miner_instance
+        from neurons.miner import Miner
+
+        if cls._miner is None:
+            cls._miner = Miner()
+        return cls._miner
 
     @classmethod
     def get_validator(cls):
-        if cls._validator_instance is None:
-            cls._validator_instance = Validator()
-        return cls._validator_instance
+        from neurons.validator import Validator
+
+        if cls._validator is None:
+            cls._validator = Validator()
+        return cls._validator
 
     @classmethod
     def get_aws_client(cls):
@@ -30,12 +34,18 @@ class Factory:
         return cls._aws_client
 
     @classmethod
-    def get_seed_dataset_iterator(cls):
+    def get_seed_dataset_iter(cls):
         if cls._seed_dataset_iter is None:
             cls._seed_dataset_iter = iter(get_seed_dataset())
         return cls._seed_dataset_iter
 
     @classmethod
-    def new_seed_dataset_iterator(cls):
+    def new_seed_dataset_iter(cls):
         cls._seed_dataset_iter = iter(get_seed_dataset())
         return cls._seed_dataset_iter
+
+    @classmethod
+    def get_config(cls):
+        if cls._config is None:
+            cls._config = get_config()
+        return cls._config

@@ -24,13 +24,14 @@ app.include_router(human_feedback_router)
 
 async def main():
     miner = Factory.get_miner()
+    config = Factory.get_config()
     with miner as m:
         log_task = asyncio.create_task(log_miner_status())
 
         config = uvicorn.run(
             app=app,
             host="0.0.0.0",
-            port=5003,
+            port=config.api.port,
             workers=1,
             log_level="info",
             # NOTE should only be used in development.

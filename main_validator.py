@@ -26,24 +26,25 @@ app.include_router(evals_router)
 
 async def main():
     validator = Factory.get_validator()
+    config = Factory.get_config()
     scheduler = AsyncIOScheduler(
         job_defaults={"max_instances": 1, "misfire_grace_time": 3}
     )
     scheduler.add_job(validator.update_score_and_send_feedback, "interval", seconds=10)
     scheduler.start()
 
+    config = uvicorn.Config(
+        app=app,
+        host="0.0.0.0",
+        port=config.api.port,
+        workers=1,
+        log_level="info",
+        reload=False,
+    )
+    server = uvicorn.Server(config)
     with validator as v:
         log_task = asyncio.create_task(log_validator_status())
 
-        config = uvicorn.Config(
-            app=app,
-            host="0.0.0.0",
-            port=5004,
-            workers=1,
-            log_level="info",
-            reload=False,
-        )
-        server = uvicorn.Server(config)
         await server.serve()
 
         log_task.cancel()

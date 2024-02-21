@@ -1,10 +1,9 @@
-import json
 from pathlib import Path
 import pickle
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, List, Optional
+from commons.factory import Factory
 from commons.objects import DendriteQueryResponse
 import bittensor as bt
-from template.utils.config import check_config, get_config
 
 __LOG_PREFIX__ = "[DataManager]"
 
@@ -12,7 +11,7 @@ __LOG_PREFIX__ = "[DataManager]"
 class DataManager:
     @staticmethod
     def get_ranking_data_filepath() -> Path:
-        config = get_config()
+        config = Factory.get_config()
         base_path = config.data_manager.base_path
         return base_path / "data" / "ranking" / "data.pkl"
 
@@ -30,7 +29,7 @@ class DataManager:
         except pickle.PickleError as e:
             bt.logging.error(__LOG_PREFIX__, f"Pickle error: {e}.")
             return None
-        except Exception as e:
+        except Exception:
             bt.logging.error(
                 __LOG_PREFIX__, "Failed to load existing ranking data from file."
             )

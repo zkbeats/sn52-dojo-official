@@ -90,6 +90,13 @@ def add_args(parser):
         default="2 GB",
     )
 
+    parser.add_argument(
+        "--api.port",
+        type=int,
+        help="FastAPI port for uvicorn to run on, should be different from axon.port as these will serve external requests.",
+        default=1888,
+    )
+
     if neuron_type == "validator":
         parser.add_argument(
             "--data_manager.base_path",
@@ -127,17 +134,8 @@ def add_args(parser):
         )
 
 
-# singleton instance
-_config = None
-
-
 def get_config():
-    """Returns the configuration object specific to this miner or validator after adding relevant arguments.
-    Manage a global config instance to allow re-using in other parts of our code.
-    """
-    global _config
-    if _config is not None:
-        return _config
+    """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
@@ -145,4 +143,6 @@ def get_config():
     bt.axon.add_args(parser)
     add_args(parser)
     _config = bt.config(parser)
+
+    check_config(_config)
     return _config

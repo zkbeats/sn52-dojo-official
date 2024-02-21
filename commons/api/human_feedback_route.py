@@ -4,7 +4,6 @@ from fastapi import APIRouter, Request
 from commons.factory import Factory
 
 from commons.human_feedback.aws_mturk import MTurkUtils
-from neurons.miner import Miner
 from template.protocol import MTurkResponse
 
 load_dotenv()

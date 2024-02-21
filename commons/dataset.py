@@ -169,14 +169,10 @@ class SeedDataManager:
         from commons.factory import Factory
 
         try:
-            return SeedDataManager._map_seed_data(
-                next(Factory.get_seed_dataset_iterator())
-            )
+            return SeedDataManager._map_seed_data(next(Factory.get_seed_dataset_iter()))
         except StopIteration:
-            Factory.new_seed_dataset_iterator()
-            return SeedDataManager._map_seed_data(
-                next(Factory.get_seed_dataset_iterator())
-            )
+            Factory.new_seed_dataset_iter()
+            return SeedDataManager._map_seed_data(next(Factory.get_seed_dataset_iter()))
 
     @staticmethod
     def _map_seed_data(row: Dict) -> Tuple[str, List[str]]:

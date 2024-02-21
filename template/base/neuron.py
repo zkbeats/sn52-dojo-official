@@ -17,19 +17,13 @@
 
 import inspect
 import os
-
-import bittensor as bt
-
 from abc import ABC, abstractmethod
 
-from commons.utils import initialise
+import bittensor as bt
 from bittensor.btlogging import logging as bt_logging
-# from bittensor.btlogging import logger as bt_logger
+from commons.factory import Factory
 
-
-# Sync calls set weights and also resyncs the metagraph.
-from template.utils.config import check_config, get_config
-from commons.utils import ttl_get_block
+from commons.utils import initialise, ttl_get_block
 from template import __spec_version__ as spec_version
 
 original_format = bt_logging._format
@@ -76,8 +70,7 @@ class BaseNeuron(ABC):
         return ttl_get_block(self.subtensor)
 
     def __init__(self):
-        self.config = get_config()
-        check_config(self.config)
+        self.config = Factory.get_config()
 
         # Set up logging with the provided configuration and directory.
         bt.logging(config=self.config, logging_dir=self.config.full_path)
