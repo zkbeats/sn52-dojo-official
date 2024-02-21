@@ -1,12 +1,10 @@
 from commons.dataset import get_seed_dataset
-from commons.human_feedback.aws_mturk import get_aws_client
 from template.utils.config import get_config
 
 
 class Factory:
     _miner = None
     _validator = None
-    _aws_client = None
     _seed_dataset_iter = None
     _config = None
 
@@ -25,14 +23,6 @@ class Factory:
         if cls._validator is None:
             cls._validator = Validator()
         return cls._validator
-
-    @classmethod
-    def get_aws_client(cls):
-        config = cls.get_config()
-        if cls._aws_client is None:
-            # TODO: Change the environment to production when launch
-            cls._aws_client = get_aws_client(config.aws_mturk_environment)
-        return cls._aws_client
 
     @classmethod
     def get_seed_dataset_iter(cls):

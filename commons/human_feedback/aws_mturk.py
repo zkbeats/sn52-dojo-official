@@ -9,6 +9,7 @@ import boto3
 import botocore.exceptions
 import markdown
 from dotenv import load_dotenv
+from commons.factory import Factory
 
 from commons.llm.prompts import ScoreRange
 from template.protocol import Completion
@@ -73,6 +74,16 @@ def get_aws_client(environment_name):
 
 
 class MTurkUtils:
+    _aws_client = None
+
+    @classmethod
+    def get_client():
+        config = Factory.get_config()
+        if MTurkUtils._aws_client is None:
+            MTurkUtils._aws_client = get_aws_client(config.aws_mturk_environment)
+
+        return MTurkUtils._aws_client
+
     @staticmethod
     def encode_task_key(completion_id: str):
         """Simple method to take Completion.cid and encode it in a way that we can receive it from AWS Lambda"""
@@ -87,7 +98,7 @@ class MTurkUtils:
 
     @staticmethod
     def get_balance():
-        return mturk_client.get_account_balance()["AvailableBalance"]
+        return MTurkUtils.get_client().get_account_balance()["AvailableBalance"]
 
     @staticmethod
     def create_mturk_task(
@@ -110,7 +121,7 @@ class MTurkUtils:
         payout_auto_approval_seconds = 3600 * 24
         success = False
         try:
-            new_hit = mturk_client.create_hit(
+            new_hit = MTurkUtils.get_client().create_hit(
                 Title=title,
                 Description=MTurkUtils.build_description(len(completions)),
                 Keywords=", ".join(search_keywords),
@@ -124,6 +135,9 @@ class MTurkUtils:
                 ),
             )
             success = True
+            env_config = get_environment_config(
+                Factory.get_config().aws_mturk_environment
+            )
             hit_url = (
                 f"{env_config['preview_url']}?groupId={new_hit['HIT']['HITGroupId']}"
             )
@@ -136,7 +150,7 @@ class MTurkUtils:
 
             try:
                 hit_type_id = new_hit["HIT"]["HITTypeId"]
-                mturk_client.update_notification_settings(
+                MTurkUtils.get_client().update_notification_settings(
                     HITTypeId=hit_type_id,
                     Notification={
                         "Destination": AWS_SNS_ARN_ID,
