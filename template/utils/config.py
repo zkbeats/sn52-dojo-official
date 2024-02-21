@@ -22,6 +22,7 @@ import argparse
 import bittensor as bt
 
 from commons.reward_model.models import ModelZoo
+from commons.scoring import Scoring
 from commons.utils import get_device
 
 
@@ -126,12 +127,25 @@ def add_args(parser):
             choices=[str(method) for method in ScoringMethod],
         )
 
-        parser.add_argument(
-            "--reward_model",
-            type=str,
-            help="Name of the reward model from huggingface to use",
-            default=ModelZoo.DEBERTA_V3_LARGE_V2,
-        )
+        args, unknown = parser.parse_known_args()
+        scoring_method = None
+
+        if known_args := vars(args):
+            scoring_method = known_args["scoring_method"]
+            if scoring_method == ScoringMethod.HF_MODEL:
+                parser.add_argument(
+                    "--reward_model",
+                    type=str,
+                    help="Name of the reward model from huggingface to use",
+                    default=ModelZoo.DEBERTA_V3_LARGE_V2,
+                )
+            elif scoring_method == ScoringMethod.AWS_MTURK:
+                parser.add_argument(
+                    "--aws_mturk_environment",
+                    choices=["sandbox", "production"],
+                    type=str,
+                    help="AWS MTurk environment to use",
+                )
 
 
 def get_config():

@@ -28,9 +28,10 @@ class Factory:
 
     @classmethod
     def get_aws_client(cls):
+        config = cls.get_config()
         if cls._aws_client is None:
             # TODO: Change the environment to production when launch
-            cls._aws_client = get_aws_client("sandbox")
+            cls._aws_client = get_aws_client(config.aws_mturk_environment)
         return cls._aws_client
 
     @classmethod
