@@ -1,11 +1,18 @@
 import asyncio
 import torch
 from commons.dataset import EvalDatasetManager
+from commons.factory import Factory
 from commons.llm.openai_proxy import Provider
 from commons.reward_model.models import (
     ModelUtils,
     get_cached_model,
     get_cached_tokenizer,
+)
+from tenacity import (
+    AsyncRetrying,
+    RetryError,
+    stop_after_attempt,
+    wait_exponential,
 )
 
 import bittensor as bt
@@ -21,7 +28,7 @@ class EvalUtils:
         model_config: ModelConfig = None,
     ) -> float:
         total_accuracy = 0
-        num_batches = 10
+        num_batches = Factory.get_config().eval.num_batches
         for _ in range(num_batches):
             batch_human_preference = EvalDatasetManager.get_batch()
             if scoring_method == ScoringMethod.HF_MODEL:
@@ -74,6 +81,13 @@ def hf_classify_accuracy(batch, model, tokenizer, device):
     return accuracy
 
 
+def log_retry_info(retry_state):
+    """Meant to be used with tenaicty's before_sleep callback"""
+    bt.logging.warning(
+        f"Retry attempt {retry_state.attempt_number} failed with exception: {retry_state.outcome.exception()}",
+    )
+
+
 async def llm_classify_accuracy(
     batch,
     model_config: ModelConfig,
@@ -83,11 +97,28 @@ async def llm_classify_accuracy(
     bt.logging.debug("Running LLM classification accuracy...")
     total_chosen = 0
     # could actually batch this but might encounter leaked semaphore due to RAM constraints
+    MAX_RETRIES = 5
     for row in batch:
-        is_chosen = await ModelUtils.llm_eval_human_preference(
-            model_config=model_config, chosen=row["chosen"], rejected=row["rejected"]
-        )
-        total_chosen += is_chosen
+        # TODO @dev handle rate limiting from the model provider
+        try:
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(MAX_RETRIES),
+                before_sleep=log_retry_info,
+                wait=wait_exponential(multiplier=1, min=4, max=12),
+            ):
+                with attempt:
+                    is_chosen = await ModelUtils.llm_eval_human_preference(
+                        model_config=model_config,
+                        chosen=row["chosen"],
+                        rejected=row["rejected"],
+                    )
+                total_chosen += is_chosen
+
+        except RetryError:
+            bt.logging.error(
+                f"Failed to generate completion after {MAX_RETRIES} attempts while evaluating human preference.",
+            )
+
     accuracy = total_chosen / len(batch)
     bt.logging.info(
         f"Batch Accuracy: {accuracy}, with LLM Model Config: {model_config}"

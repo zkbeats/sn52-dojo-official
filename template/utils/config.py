@@ -107,6 +107,13 @@ def add_args(parser):
         )
 
         parser.add_argument(
+            "--eval.num_batches",
+            type=int,
+            help="Number of batches from dataset to use when evaluating.",
+            default=10,
+        )
+
+        parser.add_argument(
             "--neuron.sample_size",
             type=int,
             help="The number of miners to query per dendrite call.",
