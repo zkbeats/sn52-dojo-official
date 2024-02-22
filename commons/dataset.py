@@ -70,6 +70,9 @@ def get_openai_webgpt_comparisons():
     )
 
 
+dataset_kwargs = {"split": "train", "streaming": True}
+
+
 def next_circular(dataset_dict: Dict[str, Iterable], key: str):
     try:
         return next(dataset_dict[key])
@@ -81,34 +84,35 @@ def next_circular(dataset_dict: Dict[str, Iterable], key: str):
         elif key == EvalDataset.ANTHROPIC_HHRLHF:
             dataset_dict[key] = iter(get_anthropic_hhrlhf())
         else:
-            dataset_dict[key] = iter(load_dataset(key, split="train", streaming=True))
+            dataset_dict[key] = iter(load_dataset(key, **dataset_kwargs))
 
         return next(dataset_dict[key])
 
 
 class EvalDatasetManager:
-    _eval_datasets = {
-        EvalDataset.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
-        EvalDataset.STANFORD_SHP: iter(get_stanford_shp()),
-        EvalDataset.OPENAI_WEBGPT_COMPARISONS: iter(get_openai_webgpt_comparisons()),
-        EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS: iter(
-            load_dataset(
-                EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS,
-                split="train",
-                streaming=True,
-            )
-        ),
-        EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
-            load_dataset(
-                EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
-                split="train",
-                streaming=True,
-            )
-        ),
-    }
+    _eval_datasets = None
 
     @classmethod
     def get_batch(cls) -> List[Dict]:
+        if cls._eval_datasets is None:
+            cls._eval_datasets = {
+                EvalDataset.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
+                EvalDataset.STANFORD_SHP: iter(get_stanford_shp()),
+                EvalDataset.OPENAI_WEBGPT_COMPARISONS: iter(
+                    get_openai_webgpt_comparisons()
+                ),
+                EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS: iter(
+                    load_dataset(
+                        EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS, **dataset_kwargs
+                    )
+                ),
+                EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
+                    load_dataset(
+                        EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
+                        **dataset_kwargs,
+                    )
+                ),
+            }
         dataset_names = list(cls._eval_datasets.keys())
         key = random.choice(dataset_names)
         bt.logging.info(f"Using dataset: {key}, for evaluation")
