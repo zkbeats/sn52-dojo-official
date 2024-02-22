@@ -24,20 +24,19 @@ app.include_router(human_feedback_router)
 
 async def main():
     miner = Factory.get_miner()
-    config = Factory.get_config()
+    config = uvicorn.Config(
+        app=app,
+        host="0.0.0.0",
+        port=Factory.get_config().api.port,
+        workers=1,
+        log_level="info",
+        reload=False,
+    )
+    server = uvicorn.Server(config)
     with miner as m:
         log_task = asyncio.create_task(log_miner_status())
 
-        config = uvicorn.run(
-            app=app,
-            host="0.0.0.0",
-            port=config.api.port,
-            workers=1,
-            log_level="info",
-            # NOTE should only be used in development.
-            reload=False,
-        )
-
+        await server.serve()
         # once the server is closed, cancel the logging task
         log_task.cancel()
         try:
