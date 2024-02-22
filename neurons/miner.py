@@ -104,6 +104,8 @@ class Miner(BaseMinerNeuron):
                 completions=synapse.completions,
                 reward_in_dollars=0.01,
             )
+        else:
+            bt.logging.error("Unrecognized scoring method!")
 
         return synapse
 

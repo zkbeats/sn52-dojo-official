@@ -72,9 +72,9 @@ def add_args(parser):
         default=neuron_type,
     )
 
-    device = get_device()
+    # device = get_device()
     parser.add_argument(
-        "--neuron.device", type=str, help="Device to run on.", default=device
+        "--neuron.device", type=str, help="Device to run on.", default="cpu"
     )
 
     parser.add_argument(
