@@ -102,7 +102,7 @@ class Validator(BaseNeuron):
         # 3. persist on disk via DataManager
 
         path = DataManager.get_ranking_data_filepath()
-        data = DataManager.load(path=path)
+        data = await DataManager.load(path=path)
         miner_hotkey = synapse.dendrite.hotkey
         if not data:
             bt.logging.error(
@@ -146,7 +146,7 @@ class Validator(BaseNeuron):
                 d.responses.append(request_copy)
 
             d.responses = _filter_valid_responses(d.responses)
-        DataManager.save(path, data)
+        await DataManager.save(path, data)
         return
 
     async def send_consensus(self, synapse: RankingResult, hotkeys: List[str]):
@@ -158,7 +158,7 @@ class Validator(BaseNeuron):
         await self.dendrite(axons=axons, synapse=synapse, deserialize=False, timeout=12)
 
     async def calculate_miner_classification_accuracy(self):
-        data = DataManager.load(path=DataManager.get_ranking_data_filepath())
+        data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
         if not data:
             bt.logging.debug(
                 "Skipping classification accuracy as no ranking data found."
@@ -187,7 +187,7 @@ class Validator(BaseNeuron):
         bt.logging.debug(
             f"Scheduled update score and send feedback triggered at time: {time.time()}"
         )
-        data = DataManager.load(path=DataManager.get_ranking_data_filepath())
+        data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
         if not data:
             bt.logging.debug(
                 "Skipping scoring as no ranking data found, this means either all have been processed or you are running the validator for the first time."
@@ -265,7 +265,7 @@ class Validator(BaseNeuron):
             request=synapse,
             responses=valid_responses,
         )
-        DataManager.append_responses(response=response_data)
+        await DataManager.append_responses(response=response_data)
         return response_data
 
     # async def concurrent_forward(self):
