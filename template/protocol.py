@@ -66,7 +66,7 @@ class RankingRequest(bt.Synapse):
     ranks: List[Rank] = Field(
         default=[], description="List of ranks for each completion"
     )
-    scoring_method: Optional[ScoringMethod] = Field(
+    scoring_method: Optional[str] = Field(
         decscription="Method to use for scoring completions"
     )
     model_config: Optional[ModelConfig] = Field(
