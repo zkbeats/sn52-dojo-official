@@ -1,15 +1,30 @@
+<p align="center">
+    <font size="20">Tensorplex RLHF Subnet</font> 
+</p>
+
 <div align="center">
-
-# **Bittensor Subnet Template** <!-- omit in toc -->
-[![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
-
----
-
-## The Incentivized Internet <!-- omit in toc -->
-
-[Discord](https://discord.gg/bittensor) • [Network](https://taostats.io/) • [Research](https://bittensor.com/whitepaper)
+  <a href="https://discord.gg/p8tg26HFQQ">
+    <img src="https://img.shields.io/discord/1186416652955430932.svg" alt="Discord">
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
 </div>
+
+<div align="center">
+  <a href="https://www.tensorplex.ai/">Website</a>
+  ·
+  <a href="https://tensorplex.gitbook.io/tensorplex-docs/tensorplex-rlhf">Docs</a>
+  ·
+  <a href="https://huggingface.co/tensorplex-labs">HuggingFace</a>
+  ·  
+  <a href="#installation">Installation</a>
+  ·
+  <a href="https://twitter.com/TensorplexLabs">Twitter</a>
+</div>
+
+
+<!-- toc -->
 
 ---
 - [Quickstarter template](#quickstarter-template)
@@ -22,14 +37,51 @@
 - [License](#license)
 
 ---
-## Quickstarter template
+# Introduction
+<TODO>
 
-This template contains all the required installation instructions, scripts, and files and functions for:
-- Building Bittensor subnets.
-- Creating custom incentive mechanisms and running these mechanisms on the subnets. 
+# Getting started as a miner or validator
+To get started, see the `.env.example`, copy and paste this file into a separate `.env` file! <b>Remember, never commit this .env file anywhere!</b>
 
-In order to simplify the building of subnets, this template abstracts away the complexity of the underlying blockchain and other boilerplate code. While the default behavior of the template is sufficient for a simple subnet, you should customize the template in order to meet your specific requirements.
----
+## Mining
+
+When providing scoring for prompt & completions, there are currently 3 methods, i.e. using a huggingface model, LLM based API (e.g. mistralai/Mixtral-8x7B-Instruct-v0.1) or human feedback via Amazon Mechanical Turk.
+
+Each of them have different combinations of command line arguments available:
+- For huggingface models, use the `--scoring_method='hf_model'` option, and `--model_name='OpenAssistant/reward-model-deberta-v3-large-v2'`
+- For LLM models via an API, use the `--scoring_method='llm_api'` option, and `--model_name='mistralai/Mixtral-8x7B-Instruct-v0.1'`
+- For using AWS Mechanical Turk, use the `--scoring_method='aws_mturk'` option, in this case --model_name will not be used.
+
+To start the miner, run the following command
+```bash
+# using huggingface model
+python main_miner.py --netuid 1 --subtensor.chain_endpoint ws://127.0.0.1:9946 --wallet.name subnet_miner --wallet.hotkey test01 --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "hf_model" --model_name "OpenAssistant/reward-model-deberta-v3-large-v2"
+# using llm api 
+python main_miner.py --netuid 1 --subtensor.chain_endpoint ws://127.0.0.1:9946 --wallet.name subnet_miner --wallet.hotkey test01 --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "llm_api" --model_name "mistralai/Mixtral-8x7B-Instruct-v0.1"
+# using aws mturk
+python main_miner.py --netuid 1 --subtensor.chain_endpoint ws://127.0.0.1:9946 --wallet.name subnet_miner --wallet.hotkey test01 --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "aws_mturk"
+```
+
+You will be evaluated on the classification accuracy on a set of human preference datasets, and this will act as a multiplier towards your consensus score, thus to gain more emissions as a miner you will need to perform better in terms of classification accuracy on some human preference datasets.
+
+## Validating
+To start the validator, run the following command
+```bash
+python main_validator.py --netuid 1 --subtensor.chain_endpoint ws://127.0.0.1:9946 --wallet.name subnet_validator --wallet.hotkey test01 --logging.debug --axon.port 9500 --neuron.type validator --neuron.epoch_length 100
+```
+
+
+
+# Consensus Mechanism
+We use a mix of spearman correlation...
+
+- Spearman correlation is used in order to calculate the consensus scores among miners when providing scores to prompt & completions.
+- 
+
+
+
+
+
 
 ## Introduction
 
@@ -74,27 +126,6 @@ Before you proceed with the installation of the subnet, note the following:
 - **Running on Bittensor testnet**: Follow the step-by-step instructions described in this section: [Running on the Test Network](./docs/running_on_testnet.md).
 - **Running on Bittensor mainnet**: Follow the step-by-step instructions described in this section: [Running on the Main Network](./docs/running_on_mainnet.md).
 
----
-
-## Writing your own incentive mechanism
-
-As described in [Quickstarter template](#quickstarter-template) section above, when you are ready to write your own incentive mechanism, update this template repository by editing the following files. The code in these files contains detailed documentation on how to update the template. Read the documentation in each of the files to understand how to update the template. There are multiple **TODO**s in each of the files identifying sections you should update. These files are:
-- `template/protocol.py`: Contains the definition of the wire-protocol used by miners and validators.
-- `neurons/miner.py`: Script that defines the miner's behavior, i.e., how the miner responds to requests from validators.
-- `neurons/validator.py`: This script defines the validator's behavior, i.e., how the validator requests information from the miners and determines the scores.
-- `template/forward.py`: Contains the definition of the validator's forward pass.
-- `template/reward.py`: Contains the definition of how validators reward miner responses.
-
-In addition to the above files, you should also update the following files:
-- `README.md`: This file contains the documentation for your project. Update this file to reflect your project's documentation.
-- `CONTRIBUTING.md`: This file contains the instructions for contributing to your project. Update this file to reflect your project's contribution guidelines.
-- `template/__init__.py`: This file contains the version of your project.
-- `setup.py`: This file contains the metadata about your project. Update this file to reflect your project's metadata.
-- `docs/`: This directory contains the documentation for your project. Update this directory to reflect your project's documentation.
-
-__Note__
-The `template` directory should also be renamed to your project name.
----
 
 ## License
 This repository is licensed under the MIT License.
