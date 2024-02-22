@@ -30,10 +30,19 @@ async def main():
     validator = Factory.get_validator()
     config = Factory.get_config()
     scheduler = AsyncIOScheduler(
-        job_defaults={"max_instances": 1, "misfire_grace_time": 3}
+        job_defaults={"max_instances": 2, "misfire_grace_time": 3}
     )
-    trigger = OrTrigger([CronTrigger(second=0), CronTrigger(second=30)])
-    scheduler.add_job(validator.update_score_and_send_feedback, trigger=trigger)
+
+    scheduler.add_job(
+        validator.update_score_and_send_feedback,
+        trigger=OrTrigger([CronTrigger(second=0), CronTrigger(second=30)]),
+    )
+    hourly_trigger = CronTrigger(minute=0)
+    daily_trigger = CronTrigger(hour=0, minute=0)
+    scheduler.add_job(
+        validator.calculate_miner_classification_accuracy, trigger=hourly_trigger
+    )
+    scheduler.add_job(validator.reset_accuracy, trigger=daily_trigger)
     scheduler.start()
 
     config = uvicorn.Config(

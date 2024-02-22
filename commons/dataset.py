@@ -70,25 +70,6 @@ def get_openai_webgpt_comparisons():
     )
 
 
-eval_datasets = {
-    EvalDataset.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
-    EvalDataset.STANFORD_SHP: iter(get_stanford_shp()),
-    EvalDataset.OPENAI_WEBGPT_COMPARISONS: iter(get_openai_webgpt_comparisons()),
-    EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS: iter(
-        load_dataset(
-            EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS, split="train", streaming=True
-        )
-    ),
-    EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
-        load_dataset(
-            EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
-            split="train",
-            streaming=True,
-        )
-    ),
-}
-
-
 def next_circular(dataset_dict: Dict[str, Iterable], key: str):
     try:
         return next(dataset_dict[key])
@@ -106,13 +87,33 @@ def next_circular(dataset_dict: Dict[str, Iterable], key: str):
 
 
 class EvalDatasetManager:
-    @staticmethod
-    def get_batch() -> List[Dict]:
-        dataset_names = list(eval_datasets.keys())
+    _eval_datasets = {
+        EvalDataset.ANTHROPIC_HHRLHF: iter(get_anthropic_hhrlhf()),
+        EvalDataset.STANFORD_SHP: iter(get_stanford_shp()),
+        EvalDataset.OPENAI_WEBGPT_COMPARISONS: iter(get_openai_webgpt_comparisons()),
+        EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS: iter(
+            load_dataset(
+                EvalDataset.YITINGXIE_RLHF_REWARD_DATASETS,
+                split="train",
+                streaming=True,
+            )
+        ),
+        EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE: iter(
+            load_dataset(
+                EvalDataset.DAHOAS_SYNTHETIC_INSTRUCT_GPTJ_PAIRWISE,
+                split="train",
+                streaming=True,
+            )
+        ),
+    }
+
+    @classmethod
+    def get_batch(cls) -> List[Dict]:
+        dataset_names = list(cls._eval_datasets.keys())
         key = random.choice(dataset_names)
         bt.logging.info(f"Using dataset: {key}, for evaluation")
         batch_size = 32
-        return [next_circular(eval_datasets, key) for _ in range(batch_size)]
+        return [next_circular(cls._eval_datasets, key) for _ in range(batch_size)]
 
 
 # # NOTE this serves as a start for prompt/completion pairs to be generated because at first there will be no requests coming in
@@ -151,7 +152,7 @@ class EvalDatasetManager:
 #     )
 # }
 
-# TODO change name to actual datset name
+# TODO @dev change name to actual datset name
 seed_dataset_name = "prooompt/test_dataset"
 
 

@@ -16,7 +16,7 @@ class DataManager:
         return base_path / "data" / "ranking" / "data.pkl"
 
     @staticmethod
-    def load(path) -> List[DendriteQueryResponse]:
+    def load(path) -> Optional[List[DendriteQueryResponse]]:
         try:
             # Load the list of Pydantic objects from the pickle file
             with open(str(path), "rb") as file:

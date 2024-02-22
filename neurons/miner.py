@@ -11,7 +11,7 @@ from commons.scoring import Scoring
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
-    LLMConfig,
+    ModelConfig,
     MTurkResponse,
     Rank,
     RankingRequest,
@@ -64,6 +64,7 @@ class Miner(BaseMinerNeuron):
                     )
                 )
             synapse.scoring_method = ScoringMethod.HF_MODEL
+            synapse.model_config = ModelConfig(model_name=self.config.model_name)
 
         elif scoring_method.casefold() == ScoringMethod.LLM_API:
             llm_provider = Provider(self.config.llm_provider)
@@ -92,7 +93,9 @@ class Miner(BaseMinerNeuron):
                         )
                     )
             synapse.scoring_method = ScoringMethod.LLM_API
-            synapse.llm_config = LLMConfig(provider=llm_provider, model_name=model_name)
+            synapse.model_config = ModelConfig(
+                provider=llm_provider, model_name=model_name
+            )
 
         elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
             # send off to MTurk workers... will timeout on validator side

@@ -1,16 +1,19 @@
 import asyncio
+from collections import defaultdict
 import threading
 import time
 from traceback import print_exception
 from typing import List, Tuple
 from datetime import datetime, timedelta
 import copy
+from torch.nn import functional as F
 
 import bittensor as bt
 import numpy as np
 import torch
 from commons.data_manager import DataManager
 from commons.dataset import SeedDataManager
+from commons.evals import EvalUtils
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
 
@@ -69,6 +72,8 @@ class Validator(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         self.moving_averaged_scores = None
+        self.hotkey_to_accuracy = defaultdict(float)
+        # self.lock = asyncio.Lock()
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
@@ -151,6 +156,32 @@ class Validator(BaseNeuron):
         )
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
         await self.dendrite(axons=axons, synapse=synapse, deserialize=False, timeout=12)
+
+    async def calculate_miner_classification_accuracy(self):
+        data = DataManager.load(path=DataManager.get_ranking_data_filepath())
+        if not data:
+            bt.logging.debug(
+                "Skipping classification accuracy as no ranking data found."
+            )
+            return
+
+        for d in data:
+            for r in d.responses:
+                participant = r.axon.hotkey
+                if participant in self.hotkey_to_accuracy:
+                    bt.logging.warning(
+                        f"Participant {participant} already has an accuracy score... skipping"
+                    )
+                    continue
+
+                accuracy = await EvalUtils.classification_accuracy(
+                    scoring_method=r.scoring_method, model_config=r.model_config
+                )
+                self.hotkey_to_accuracy[participant] = accuracy
+        return
+
+    async def reset_accuracy(self):
+        self.hotkey_to_accuracy.clear()
 
     async def update_score_and_send_feedback(self):
         bt.logging.debug(
@@ -373,9 +404,11 @@ class Validator(BaseNeuron):
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
-        raw_weights = torch.nn.functional.normalize(
-            self.moving_averaged_scores, p=1, dim=0
-        )
+        raw_weights = F.normalize(self.moving_averaged_scores, p=1, dim=0)
+        if torch.all(raw_weights == 0):
+            bt.logging.warning(
+                "All weights are zero, therefore no valid weights to set"
+            )
 
         bt.logging.debug("raw_weights", raw_weights)
         bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
@@ -451,24 +484,29 @@ class Validator(BaseNeuron):
         self.scores = updated_scores
         self.hotkeys = self.metagraph.hotkeys
 
-    def update_scores(self, hotkey_to_rewards):
+    def update_scores(self, hotkey_to_scores):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
         after setting the self.scores variable here, `set_weights` will be called to set the weights on chain."""
 
-        nan_value_indices = np.isnan(list(hotkey_to_rewards.values()))
+        nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
         if nan_value_indices.any():
-            bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_rewards}")
+            bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
         rewards = torch.zeros((len(self.hotkeys),))
-        for index, (key, value) in enumerate(hotkey_to_rewards.items()):
+        for index, (key, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
             if nan_value_indices[index]:
                 rewards[key] = 0.0
             # search metagraph for hotkey and grab uid
             uid = self.hotkeys.index(key)
-            rewards[uid] = value
+
+            # multiply by the classification accuracy
+            if (accuracy := self.hotkey_to_accuracy[key]) and accuracy == 0.0:
+                bt.logging.warning(f"Classification accuracy for hotkey {key} is 0")
+
+            rewards[uid] = value * accuracy
         bt.logging.debug(f"Rewards: {rewards}")
 
         # Update scores with rewards produced by this step.
