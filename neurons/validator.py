@@ -194,25 +194,8 @@ class Validator(BaseNeuron):
             )
             return
 
-        # get those where request epoch time >X h from current time
-        current_time = datetime.fromtimestamp(get_epoch_time())
-        print(f"Current time: {current_time}")
-        for d in data:
-            print(
-                f"Request epoch time: {datetime.fromtimestamp(d.request.epoch_timestamp)}, raw: {d.request.epoch_timestamp}"
-            )
-
         # TODO @dev change this to ensure enough time for human feedback!!!
-        data: List[DendriteQueryResponse] = [
-            d
-            for d in data
-            if current_time - datetime.fromtimestamp(d.request.epoch_timestamp)
-            >= timedelta(seconds=5)
-        ]
-        if not data:
-            bt.logging.warning("No data to update scores and send feedback")
-            return
-
+        consumed_responses = []
         for d in data:
             ranking_result = Scoring.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
@@ -222,6 +205,11 @@ class Validator(BaseNeuron):
                 hotkeys=list(ranking_result.hotkey_to_score.keys()),
             )
             await asyncio.sleep(1)
+            # update the data on disk to successfully consume the data
+            consumed_responses.append(d)
+
+        # once we have scored certain responses, just remove them
+        await DataManager.remove_responses(consumed_responses)
 
     async def send_request(
         self, synapse: RankingRequest = None

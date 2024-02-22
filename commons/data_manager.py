@@ -20,12 +20,10 @@ class DataManager:
         return base_path / "data" / "ranking" / "data.pkl"
 
     @classmethod
-    async def load(cls, path) -> Optional[List[DendriteQueryResponse]]:
+    async def _load_without_lock(cls, path) -> Optional[List[DendriteQueryResponse]]:
         try:
-            # Load the list of Pydantic objects from the pickle file
-            async with cls._lock:
-                with open(str(path), "rb") as file:
-                    return pickle.load(file)
+            with open(str(path), "rb") as file:
+                return pickle.load(file)
         except FileNotFoundError as e:
             bt.logging.warning(
                 __LOG_PREFIX__, f"File not found at {path}... , exception:{e}"
@@ -39,6 +37,23 @@ class DataManager:
                 __LOG_PREFIX__, "Failed to load existing ranking data from file."
             )
             return None
+
+    @classmethod
+    async def load(cls, path) -> Optional[List[DendriteQueryResponse]]:
+        # Load the list of Pydantic objects from the pickle file
+        async with cls._lock:
+            return cls._load_without_lock(path)
+
+    @classmethod
+    async def _save_without_lock(cls, path, data: Any):
+        try:
+            with open(str(path), "wb") as file:
+                pickle.dump(data, file)
+                bt.logging.debug(__LOG_PREFIX__, f"Saved data to {path}")
+                return True
+        except Exception as e:
+            bt.logging.error(__LOG_PREFIX__, f"Failed to save data to file: {e}")
+            return False
 
     @classmethod
     async def save(cls, path, data: Any):
@@ -72,13 +87,23 @@ class DataManager:
 
         return
 
-    @staticmethod
-    async def get_response_by_request_id(request_id) -> Optional[DendriteQueryResponse]:
+    @classmethod
+    async def remove_responses(
+        cls, responses: List[DendriteQueryResponse]
+    ) -> Optional[DendriteQueryResponse]:
         path = DataManager.get_ranking_data_filepath()
-        data = await DataManager.load(path=path)
-        assert isinstance(data, list)
+        async with cls._lock:
+            data = await DataManager._load_without_lock(path=path)
+            assert isinstance(data, list)
 
-        for d in data:
-            if d.request.pid == request_id:
-                return d
-        return None
+            if data is None:
+                return
+
+            new_data = []
+
+            for d in data:
+                if d in responses:
+                    continue
+                new_data.append(d)
+
+            await DataManager._save_without_lock(path, new_data)
