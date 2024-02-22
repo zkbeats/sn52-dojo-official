@@ -65,10 +65,13 @@ class Scoring:
         ]
 
         for i, response in enumerate(responses):
-            if any(
-                rank.scoring_method == ScoringMethod.AWS_MTURK
-                for rank in response.ranks
-            ):
+            if not response.scoring_method:
+                bt.logging.error(
+                    "Scoring method not set... defaulting to normal weights"
+                )
+                continue
+
+            if response.scoring_method == ScoringMethod.AWS_MTURK:
                 # TODO verify this so that there are no work arounds
                 correlations[i] *= 1.2
 
