@@ -29,8 +29,8 @@ class Rank(BaseModel):
     score: float = Field(default=0.0, description="Score of the completion")
 
 
-class LLMConfig(BaseModel):
-    provider: Provider
+class ModelConfig(BaseModel):
+    provider: Optional[Provider]
     model_name: str
 
 
@@ -69,8 +69,8 @@ class RankingRequest(bt.Synapse):
     scoring_method: Optional[ScoringMethod] = Field(
         decscription="Method to use for scoring completions"
     )
-    llm_config: Optional[LLMConfig] = Field(
-        description="Model configuration for LLM scoring"
+    model_config: Optional[ModelConfig] = Field(
+        description="Model configuration for Huggingface / LLM API scoring"
     )
 
 

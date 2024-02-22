@@ -17,7 +17,7 @@ from commons.llm.openai_proxy import Provider, get_openai_client
 from commons.llm.prompts import PromptBuilder, ScoreRange
 from commons.objects import PreferenceResponse, ScoresResponse
 from commons.utils import PydanticUtils, get_device
-from template.protocol import Completion, LLMConfig
+from template.protocol import Completion, ModelConfig
 
 load_dotenv()
 
@@ -117,9 +117,9 @@ class ModelUtils:
 
     @staticmethod
     async def llm_eval_human_preference(
-        llm_config: LLMConfig, chosen: str, rejected: str
+        model_config: ModelConfig, chosen: str, rejected: str
     ):
-        client = get_openai_client(llm_config.provider)
+        client = get_openai_client(model_config.provider)
         system_prompt = PromptBuilder.build_system_eval_human_preference_prompt()
         chosen_idx, rejected_idx = 1, 2
         user_prompt = PromptBuilder.build_user_eval_human_preference_prompt(
@@ -128,7 +128,7 @@ class ModelUtils:
         bt.logging.warning(f"System prompt: {system_prompt}")
         bt.logging.warning(f"User prompt: {user_prompt}")
         response = await client.chat.completions.create(
-            model=llm_config.model_name,
+            model=model_config.model_name,
             temperature=0,
             stream=False,
             messages=[
