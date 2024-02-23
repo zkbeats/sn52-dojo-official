@@ -99,7 +99,6 @@ async def llm_classify_accuracy(
     # could actually batch this but might encounter leaked semaphore due to RAM constraints
     MAX_RETRIES = 5
     for row in batch:
-        # TODO @dev handle rate limiting from the model provider
         try:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(MAX_RETRIES),
@@ -124,21 +123,3 @@ async def llm_classify_accuracy(
         f"Batch Accuracy: {accuracy}, with LLM Model Config: {model_config}"
     )
     return accuracy
-
-
-async def main():
-    batch_human_preference = EvalDatasetManager.get_batch()
-    batch_accuracy = await llm_classify_accuracy(
-        batch_human_preference,
-        # TODO normally this would be stored inside of our Datamanager class
-        ModelConfig(
-            provider=Provider.TOGETHER_AI,
-            model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
-        ),
-    )
-    bt.logging.info(f"Batch accuracy: {batch_accuracy}")
-
-
-if __name__ == "__main__":
-    # EvalUtils.classification_accuracy(ModelZoo.DEBERTA_V3_LARGE_V2)
-    asyncio.run(main())

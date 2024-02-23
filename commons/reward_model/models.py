@@ -92,7 +92,7 @@ class ModelUtils:
         user_prompt = PromptBuilder.build_user_score_completion_prompt(
             prompt, completions
         )
-        # TODO use instructor instead when compatible due to pydantic v2
+        # TODO @dev use instructor when bittensor migrates to pydantic v2
         response = await client.chat.completions.create(
             model=model_name,
             temperature=0,

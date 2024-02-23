@@ -72,7 +72,7 @@ class Scoring:
                 continue
 
             if response.scoring_method == ScoringMethod.AWS_MTURK:
-                # TODO verify this so that there are no work arounds
+                # TODO @dev verify this so that there are no work arounds
                 correlations[i] *= 1.2
 
         hotkeys = [r.axon.hotkey for r in responses]
