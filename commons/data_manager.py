@@ -7,8 +7,6 @@ from commons.objects import DendriteQueryResponse
 import bittensor as bt
 # import aiofiles
 
-__LOG_PREFIX__ = "[DataManager]"
-
 
 class DataManager:
     _lock = asyncio.Lock()
@@ -25,17 +23,13 @@ class DataManager:
             with open(str(path), "rb") as file:
                 return pickle.load(file)
         except FileNotFoundError as e:
-            bt.logging.warning(
-                __LOG_PREFIX__, f"File not found at {path}... , exception:{e}"
-            )
+            bt.logging.warning(f"File not found at {path}... , exception:{e}")
             return None
         except pickle.PickleError as e:
-            bt.logging.error(__LOG_PREFIX__, f"Pickle error: {e}.")
+            bt.logging.error(f"Pickle error: {e}")
             return None
         except Exception:
-            bt.logging.error(
-                __LOG_PREFIX__, "Failed to load existing ranking data from file."
-            )
+            bt.logging.error("Failed to load existing ranking data from file.")
             return None
 
     @classmethod
@@ -49,10 +43,10 @@ class DataManager:
         try:
             with open(str(path), "wb") as file:
                 pickle.dump(data, file)
-                bt.logging.debug(__LOG_PREFIX__, f"Saved data to {path}")
+                bt.logging.debug(f"Saved data to {path}")
                 return True
         except Exception as e:
-            bt.logging.error(__LOG_PREFIX__, f"Failed to save data to file: {e}")
+            bt.logging.error(f"Failed to save data to file: {e}")
             return False
 
     @classmethod
@@ -61,10 +55,10 @@ class DataManager:
             async with cls._lock:
                 with open(str(path), "wb") as file:
                     pickle.dump(data, file)
-                    bt.logging.debug(__LOG_PREFIX__, f"Saved data to {path}")
+                    bt.logging.debug(f"Saved data to {path}")
                     return True
         except Exception as e:
-            bt.logging.error(__LOG_PREFIX__, f"Failed to save data to file: {e}")
+            bt.logging.error(f"Failed to save data to file: {e}")
             return False
 
     @staticmethod
