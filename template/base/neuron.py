@@ -15,42 +15,14 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import inspect
-import os
 from abc import ABC, abstractmethod
 
 import bittensor as bt
-from bittensor.btlogging import logging as bt_logging
+
 from commons.factory import Factory
 
 from commons.utils import initialise, ttl_get_block
 from template import __spec_version__ as spec_version
-
-original_format = bt_logging._format
-
-
-# TODO this is for logging and is not really a priority atm
-def custom_format(cls, prefix: object, sufix: object = None):
-    frame = inspect.currentframe().f_back.f_back
-    (
-        filename,
-        line_number,
-        func_name,
-        lines,
-        index,
-    ) = inspect.getframeinfo(frame)
-    filename, _ = os.path.splitext(os.path.basename(filename))
-    if func_name.startswith("<") or func_name.endswith(">"):
-        func_name = "\\" + func_name
-    context = f"<cyan>{filename}.{func_name}@{line_number}<cyan>".center(30)
-    log_msg = f"{context} | {prefix}"
-    if sufix is not None:
-        log_msg += f" | {sufix}"
-    return log_msg
-
-
-# monkey-patch
-# bt_logging._format = classmethod(custom_format)
 
 
 class BaseNeuron(ABC):
