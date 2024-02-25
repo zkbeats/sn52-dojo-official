@@ -35,12 +35,6 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 
 
 class Validator(BaseNeuron):
-    """Singleton class for validator, this means that trying to instantiate the
-    same validator class will always return the same instance. This prevents
-    trying to maintain multiple metagraphs, subtensors, etc.
-
-    """
-
     def __init__(self):
         super(Validator, self).__init__()
 
@@ -48,7 +42,6 @@ class Validator(BaseNeuron):
             forward_fn=self.forward_mturk_response,
             blacklist_fn=self.blacklist_mturk_response,
         )
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
 
         ##### FROM BaseValidatorNeuron ########################################
         # Save a copy of the hotkeys to local memory.
