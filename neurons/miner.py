@@ -2,7 +2,9 @@ import asyncio
 from datetime import datetime
 import threading
 import time
+import functools
 from typing import Dict, Tuple
+from concurrent.futures import ThreadPoolExecutor
 
 import bittensor as bt
 from commons.llm.openai_proxy import Provider
@@ -42,6 +44,7 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         self.hotkey_to_request: Dict[str, RankingRequest] = {}
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
     async def forward_result(self, synapse: RankingResult) -> RankingResult:
         bt.logging.info("Received consensus from validators")
@@ -98,12 +101,15 @@ class Miner(BaseMinerNeuron):
             )
 
         elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
-            # send off to MTurk workers... will timeout on validator side
-            create_mturk_status = MTurkUtils.create_mturk_task(
+            # send off to MTurk workers in a non-blocking way
+            loop = asyncio.get_event_loop()
+            task = functools.partial(
+                MTurkUtils.create_mturk_task,
                 prompt=synapse.prompt,
                 completions=synapse.completions,
                 reward_in_dollars=0.01,
             )
+            await loop.run_in_executor(self.executor, task)
         else:
             bt.logging.error("Unrecognized scoring method!")
 
