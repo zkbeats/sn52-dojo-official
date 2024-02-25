@@ -93,7 +93,7 @@ class Validator(BaseNeuron):
             )
             return True, "Validators not allowed"
 
-        return False, "Valid request received from miner (to validator)"
+        return False, "Valid request received from miner"
 
     async def forward_mturk_response(self, synapse: MTurkResponse):
         """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
@@ -286,6 +286,7 @@ class Validator(BaseNeuron):
 
         This function performs the following primary tasks:
         1. Check for registration on the Bittensor network.
+        2. Synchronizes with the chain and updates the metagraph.
         2. Continuously forwards queries to the miners on the network, rewarding their responses and updating the scores accordingly.
         3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
 
@@ -308,11 +309,11 @@ class Validator(BaseNeuron):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
+        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        self.axon.start()
         bt.logging.info(
             f"Serving validator axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
-        self.axon.start()
 
         bt.logging.info(f"Validator starting at block: {self.block}")
 
@@ -457,7 +458,7 @@ class Validator(BaseNeuron):
             bt.logging.error("set_weights failed")
 
     def resync_metagraph(self):
-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+        """Sync the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         bt.logging.info("checking if we need to resync metagraph...")
 
         # Copies state of metagraph before syncing.

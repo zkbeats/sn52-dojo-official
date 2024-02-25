@@ -79,9 +79,10 @@ class BaseNeuron(ABC):
 
     def sync(self):
         """
-        Wrapper for synchronizing the state of the network for the given miner or validator.
+        1. check if registered on subnet
+        2. check if should sync metagraph
+        3. check if should set weights
         """
-        # Ensure miner or validator hotkey is still registered on the network.
         self.check_registered()
 
         if self.should_sync_metagraph():
