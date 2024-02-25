@@ -4,6 +4,7 @@ import random
 import bittensor as bt
 
 from datasets import load_dataset, interleave_datasets
+from commons.factory import Factory
 
 from template.protocol import Completion, RankingRequest
 
@@ -116,7 +117,7 @@ class EvalDatasetManager:
         dataset_names = list(cls._eval_datasets.keys())
         key = random.choice(dataset_names)
         bt.logging.info(f"Using dataset: {key}, for evaluation")
-        batch_size = 32
+        batch_size = Factory.get_config().evaluation.batch_size
         return [next_circular(cls._eval_datasets, key) for _ in range(batch_size)]
 
 

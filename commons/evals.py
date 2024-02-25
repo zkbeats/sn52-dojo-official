@@ -28,7 +28,7 @@ class EvalUtils:
         model_config: ModelConfig = None,
     ) -> float:
         total_accuracy = 0
-        num_batches = Factory.get_config().eval.num_batches
+        num_batches = Factory.get_config().evaluation.num_batches
         for _ in range(num_batches):
             batch_human_preference = EvalDatasetManager.get_batch()
             if scoring_method == ScoringMethod.HF_MODEL:
