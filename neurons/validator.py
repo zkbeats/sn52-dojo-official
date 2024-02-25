@@ -93,7 +93,7 @@ class Validator(BaseNeuron):
             )
             return True, "Validators not allowed"
 
-        return False, "Passed blacklist function"
+        return False, "Valid request received from miner (to validator)"
 
     async def forward_mturk_response(self, synapse: MTurkResponse):
         """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
@@ -171,6 +171,12 @@ class Validator(BaseNeuron):
                 if participant in self.hotkey_to_accuracy:
                     bt.logging.warning(
                         f"Participant {participant} already has an accuracy score... skipping"
+                    )
+                    continue
+
+                if r.scoring_method not in [method for method in ScoringMethod]:
+                    bt.logging.error(
+                        f"Unrecognized scoring method: {r.scoring_method} for participant {participant}"
                     )
                     continue
 
