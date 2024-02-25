@@ -27,7 +27,7 @@ from template.protocol import (
     RankingResult,
     ScoringMethod,
 )
-from template.utils.uids import get_random_uids
+from template.utils.uids import get_random_miner_uids
 
 
 def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
@@ -225,7 +225,7 @@ class Validator(BaseNeuron):
                 completions=[Completion(text=c) for c in completions],
             )
 
-        miner_uids = get_random_uids(
+        miner_uids = get_random_miner_uids(
             metagraph=self.metagraph, k=self.config.neuron.sample_size
         )
         axons = [

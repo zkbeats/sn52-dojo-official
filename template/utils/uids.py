@@ -13,16 +13,16 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
     # filter non serving axons.
     if not metagraph.axons[uid].is_serving:
         return False
-
     return True
 
 
-def get_random_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
+def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
     """Returns k available random uids from the metagraph."""
     avail_uids = []
 
     for uid in range(metagraph.n.item()):
-        if is_uid_available(metagraph, uid):
+        neuron: bt.NeuronInfo = metagraph.neurons[uid]
+        if is_uid_available(metagraph, uid) and not neuron.validator_permit:
             avail_uids.append(uid)
 
     # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
