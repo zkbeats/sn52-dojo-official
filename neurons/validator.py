@@ -200,9 +200,21 @@ class Validator(BaseNeuron):
             )
             return
 
-        # TODO @dev change this to ensure enough time for human feedback!!!
+        current_time = datetime.fromtimestamp(get_epoch_time())
+        filtered_data = [
+            d
+            for d in data
+            if current_time - datetime.fromtimestamp(d.request.epoch_timestamp)
+            >= timedelta(hours=8)
+        ]
+        if not filtered_data:
+            bt.logging.debug(
+                "Skipping scoring as no ranking data has been persisted for at least 8 hours."
+            )
+            return
+
         consumed_responses = []
-        for d in data:
+        for d in filtered_data:
             ranking_result = Scoring.consensus_score(responses=d.responses)
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
@@ -211,7 +223,6 @@ class Validator(BaseNeuron):
                 hotkeys=list(ranking_result.hotkey_to_score.keys()),
             )
             await asyncio.sleep(1)
-            # update the data on disk to successfully consume the data
             consumed_responses.append(d)
 
         # once we have scored certain responses, just remove them
