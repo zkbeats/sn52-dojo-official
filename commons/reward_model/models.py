@@ -35,13 +35,16 @@ ModelName = Union[str, ModelZoo]
 
 
 # adjust cache maxsize depending on however many models you have in your ModelZoo
-@lru_cache(maxsize=10)
+max_num_miners = 256
+
+
+@lru_cache(maxsize=max_num_miners)
 def get_cached_model(model_name: ModelName):
     model = AutoModelForSequenceClassification.from_pretrained(model_name).eval()
     return model
 
 
-@lru_cache(maxsize=10)
+@lru_cache(maxsize=max_num_miners)
 def get_cached_tokenizer(
     model_name: ModelName,
 ) -> PreTrainedTokenizerFast | PreTrainedTokenizer:
