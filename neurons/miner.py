@@ -148,31 +148,27 @@ class Miner(BaseMinerNeuron):
         self, synapse: RankingRequest
     ) -> Tuple[bool, str]:
         bt.logging.info("checking blacklist function")
-        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
+        caller_hotkey = synapse.dendrite.hotkey
+        if caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
             bt.logging.warning(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
 
-        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+        caller_uid = self.metagraph.hotkeys.index(caller_hotkey)
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
         if not validator_neuron.validator_permit:
             return True, "Not a validator"
 
-        # TODO re-enable before going live
-        # MIN_VALIDATOR_STAKE = 20_000
-        MIN_VALIDATOR_STAKE = 0
-        if (
-            validator_neuron.validator_permit
-            and validator_neuron.stake.tao < MIN_VALIDATOR_STAKE
-        ):
+        MIN_VALIDATOR_STAKE = 20_000
+        if validator_neuron.stake.tao < float(MIN_VALIDATOR_STAKE):
             bt.logging.warning(
-                f"Blacklisting hotkey: {synapse.dendrite.hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
+                f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
             )
             return True, "Insufficient validator stake"
 
-        return False, "Passed blacklist function"
+        return False, "Valid request received from validator"
 
     async def priority(self, synapse: RankingRequest) -> float:
         """
