@@ -77,7 +77,7 @@ class MTurkUtils:
     _aws_client = None
 
     @classmethod
-    def get_client():
+    def get_client(cls):
         config = Factory.get_config()
         if MTurkUtils._aws_client is None:
             MTurkUtils._aws_client = get_aws_client(config.aws_mturk_environment)
