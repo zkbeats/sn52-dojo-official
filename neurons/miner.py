@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import threading
 import time
 from typing import Dict, Tuple
@@ -8,6 +9,7 @@ from commons.llm.openai_proxy import Provider
 from commons.human_feedback.aws_mturk import MTurkUtils
 from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
+from commons.utils import get_epoch_time
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
@@ -21,8 +23,6 @@ from template.protocol import (
 
 
 class Miner(BaseMinerNeuron):
-    """Singleton class for miner."""
-
     def __init__(self):
         super(Miner, self).__init__()
         # Dendrite lets us send messages to other nodes (axons) in the network.
@@ -33,7 +33,7 @@ class Miner(BaseMinerNeuron):
         self.axon.attach(
             forward_fn=self.forward_ranking_request,
             blacklist_fn=self.blacklist_ranking_request,
-            priority_fn=self.priority,
+            priority_fn=self.priority_ranking,
         ).attach(forward_fn=self.forward_result)
 
         # Instantiate runners
@@ -170,37 +170,21 @@ class Miner(BaseMinerNeuron):
 
         return False, "Valid request received from validator"
 
-    async def priority(self, synapse: RankingRequest) -> float:
+    async def priority_ranking(self, synapse: RankingRequest) -> float:
         """
-        The priority function determines the order in which requests are handled. More valuable or higher-priority
-        requests are processed before others. You should design your own priority mechanism with care.
-
-        This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
-
-        Args:
-            synapse (template.protocol.Dummy): The synapse object that contains metadata about the incoming request.
-
-        Returns:
-            float: A priority score derived from the stake of the calling entity.
-
-        Miners may recieve messages from multiple entities at once. This function determines which request should be
-        processed first. Higher values indicate that the request should be processed first. Lower values indicate
-        that the request should be processed later.
-
-        Example priority logic:
-        - A higher stake results in a higher priority value.
+        The priority function determines the order in which requests are handled. Higher-priority
+        requests are processed before others. Miners may recieve messages from multiple entities at
+        once. This function determines which request should be processed first.
+        Higher values indicate that the request should be processed first.
+        Lower values indicate that the request should be processed later.
         """
-        # TODO(developer): Define how miners should prioritize requests.
-        caller_uid = self.metagraph.hotkeys.index(
-            synapse.dendrite.hotkey
-        )  # Get the caller index.
-        prirority = float(
-            self.metagraph.S[caller_uid]
-        )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
+        current_timestamp = datetime.fromtimestamp(get_epoch_time())
+        dt = current_timestamp - datetime.fromtimestamp(synapse.timestamp)
+        priority = float(dt.total_seconds())
+        bt.logging.debug(
+            f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
         )
-        return prirority
+        return priority
 
 
 async def log_miner_status():
