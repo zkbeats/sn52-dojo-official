@@ -61,23 +61,25 @@ class DataManager:
             bt.logging.error(f"Failed to save data to file: {e}")
             return False
 
-    @staticmethod
-    async def append_responses(response: DendriteQueryResponse):
+    @classmethod
+    async def append_responses(cls, response: DendriteQueryResponse):
         path = DataManager.get_ranking_data_filepath()
-        # ensure parent path exists
-        if not path.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
+        async with cls._lock:
+            # ensure parent path exists
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
 
-        data = await DataManager.load(path=path)
-        if not data:
-            # store initial data
-            await DataManager.save(path, [response])
-            return
+            # TODO @dev use without lock methods and lock directly hjere
+            data = await DataManager._load_without_lock(path=path)
+            if not data:
+                # store initial data
+                await DataManager._save_without_lock(path, [response])
+                return
 
-        # append our data
-        assert isinstance(data, list)
-        data.append(response)
-        await DataManager.save(path, data)
+            # append our data, if the existing data exists
+            assert isinstance(data, list)
+            data.append(response)
+            await DataManager._save_without_lock(path, data)
 
         return
 
