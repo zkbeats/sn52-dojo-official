@@ -31,12 +31,31 @@ app.include_router(reward_router)
 async def main():
     validator = Factory.get_validator()
     scheduler = AsyncIOScheduler(
-        job_defaults={"max_instances": 2, "misfire_grace_time": 3}
+        job_defaults={"max_instances": 3, "misfire_grace_time": 3}
     )
 
-    hourly_trigger = CronTrigger(minute=0)
-    scheduler.add_job(validator.update_score_and_send_feedback, trigger=hourly_trigger)
-    daily_trigger = CronTrigger(hour=0, minute=0)
+    eight_hourly_trigger = CronTrigger(
+        minute=0,
+        hour="*/8",
+        day="*",
+        month="*",
+    )
+    hourly_trigger = CronTrigger(
+        minute=0,
+        hour="*",
+        day="*",
+        month="*",
+    )
+    daily_trigger = CronTrigger(
+        minute=0,
+        hour=0,
+        day="*",
+        month="*",
+    )
+
+    scheduler.add_job(
+        validator.update_score_and_send_feedback, trigger=eight_hourly_trigger
+    )
     scheduler.add_job(
         validator.calculate_miner_classification_accuracy, trigger=hourly_trigger
     )
