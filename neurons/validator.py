@@ -73,7 +73,7 @@ class Validator(BaseNeuron):
     ) -> Tuple[bool, str]:
         if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
-            bt.logging.debug(
+            bt.logging.warning(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
@@ -81,7 +81,7 @@ class Validator(BaseNeuron):
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
         if neuron.validator_permit:
-            bt.logging.trace(
+            bt.logging.warning(
                 f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
             )
             return True, "Validators not allowed"
@@ -109,6 +109,9 @@ class Validator(BaseNeuron):
             request_cids = set([completion.cid for completion in d.request.completions])
 
             if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
+                bt.logging.warning(
+                    f"Received mturk response with {mturk_cids=}, but no found requests with those matching CIDs."
+                )
                 continue
 
             bt.logging.info(
@@ -180,9 +183,17 @@ class Validator(BaseNeuron):
         return
 
     async def reset_accuracy(self):
-        self.hotkey_to_accuracy.clear()
+        if not self.hotkey_to_accuracy:
+            bt.logging.warning(
+                "Reset miner hotkey accuracy triggered, but no accuracy data found. Skipping..."
+            )
+            self.hotkey_to_accuracy.clear()
+        return
 
     async def update_score_and_send_feedback(self):
+        """While this function is triggered every X time period in AsyncIOScheduler,
+        only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
+        """
         bt.logging.debug(
             f"Scheduled update score and send feedback triggered at time: {time.time()}"
         )
@@ -502,6 +513,7 @@ class Validator(BaseNeuron):
             uid = self.hotkeys.index(key)
 
             # multiply by the classification accuracy
+            # TODO @dev handle case
             if (accuracy := self.hotkey_to_accuracy[key]) and accuracy == 0.0:
                 bt.logging.warning(f"Classification accuracy for hotkey {key} is 0")
 
