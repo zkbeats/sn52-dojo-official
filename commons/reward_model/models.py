@@ -40,7 +40,11 @@ max_num_miners = 256
 
 @lru_cache(maxsize=max_num_miners)
 def get_cached_model(model_name: ModelName):
-    model = AutoModelForSequenceClassification.from_pretrained(model_name).eval()
+    # use num_labels kwarg to make sure _hf_score function works
+    model_kwargs = {"num_labels": 1}
+    model = AutoModelForSequenceClassification.from_pretrained(
+        model_name, **model_kwargs
+    ).eval()
     return model
 
 
@@ -74,13 +78,14 @@ class ModelUtils:
             padding=True,
             truncation=True,
         )
+        batch_size = 1
         with torch.no_grad():
-            logits = model(**inputs).logits[0].cpu().detach()
+            logits = model(**inputs).logits
+            assert logits.shape == torch.Size(batch_size, 1)
+            logits = logits[0].cpu().detach()
 
-        # bt.logging.info(f"Raw logits: {logits}")
         # squish logits into range [0, 1]
         score = F.sigmoid(logits)
-        # bt.logging.info(f"Score: {score}, question: {prompt}, answer: {completion}")
         return score
 
     @staticmethod
