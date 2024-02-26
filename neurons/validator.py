@@ -220,6 +220,9 @@ class Validator(BaseNeuron):
         consumed_responses = []
         for d in filtered_data:
             ranking_result = Scoring.consensus_score(responses=d.responses)
+            ranking_result = Scoring.adjust_score(
+                ranking_result, hotkey_to_weights=self.hotkey_to_accuracy
+            )
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
             await self.send_consensus(

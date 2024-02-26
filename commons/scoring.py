@@ -6,6 +6,8 @@ import bittensor as bt
 import numpy as np
 import scipy
 from attr import define, field
+import torch
+from torch.nn import functional as F
 
 from template.protocol import RankingRequest, RankingResult, ScoringMethod
 
@@ -94,14 +96,35 @@ class Scoring:
         # scale values in the range [-1, 1] to [0, 1]
         spearman_correlations = 0.5 * (np.array(spearman_correlations) + 1)
 
-        # ensure sum of scores == 1
-        scores = spearman_correlations / spearman_correlations.sum()
-
         # store in synapse to be forwarded to miners
         ranking_result = RankingResult(
             request_id=responses[0].request_id,
             cid_to_consensus=cid_to_average,
-            hotkey_to_score=dict(zip(hotkeys, scores.tolist())),
+            hotkey_to_score=dict(zip(hotkeys, spearman_correlations.tolist())),
+        )
+
+        return ranking_result
+
+    @staticmethod
+    def adjust_score(
+        ranking_result: RankingResult, hotkey_to_weights: Dict[str, float]
+    ):
+        """Given a ranking result and a dict of hotkey to weights, will adjust the scores accordingly."""
+        if not ranking_result.hotkey_to_score:
+            raise ValueError("Scores cannot be empty")
+
+        for hotkey, weight in hotkey_to_weights.items():
+            if hotkey not in ranking_result.hotkey_to_score:
+                continue
+
+            ranking_result.hotkey_to_score[hotkey] *= weight
+
+        scores = torch.tensor(list(ranking_result.hotkey_to_score.values()))
+        # ensure sum == 1
+        scores = F.softmax(scores, dim=0)
+
+        ranking_result.hotkey_to_score = dict(
+            zip(ranking_result.hotkey_to_score.keys(), scores)
         )
 
         return ranking_result
