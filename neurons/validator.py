@@ -26,6 +26,7 @@ from template.protocol import (
     RankingRequest,
     RankingResult,
     ScoringMethod,
+    SCORING_METHOD_PRIORITY,
 )
 from template.utils.uids import get_random_miner_uids
 
@@ -118,13 +119,25 @@ class Validator(BaseNeuron):
                 f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
             )
 
-            if (
-                miner_participants := [r.axon.hotkey for r in d.responses]
-            ) and miner_hotkey in miner_participants:
-                bt.logging.warning(
-                    f"Miner already sent response for request id: {d.request.request_id}, skipping..."
+            existing_responses = {r.axon.hotkey: r for r in d.responses}
+            if miner_hotkey in existing_responses:
+                existing_method = ScoringMethod(
+                    existing_responses[miner_hotkey].scoring_method
                 )
-                continue
+                new_method = ScoringMethod.AWS_MTURK
+                if (
+                    SCORING_METHOD_PRIORITY[new_method]
+                    > SCORING_METHOD_PRIORITY[existing_method]
+                ):
+                    bt.logging.info(
+                        f"Replacing {existing_method} with higher priority {new_method} for request id: {d.request.request_id}"
+                    )
+                    d.responses.remove(existing_responses[miner_hotkey])
+                else:
+                    bt.logging.warning(
+                        f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
+                    )
+                    continue
 
             request_copy = copy.deepcopy(d.request)
             for cid in found_cids:
