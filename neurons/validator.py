@@ -264,11 +264,18 @@ class Validator(BaseNeuron):
 
         # The dendrite client queries the network.
         responses: List[RankingRequest] = await self.dendrite(
-            axons=axons, synapse=synapse, deserialize=False, timeout=60
+            axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        valid_responses = _filter_valid_responses(responses)
+        valid_responses = [
+            response
+            for response in responses
+            if len(response.ranks) > 0
+            and response.scoring_method in [method for method in ScoringMethod]
+            and response.scoring_method != ScoringMethod.AWS_MTURK
+        ]
+
         if not len(valid_responses):
             bt.logging.warning("No valid responses received from miners.")
             return
