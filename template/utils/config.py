@@ -110,7 +110,8 @@ def add_args(parser):
             "--evaluation.num_batches",
             type=int,
             help="Number of batches from dataset to use when evaluating.",
-            default=10,
+            # NOTE @dev this is a little low, but shall leave it low for now and increase in the future
+            default=20,
         )
 
         parser.add_argument(
@@ -131,7 +132,7 @@ def add_args(parser):
             "--neuron.moving_average_alpha",
             type=float,
             help="Moving average alpha parameter, how much to add of the new observation.",
-            default=0.05,
+            default=0.3,
         )
 
     elif neuron_type == "miner":
