@@ -12,7 +12,7 @@ import bittensor as bt
 import numpy as np
 import torch
 from commons.data_manager import DataManager
-from commons.dataset import SeedDataManager
+from commons.dataset.dataset import SeedDataManager
 from commons.evals import EvalUtils
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
