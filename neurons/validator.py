@@ -12,7 +12,7 @@ import bittensor as bt
 import numpy as np
 import torch
 from commons.data_manager import DataManager
-from commons.dataset import SeedDataManager
+from commons.dataset.dataset import SeedDataManager
 from commons.evals import EvalUtils
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
@@ -26,6 +26,7 @@ from template.protocol import (
     RankingRequest,
     RankingResult,
     ScoringMethod,
+    SCORING_METHOD_PRIORITY,
 )
 from template.utils.uids import get_random_miner_uids
 
@@ -118,13 +119,25 @@ class Validator(BaseNeuron):
                 f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
             )
 
-            if (
-                miner_participants := [r.axon.hotkey for r in d.responses]
-            ) and miner_hotkey in miner_participants:
-                bt.logging.warning(
-                    f"Miner already sent response for request id: {d.request.request_id}, skipping..."
+            existing_responses = {r.axon.hotkey: r for r in d.responses}
+            if miner_hotkey in existing_responses:
+                existing_method = ScoringMethod(
+                    existing_responses[miner_hotkey].scoring_method
                 )
-                continue
+                new_method = ScoringMethod.AWS_MTURK
+                if (
+                    SCORING_METHOD_PRIORITY[new_method]
+                    > SCORING_METHOD_PRIORITY[existing_method]
+                ):
+                    bt.logging.info(
+                        f"Replacing {existing_method} with higher priority {new_method} for request id: {d.request.request_id}"
+                    )
+                    d.responses.remove(existing_responses[miner_hotkey])
+                else:
+                    bt.logging.warning(
+                        f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
+                    )
+                    continue
 
             request_copy = copy.deepcopy(d.request)
             for cid in found_cids:
@@ -220,6 +233,9 @@ class Validator(BaseNeuron):
         consumed_responses = []
         for d in filtered_data:
             ranking_result = Scoring.consensus_score(responses=d.responses)
+            ranking_result = Scoring.adjust_score(
+                ranking_result, hotkey_to_weights=self.hotkey_to_accuracy
+            )
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
             await self.send_consensus(
@@ -261,11 +277,18 @@ class Validator(BaseNeuron):
 
         # The dendrite client queries the network.
         responses: List[RankingRequest] = await self.dendrite(
-            axons=axons, synapse=synapse, deserialize=False, timeout=60
+            axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
         bt.logging.info(f"Received responses: {responses}")
 
-        valid_responses = _filter_valid_responses(responses)
+        valid_responses = [
+            response
+            for response in responses
+            if len(response.ranks) > 0
+            and response.scoring_method in [method for method in ScoringMethod]
+            and response.scoring_method != ScoringMethod.AWS_MTURK
+        ]
+
         if not len(valid_responses):
             bt.logging.warning("No valid responses received from miners.")
             return
@@ -419,6 +442,7 @@ class Validator(BaseNeuron):
             bt.logging.warning(
                 "All weights are zero, therefore no valid weights to set"
             )
+            return
 
         bt.logging.debug("raw_weights", raw_weights)
         bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
@@ -436,30 +460,34 @@ class Validator(BaseNeuron):
         bt.logging.debug("processed_weights", processed_weights)
         bt.logging.debug("processed_weight_uids", processed_weight_uids)
 
-        # Convert to uint16 weights and uids.
-        (
-            uint_uids,
-            uint_weights,
-        ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
-            uids=processed_weight_uids, weights=processed_weights
-        )
-        bt.logging.debug("uint_weights", uint_weights)
-        bt.logging.debug("uint_uids", uint_uids)
+        # # TODO remove call because this is already inside of nested call inside
+        # of set_weights_extrinsic() function
+
+        # # Convert to uint16 weights and uids.
+        # (
+        #     uint_uids,
+        #     uint_weights,
+        # ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
+        #     uids=processed_weight_uids, weights=processed_weights
+        # )
+        # bt.logging.debug("uint_weights", uint_weights)
+        # bt.logging.debug("uint_uids", uint_uids)
 
         # Set the weights on chain via our subtensor connection.
         result = self.subtensor.set_weights(
             wallet=self.wallet,
             netuid=self.config.netuid,
-            uids=uint_uids,
-            weights=uint_weights,
+            uids=processed_weight_uids.tolist(),
+            weights=processed_weights.tolist(),
             wait_for_finalization=False,
             wait_for_inclusion=True,
             version_key=self.spec_version,
         )
         if result is True:
-            bt.logging.info("set_weights on chain successfully!")
+            bt.logging.success("Validator set weights on chain successfully!")
         else:
             bt.logging.error("set_weights failed")
+        return result
 
     def resync_metagraph(self):
         """Sync the metagraph and updates the hotkeys and moving averages based on the new metagraph."""

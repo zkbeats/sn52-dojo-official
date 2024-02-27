@@ -1,6 +1,6 @@
 import asyncio
 import torch
-from commons.dataset import EvalDatasetManager
+from commons.dataset.dataset import EvalDatasetManager
 from commons.factory import Factory
 from commons.llm.openai_proxy import Provider
 from commons.reward_model.models import (

@@ -101,6 +101,7 @@ class Miner(BaseMinerNeuron):
             )
 
         elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
+            # TODO @dev eval task for aws mturk method as well, means we need WorkerIDs, etc.
             # send off to MTurk workers in a non-blocking way
             loop = asyncio.get_event_loop()
             task = functools.partial(

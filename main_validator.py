@@ -1,4 +1,4 @@
-import commons.patch_logging
+import commons.patch_logging  # noqa: F401
 import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI

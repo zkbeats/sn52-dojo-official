@@ -13,6 +13,13 @@ class ScoringMethod(StrEnum):
     AWS_MTURK = "aws_mturk"
 
 
+SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
+    ScoringMethod.HF_MODEL: 1,
+    ScoringMethod.LLM_API: 0,
+    ScoringMethod.AWS_MTURK: 2,
+}
+
+
 class Completion(BaseModel):
     class Config:
         allow_mutation = False

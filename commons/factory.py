@@ -1,4 +1,4 @@
-from commons.dataset import get_seed_dataset
+from commons.dataset.dataset import get_seed_dataset
 from template.utils.config import get_config
 
 
