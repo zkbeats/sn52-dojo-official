@@ -11,9 +11,12 @@ from torch.nn import functional as F
 import bittensor as bt
 import numpy as np
 import torch
+from xarray import Dataset
 from commons.data_manager import DataManager
 from commons.dataset.dataset import SeedDataManager
+from commons.dataset.hf_utils import HuggingFaceUtils, DatasetItem
 from commons.evals import EvalUtils
+from commons.factory import Factory
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
 
@@ -244,6 +247,24 @@ class Validator(BaseNeuron):
             )
             await asyncio.sleep(1)
             consumed_responses.append(d)
+
+            is_contrib_disabled = Factory.get_config().hf_dataset_contrib.off
+
+            if not is_contrib_disabled:
+                prompt = d.request.prompt
+                completions = d.request.completions
+                consensus_scores = [None] * len(completions)
+                for i in range(len(completions)):
+                    consensus_score = ranking_result.cid_to_consensus.get(
+                        completions[i].cid, None
+                    )
+                    if not consensus_score:
+                        continue
+                    consensus_scores[i] = consensus_score
+
+                HuggingFaceUtils.append_data(
+                    prompt, completions, consensus_scores, self.wallet
+                )
 
         # once we have scored certain responses, just remove them
         await DataManager.remove_responses(consumed_responses)
