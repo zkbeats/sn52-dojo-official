@@ -81,7 +81,7 @@ class ModelUtils:
         batch_size = 1
         with torch.no_grad():
             logits = model(**inputs).logits
-            assert logits.shape == torch.Size(batch_size, 1)
+            assert logits.shape == torch.Size((batch_size, 1))
             logits = logits[0].cpu().detach()
 
         # squish logits into range [0, 1]
