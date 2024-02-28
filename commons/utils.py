@@ -1,3 +1,148 @@
+import copy
+import time
+import uuid
+from collections import OrderedDict
+from collections.abc import Mapping
+from typing import Tuple
+
+import bittensor as bt
+import jsonref
+import requests
+import torch
+from pydantic import BaseModel
+
+
+def initialise(
+    config: bt.config,
+) -> Tuple[bt.wallet, bt.subtensor, bt.metagraph, bt.axon]:
+    # Build Bittensor objects
+    # These are core Bittensor classes to interact with the network.
+    bt.logging.info("Setting up bittensor objects....")
+    # The wallet holds the cryptographic key pairs for the miner.
+    wallet = bt.wallet(config=config)
+    bt.logging.info(f"Wallet: {wallet}")
+    # The subtensor is our connection to the Bittensor blockchain.
+    subtensor = bt.subtensor(config=config)
+    bt.logging.info(f"Subtensor: {subtensor}")
+    # The metagraph holds the state of the network, letting us know about other validators and miners.
+    metagraph = subtensor.metagraph(config.netuid)
+    bt.logging.info(f"Metagraph: {metagraph}")
+    # The axon handles request processing, allowing validators to send this miner requests.
+    axon = bt.axon(wallet=wallet, port=config.axon.port)
+    bt.logging.info(f"Axon: {axon}")
+    return wallet, subtensor, metagraph, axon
+
+
+def check_registered(subtensor, wallet, config):
+    # --- Check for registration.
+    if not subtensor.is_hotkey_registered(
+        netuid=config.netuid,
+        hotkey_ss58=wallet.hotkey.ss58_address,
+    ):
+        bt.logging.error(
+            f"Wallet: {wallet} is not registered on netuid {config.netuid}."
+            f" Please register the hotkey using `btcli s register` before trying again"
+        )
+        exit()
+
+
+def should_resync_metagraph(subtensor, metagraph, wallet, config):
+    """
+    Check if enough blocks have elapsed since the last checkpoint to sync.
+    """
+    uid = metagraph.hotkeys.index(wallet.hotkey.ss58_address)
+    return (
+        ttl_get_block(subtensor) - metagraph.last_update[uid]
+    ) > config.neuron.epoch_length
+
+
+def get_external_ip() -> str:
+    response = requests.get("https://ifconfig.me/ip")
+    response.raise_for_status()
+    return response.text.strip()
+
+
+def get_new_uuid():
+    return str(uuid.uuid4())
+
+
+def get_epoch_time():
+    return time.time()
+
+
+def get_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
+
+
+class DotDict(OrderedDict):
+    """
+    Quick and dirty implementation of a dot-able dict, which allows access and
+    assignment via object properties rather than dict indexing.
+    """
+
+    def __init__(self, *args, **kwargs):
+        # we could just call super(DotDict, self).__init__(*args, **kwargs)
+        # but that won't get us nested dotdict objects
+        od = OrderedDict(*args, **kwargs)
+        for key, val in od.items():
+            if isinstance(val, Mapping):
+                value = DotDict(val)
+            else:
+                value = val
+            self[key] = value
+
+    def __delattr__(self, name):
+        try:
+            del self[name]
+        except KeyError as ex:
+            raise AttributeError(f"No attribute called: {name}") from ex
+
+    def __getattr__(self, k):
+        try:
+            return self[k]
+        except KeyError as ex:
+            raise AttributeError(f"No attribute called: {k}") from ex
+
+    __setattr__ = OrderedDict.__setitem__
+
+
+def remove_key(input_dict, key, depth=0):
+    """Recursively remove a specified key from a nested dictionary, keeping track of depth."""
+    for k, v in list(input_dict.items()):
+        if k == key:
+            del input_dict[k]
+        elif isinstance(v, dict):
+            remove_key(v, key, depth=depth + 1)
+    return input_dict
+
+
+def _resolve_references(json_str):
+    return jsonref.loads(json_str)
+
+
+class PydanticUtils:
+    @staticmethod
+    def build_response_format(model: BaseModel):
+        """Build a response format for OpenAI API calls."""
+        schema = model.schema_json()
+        resolved_schema = copy.deepcopy(_resolve_references(schema))
+
+        if "definitions" in resolved_schema:
+            resolved_schema.pop("definitions")
+
+        resolved_schema = remove_key(resolved_schema, "title")
+        resolved_schema = remove_key(resolved_schema, "additionalProperties")
+        required = resolved_schema.get("required", [])
+        resolved_schema = remove_key(resolved_schema, "required")
+        resolved_schema["required"] = required
+        return {"type": "json_object", "schema": resolved_schema}
+
+
 # The MIT License (MIT)
 # Copyright © 2023 Yuma Rao
 # Copyright © 2023 Opentensor Foundation
@@ -91,7 +236,7 @@ def _ttl_hash_gen(seconds: int):
 
 # 12 seconds updating block.
 @ttl_cache(maxsize=1, ttl=12)
-def ttl_get_block(self) -> int:
+def ttl_get_block(subtensor) -> int:
     """
     Retrieves the current block number from the blockchain. This method is cached with a time-to-live (TTL)
     of 12 seconds, meaning that it will only refresh the block number from the blockchain at most every 12 seconds,
@@ -109,4 +254,4 @@ def ttl_get_block(self) -> int:
 
     Note: self here is the miner or validator instance
     """
-    return self.subtensor.get_current_block()
+    return subtensor.get_current_block()

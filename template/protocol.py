@@ -1,76 +1,98 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
-import typing
+from enum import StrEnum
+from typing import Dict, List, Optional
 import bittensor as bt
+from pydantic import BaseModel, Field
+from commons.llm.openai_proxy import Provider
 
-# TODO(developer): Rewrite with your protocol definition.
-
-# This is the protocol for the dummy miner and validator.
-# It is a simple request-response protocol where the validator sends a request
-# to the miner, and the miner responds with a dummy response.
-
-# ---- miner ----
-# Example usage:
-#   def dummy( synapse: Dummy ) -> Dummy:
-#       synapse.dummy_output = synapse.dummy_input + 1
-#       return synapse
-#   axon = bt.axon().attach( dummy ).serve(netuid=...).start()
-
-# ---- validator ---
-# Example usage:
-#   dendrite = bt.dendrite()
-#   dummy_output = dendrite.query( Dummy( dummy_input = 1 ) )
-#   assert dummy_output == 2
+from commons.utils import get_epoch_time, get_new_uuid
 
 
-class Dummy(bt.Synapse):
-    """
-    A simple dummy protocol representation which uses bt.Synapse as its base.
-    This protocol helps in handling dummy request and response communication between
-    the miner and the validator.
+class ScoringMethod(StrEnum):
+    HF_MODEL = "hf_model"
+    LLM_API = "llm_api"
+    AWS_MTURK = "aws_mturk"
 
-    Attributes:
-    - dummy_input: An integer value representing the input request sent by the validator.
-    - dummy_output: An optional integer value which, when filled, represents the response from the miner.
-    """
 
-    # Required request input, filled by sending dendrite caller.
-    dummy_input: int
+SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
+    ScoringMethod.HF_MODEL: 1,
+    ScoringMethod.LLM_API: 0,
+    ScoringMethod.AWS_MTURK: 2,
+}
 
-    # Optional request output, filled by recieving axon.
-    dummy_output: typing.Optional[int] = None
 
-    def deserialize(self) -> int:
-        """
-        Deserialize the dummy output. This method retrieves the response from
-        the miner in the form of dummy_output, deserializes it and returns it
-        as the output of the dendrite.query() call.
+class Completion(BaseModel):
+    class Config:
+        allow_mutation = False
 
-        Returns:
-        - int: The deserialized response, which in this case is the value of dummy_output.
+    cid: str = Field(
+        default_factory=get_new_uuid,
+        description="Unique identifier for the completion",
+    )
+    text: str = Field(description="Text of the completion")
 
-        Example:
-        Assuming a Dummy instance has a dummy_output value of 5:
-        >>> dummy_instance = Dummy(dummy_input=4)
-        >>> dummy_instance.dummy_output = 5
-        >>> dummy_instance.deserialize()
-        5
-        """
-        return self.dummy_output
+
+class Rank(BaseModel):
+    cid: str = Field(description="Unique identifier for the completion")
+    score: float = Field(default=0.0, description="Score of the completion")
+
+
+class ModelConfig(BaseModel):
+    provider: Optional[Provider]
+    model_name: str
+
+
+class RankingRequest(bt.Synapse):
+    # filled in by validator
+    epoch_timestamp: int = Field(
+        default_factory=get_epoch_time,
+        description="Epoch timestamp for the request",
+        allow_mutation=False,
+    )
+    request_id: str = Field(
+        default_factory=get_new_uuid,
+        description="Unique identifier for the request",
+        allow_mutation=False,
+    )
+    pid: str = Field(
+        default_factory=get_new_uuid,
+        description="Unique identifier for the prompt",
+    )
+    prompt: str = Field(
+        description="Prompt or query from the user sent the LLM",
+        allow_mutation=False,
+    )
+    n_completions: int = Field(
+        description="Number of completions for miner to score/rank",
+        allow_mutation=False,
+    )
+    completions: List[Completion] = Field(
+        description="List of completions for the prompt",
+        allow_mutation=False,
+    )
+    # filled in by miners
+    ranks: List[Rank] = Field(
+        default=[], description="List of ranks for each completion"
+    )
+    scoring_method: Optional[str] = Field(
+        decscription="Method to use for scoring completions"
+    )
+    model_config: Optional[ModelConfig] = Field(
+        description="Model configuration for Huggingface / LLM API scoring"
+    )
+
+
+class RankingResult(bt.Synapse):
+    request_id: str = Field(
+        description="Unique identifier for the request",
+        allow_mutation=False,
+    )
+    cid_to_consensus: Dict[str, float] = Field(
+        description="Consensus score for each completion", allow_mutation=False
+    )
+    hotkey_to_score: Dict[str, float] = Field(
+        description="Hotkey to score mapping", allow_mutation=False
+    )
+
+
+class MTurkResponse(bt.Synapse):
+    completion_id_to_score: Dict[str, float]

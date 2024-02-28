@@ -17,14 +17,17 @@
 # DEALINGS IN THE SOFTWARE.
 
 import os
-import torch
+from pathlib import Path
 import argparse
 import bittensor as bt
-from loguru import logger
+
+from commons.reward_model.models import ModelZoo
+from commons.scoring import Scoring
+from commons.utils import get_device
 
 
-def check_config(cls, config: "bt.Config"):
-    r"""Checks/validates the config namespace object."""
+def check_config(config: bt.config):
+    """Checks/validates the config namespace object."""
     bt.logging.check_config(config)
 
     full_path = os.path.expanduser(
@@ -36,36 +39,31 @@ def check_config(cls, config: "bt.Config"):
             config.neuron.name,
         )
     )
-    print("full path:", full_path)
     config.neuron.full_path = os.path.expanduser(full_path)
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
 
-    if not config.neuron.dont_save_events:
-        # Add custom event logger for the events.
-        logger.level("EVENTS", no=38, icon="📝")
-        logger.add(
-            os.path.join(config.neuron.full_path, "events.log"),
-            rotation=config.neuron.events_retention_size,
-            serialize=True,
-            enqueue=True,
-            backtrace=False,
-            diagnose=False,
-            level="EVENTS",
-            format="{time:YYYY-MM-DD at HH:mm:ss} | {level} | {message}",
-        )
 
+def add_args(parser):
+    from template.protocol import ScoringMethod
 
-def add_args(cls, parser):
     """
     Adds relevant arguments to the parser for operation.
     """
     # Netuid Arg: The netuid of the subnet to connect to.
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
 
-    neuron_type = (
-        "validator" if "miner" not in cls.__name__.lower() else "miner"
+    neuron_types = ["miner", "validator"]
+    parser.add_argument(
+        "--neuron.type",
+        choices=neuron_types,
+        type=str,
+        help="Whether running a miner or validator",
     )
+    args, unknown = parser.parse_known_args()
+    neuron_type = None
+    if known_args := vars(args):
+        neuron_type = known_args["neuron.type"]
 
     parser.add_argument(
         "--neuron.name",
@@ -74,11 +72,9 @@ def add_args(cls, parser):
         default=neuron_type,
     )
 
+    # device = get_device()
     parser.add_argument(
-        "--neuron.device",
-        type=str,
-        help="Device to run on.",
-        default="cpu",
+        "--neuron.device", type=str, help="Device to run on.", default="cpu"
     )
 
     parser.add_argument(
@@ -96,82 +92,97 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
-        "--neuron.dont_save_events",
-        action="store_true",
-        help="If set, we dont save events to a log file.",
-        default=False,
+        "--api.port",
+        type=int,
+        help="FastAPI port for uvicorn to run on, should be different from axon.port as these will serve external requests.",
+        default=1888,
     )
 
     if neuron_type == "validator":
         parser.add_argument(
-            "--neuron.num_concurrent_forwards",
+            "--data_manager.base_path",
+            type=str,
+            help="Base path to store data to.",
+            default=Path.cwd(),
+        )
+
+        parser.add_argument(
+            "--evaluation.num_batches",
             type=int,
-            help="The number of concurrent forwards running at any time.",
-            default=1,
+            help="Number of batches from dataset to use when evaluating.",
+            # NOTE @dev this is a little low, but shall leave it low for now and increase in the future
+            default=20,
+        )
+
+        parser.add_argument(
+            "--evaluation.batch_size",
+            type=int,
+            help="Number of rows of data from dataset to use when evaluating.",
+            default=32,
         )
 
         parser.add_argument(
             "--neuron.sample_size",
             type=int,
-            help="The number of miners to query in a single step.",
+            help="The number of miners to query per dendrite call.",
             default=10,
-        )
-
-        parser.add_argument(
-            "--neuron.disable_set_weights",
-            action="store_true",
-            help="Disables setting weights.",
-            default=False,
         )
 
         parser.add_argument(
             "--neuron.moving_average_alpha",
             type=float,
             help="Moving average alpha parameter, how much to add of the new observation.",
-            default=0.05,
+            default=0.3,
+        )
+
+    elif neuron_type == "miner":
+        parser.add_argument(
+            "--scoring_method",
+            help="Method to use for scoring completions.",
+            choices=[str(method) for method in ScoringMethod],
+        )
+
+        args, unknown = parser.parse_known_args()
+        scoring_method = None
+        if known_args := vars(args):
+            scoring_method = known_args["scoring_method"]
+
+        default_model_name = (
+            ModelZoo.DEBERTA_V3_LARGE_V2
+            if scoring_method == ScoringMethod.HF_MODEL
+            else "mistralai/Mixtral-8x7B-Instruct-v0.1"
+        )
+        parser.add_argument(
+            "--model_name",
+            type=str,
+            help="Name of the reward model to use, either from Huggingface or LLM API provider such as TogetherAI.",
+            default=default_model_name,
         )
 
         parser.add_argument(
-            "--neuron.axon_off",
-            "--axon_off",
-            action="store_true",
-            # Note: the validator needs to serve an Axon with their IP or they may
-            #   be blacklisted by the firewall of serving peers on the network.
-            help="Set this flag to not attempt to serve an Axon.",
-            default=False,
+            "--llm_provider",
+            type=str,
+            help="LLM provider to use for scoring completions.",
+            default="togetherai",
         )
 
         parser.add_argument(
-            "--neuron.vpermit_tao_limit",
-            type=int,
-            help="The maximum number of TAO allowed to query a validator with a vpermit.",
-            default=4096,
-        )
-
-    else:
-        parser.add_argument(
-            "--blacklist.force_validator_permit",
-            action="store_true",
-            help="If set, we will force incoming requests to have a permit.",
-            default=False,
-        )
-
-        parser.add_argument(
-            "--blacklist.allow_non_registered",
-            action="store_true",
-            help="If set, miners will accept queries from non registered entities. (Dangerous!)",
-            default=False,
+            "--aws_mturk_environment",
+            choices=["sandbox", "production"],
+            type=str,
+            help="AWS MTurk environment to use",
         )
 
 
-def config(cls):
-    """
-    Returns the configuration object specific to this miner or validator after adding relevant arguments.
-    """
+def get_config():
+    """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
     bt.logging.add_args(parser)
     bt.axon.add_args(parser)
-    cls.add_args(parser)
-    return bt.config(parser)
+    add_args(parser)
+    _config = bt.config(parser)
+
+    check_config(_config)
+    return _config

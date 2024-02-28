@@ -1,148 +1,200 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# TODO(developer): Set your name
-# Copyright © 2023 <your name>
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
+import asyncio
+from datetime import datetime
+import threading
 import time
-import typing
+import functools
+from typing import Dict, Tuple
+from concurrent.futures import ThreadPoolExecutor
+
 import bittensor as bt
+from commons.llm.openai_proxy import Provider
+from commons.human_feedback.aws_mturk import MTurkUtils
+from commons.reward_model.models import ModelUtils
+from commons.scoring import Scoring
+from commons.utils import get_epoch_time
 
-# Bittensor Miner Template:
-import template
-
-# import base miner class which takes care of most of the boilerplate
 from template.base.miner import BaseMinerNeuron
+from template.protocol import (
+    ModelConfig,
+    MTurkResponse,
+    Rank,
+    RankingRequest,
+    RankingResult,
+    ScoringMethod,
+)
 
 
 class Miner(BaseMinerNeuron):
-    """
-    Your miner neuron class. You should use this class to define your miner's behavior. In particular, you should replace the forward function with your own logic. You may also want to override the blacklist and priority functions according to your needs.
+    def __init__(self):
+        super(Miner, self).__init__()
+        # Dendrite lets us send messages to other nodes (axons) in the network.
+        self.dendrite = bt.dendrite(wallet=self.wallet)
 
-    This class inherits from the BaseMinerNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.
+        # Attach determiners which functions are called when servicing a request.
+        bt.logging.info("Attaching forward function to miner axon.")
+        self.axon.attach(
+            forward_fn=self.forward_ranking_request,
+            blacklist_fn=self.blacklist_ranking_request,
+            priority_fn=self.priority_ranking,
+        ).attach(forward_fn=self.forward_result)
 
-    This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom
-    """
+        # Instantiate runners
+        self.should_exit: bool = False
+        self.is_running: bool = False
+        self.thread: threading.Thread = None
+        self.lock = asyncio.Lock()
+        self.hotkey_to_request: Dict[str, RankingRequest] = {}
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
-    def __init__(self, config=None):
-        super(Miner, self).__init__(config=config)
-
-        # TODO(developer): Anything specific to your use case you can do here
-
-    async def forward(
-        self, synapse: template.protocol.Dummy
-    ) -> template.protocol.Dummy:
-        """
-        Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
-        This method should be replaced with actual logic relevant to the miner's purpose.
-
-        Args:
-            synapse (template.protocol.Dummy): The synapse object containing the 'dummy_input' data.
-
-        Returns:
-            template.protocol.Dummy: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
-        The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
-        the miner's intended operation. This method demonstrates a basic transformation of input data.
-        """
-        # TODO(developer): Replace with actual implementation logic.
-        synapse.dummy_output = synapse.dummy_input * 2
+    async def forward_result(self, synapse: RankingResult) -> RankingResult:
+        bt.logging.info("Received consensus from validators")
         return synapse
 
-    async def blacklist(
-        self, synapse: template.protocol.Dummy
-    ) -> typing.Tuple[bool, str]:
-        """
-        Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
-        define the logic for blacklisting requests based on your needs and desired security parameters.
+    async def forward_ranking_request(self, synapse: RankingRequest) -> RankingRequest:
+        print(f"Miner received request, type={str(synapse.__class__.__name__)}")
+        self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
-        Blacklist runs before the synapse data has been deserialized (i.e. before synapse.data is available).
-        The synapse is instead contructed via the headers of the request. It is important to blacklist
-        requests before they are deserialized to avoid wasting resources on requests that will be ignored.
+        scoring_method = self.config.scoring_method
+        if scoring_method.casefold() == ScoringMethod.HF_MODEL:
+            for completion in synapse.completions:
+                score = ModelUtils._hf_score(
+                    self.config.model_name, synapse.prompt, completion.text
+                )
+                synapse.ranks.append(
+                    Rank(
+                        cid=completion.cid,
+                        score=score,
+                    )
+                )
+            synapse.scoring_method = ScoringMethod.HF_MODEL
+            synapse.model_config = ModelConfig(model_name=self.config.model_name)
 
-        Args:
-            synapse (template.protocol.Dummy): A synapse object constructed from the headers of the incoming request.
+        elif scoring_method.casefold() == ScoringMethod.LLM_API:
+            llm_provider = Provider(self.config.llm_provider)
+            model_name = self.config.model_name
+            scores_response = await ModelUtils._llm_api_score(
+                provider=llm_provider,
+                model_name=model_name,
+                prompt=synapse.prompt,
+                completions=synapse.completions,
+            )
+            for completion in synapse.completions:
+                matching_score_item = next(
+                    (
+                        item
+                        for item in scores_response.scores
+                        if item.completion_id == completion.cid
+                    ),
+                    [None],
+                )
 
-        Returns:
-            Tuple[bool, str]: A tuple containing a boolean indicating whether the synapse's hotkey is blacklisted,
-                            and a string providing the reason for the decision.
+                if matching_score_item:
+                    synapse.ranks.append(
+                        Rank(
+                            cid=completion.cid,
+                            score=matching_score_item.score,
+                        )
+                    )
+            synapse.scoring_method = ScoringMethod.LLM_API
+            synapse.model_config = ModelConfig(
+                provider=llm_provider, model_name=model_name
+            )
 
-        This function is a security measure to prevent resource wastage on undesired requests. It should be enhanced
-        to include checks against the metagraph for entity registration, validator status, and sufficient stake
-        before deserialization of synapse data to minimize processing overhead.
+        elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
+            # TODO @dev eval task for aws mturk method as well, means we need WorkerIDs, etc.
+            # send off to MTurk workers in a non-blocking way
+            loop = asyncio.get_event_loop()
+            task = functools.partial(
+                MTurkUtils.create_mturk_task,
+                prompt=synapse.prompt,
+                completions=synapse.completions,
+                reward_in_dollars=0.01,
+            )
+            await loop.run_in_executor(self.executor, task)
+        else:
+            bt.logging.error("Unrecognized scoring method!")
 
-        Example blacklist logic:
-        - Reject if the hotkey is not a registered entity within the metagraph.
-        - Consider blacklisting entities that are not validators or have insufficient stake.
+        return synapse
 
-        In practice it would be wise to blacklist requests from entities that are not validators, or do not have
-        enough stake. This can be checked via metagraph.S and metagraph.validator_permit. You can always attain
-        the uid of the sender via a metagraph.hotkeys.index( synapse.dendrite.hotkey ) call.
+    async def send_mturk_response(self, synapse: MTurkResponse):
+        """After receiving a response from MTurk, send the response back to the calling validator"""
+        # 1. figure out which validator hotkey sent the original request
+        hotkey = self._find_hotkey_by_completions(synapse.completion_id_to_score)
+        if not hotkey and not self.hotkey_to_request:
+            bt.logging.error(
+                f"No hotkey found for completion ids: {synapse.completion_id_to_score.keys()}"
+            )
+            return
 
-        Otherwise, allow the request to be processed further.
-        """
-        # TODO(developer): Define how miners should blacklist requests.
-        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
+        uid = self.metagraph.hotkeys.index(hotkey)
+        axon = self.metagraph.axons[uid]
+        await self.dendrite(
+            axons=[axon],
+            synapse=synapse,
+            deserialize=False,
+            timeout=60,
+        )
+        return
+
+    def _find_hotkey_by_completions(self, completion_id_to_scores: Dict[str, float]):
+        if not self.hotkey_to_request:
+            bt.logging.warning(
+                "No requests received yet... therefore no validator hotkeys to find"
+            )
+            return None
+        mturk_completion_ids = set(completion_id_to_scores.keys())
+        for k, v in self.hotkey_to_request.items():
+            completion_ids = set([completion.cid for completion in v.completions])
+            if (
+                common_cids := completion_ids.intersection(mturk_completion_ids)
+            ) and len(common_cids):
+                return k
+        return None
+
+    async def blacklist_ranking_request(
+        self, synapse: RankingRequest
+    ) -> Tuple[bool, str]:
+        bt.logging.info("checking blacklist function")
+        caller_hotkey = synapse.dendrite.hotkey
+        if caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
-            bt.logging.trace(
+            bt.logging.warning(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
 
-        bt.logging.trace(
-            f"Not Blacklisting recognized hotkey {synapse.dendrite.hotkey}"
-        )
-        return False, "Hotkey recognized!"
+        caller_uid = self.metagraph.hotkeys.index(caller_hotkey)
+        validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
+        if not validator_neuron.validator_permit:
+            return True, "Not a validator"
 
-    async def priority(self, synapse: template.protocol.Dummy) -> float:
+        MIN_VALIDATOR_STAKE = 20_000
+        if validator_neuron.stake.tao < float(MIN_VALIDATOR_STAKE):
+            bt.logging.warning(
+                f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
+            )
+            return True, "Insufficient validator stake"
+
+        return False, "Valid request received from validator"
+
+    async def priority_ranking(self, synapse: RankingRequest) -> float:
         """
-        The priority function determines the order in which requests are handled. More valuable or higher-priority
-        requests are processed before others. You should design your own priority mechanism with care.
-
-        This implementation assigns priority to incoming requests based on the calling entity's stake in the metagraph.
-
-        Args:
-            synapse (template.protocol.Dummy): The synapse object that contains metadata about the incoming request.
-
-        Returns:
-            float: A priority score derived from the stake of the calling entity.
-
-        Miners may recieve messages from multiple entities at once. This function determines which request should be
-        processed first. Higher values indicate that the request should be processed first. Lower values indicate
-        that the request should be processed later.
-
-        Example priority logic:
-        - A higher stake results in a higher priority value.
+        The priority function determines the order in which requests are handled. Higher-priority
+        requests are processed before others. Miners may recieve messages from multiple entities at
+        once. This function determines which request should be processed first.
+        Higher values indicate that the request should be processed first.
+        Lower values indicate that the request should be processed later.
         """
-        # TODO(developer): Define how miners should prioritize requests.
-        caller_uid = self.metagraph.hotkeys.index(
-            synapse.dendrite.hotkey
-        )  # Get the caller index.
-        prirority = float(
-            self.metagraph.S[caller_uid]
-        )  # Return the stake as the priority.
-        bt.logging.trace(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: ", prirority
+        current_timestamp = datetime.fromtimestamp(get_epoch_time())
+        dt = current_timestamp - datetime.fromtimestamp(synapse.timestamp)
+        priority = float(dt.total_seconds())
+        bt.logging.debug(
+            f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
         )
-        return prirority
+        return priority
 
 
-# This is the main function, which runs the miner.
-if __name__ == "__main__":
-    with Miner() as miner:
-        while True:
-            bt.logging.info("Miner running...", time.time())
-            time.sleep(5)
+async def log_miner_status():
+    while True:
+        bt.logging.info(f"Miner running... {time.time()}")
+        await asyncio.sleep(20)
