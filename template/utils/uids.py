@@ -16,13 +16,20 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
     return True
 
 
+def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
+    """Check if uid is a validator."""
+    stakes = metagraph.S.tolist()
+    if len(stakes) <= 64:
+        return stakes[uid] < 1_000
+    return not metagraph.neurons[uid].validator_permit
+
+
 def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
     """Returns k available random uids from the metagraph."""
     avail_uids = []
 
     for uid in range(metagraph.n.item()):
-        neuron: bt.NeuronInfo = metagraph.neurons[uid]
-        if is_uid_available(metagraph, uid) and not neuron.validator_permit:
+        if metagraph.axons[uid].is_serving and is_miner(metagraph, uid):
             avail_uids.append(uid)
 
     # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
