@@ -12,7 +12,7 @@ from template.protocol import Completion
 load_dotenv()
 
 
-os.environ["HF_HUB_DISABLE_EXPERIMENTAL_WARNING"] = 1
+os.environ["HF_HUB_DISABLE_EXPERIMENTAL_WARNING"] = "1"
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 # NOTE this will be where our dataset gets collected over time
@@ -20,9 +20,6 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 HF_REPO_ID = "prooompt/test_dataset"
 hf_api = huggingface_hub.HfApi(token=HF_TOKEN)
 repo_kwargs = {"repo_id": HF_REPO_ID, "repo_type": "dataset"}
-
-for discussion in hf_api.get_repo_discussions(**repo_kwargs):
-    print(f"{discussion.num} - {discussion.title}, pr: {discussion.is_pull_request}")
 
 
 class HuggingFaceUtils:

@@ -1,8 +1,10 @@
 import asyncio
+import copy
 from datetime import datetime
 import threading
 import time
 import functools
+import traceback
 from typing import Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
@@ -22,6 +24,7 @@ from template.protocol import (
     RankingResult,
     ScoringMethod,
 )
+from template.utils.uids import is_miner
 
 
 class Miner(BaseMinerNeuron):
@@ -51,68 +54,71 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     async def forward_ranking_request(self, synapse: RankingRequest) -> RankingRequest:
-        print(f"Miner received request, type={str(synapse.__class__.__name__)}")
-        self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
+        try:
+            print(f"Miner received request, type={str(synapse.__class__.__name__)}")
+            self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
-        scoring_method = self.config.scoring_method
-        if scoring_method.casefold() == ScoringMethod.HF_MODEL:
-            for completion in synapse.completions:
-                score = ModelUtils._hf_score(
-                    self.config.model_name, synapse.prompt, completion.text
-                )
-                synapse.ranks.append(
-                    Rank(
-                        cid=completion.cid,
-                        score=score,
+            scoring_method = self.config.scoring_method
+            if scoring_method.casefold() == ScoringMethod.HF_MODEL:
+                for completion in synapse.completions:
+                    score = ModelUtils._hf_score(
+                        self.config.model_name, synapse.prompt, completion.text
                     )
-                )
-            synapse.scoring_method = ScoringMethod.HF_MODEL
-            synapse.model_config = ModelConfig(model_name=self.config.model_name)
-
-        elif scoring_method.casefold() == ScoringMethod.LLM_API:
-            llm_provider = Provider(self.config.llm_provider)
-            model_name = self.config.model_name
-            scores_response = await ModelUtils._llm_api_score(
-                provider=llm_provider,
-                model_name=model_name,
-                prompt=synapse.prompt,
-                completions=synapse.completions,
-            )
-            for completion in synapse.completions:
-                matching_score_item = next(
-                    (
-                        item
-                        for item in scores_response.scores
-                        if item.completion_id == completion.cid
-                    ),
-                    [None],
-                )
-
-                if matching_score_item:
                     synapse.ranks.append(
                         Rank(
                             cid=completion.cid,
-                            score=matching_score_item.score,
+                            score=score,
                         )
                     )
-            synapse.scoring_method = ScoringMethod.LLM_API
-            synapse.model_config = ModelConfig(
-                provider=llm_provider, model_name=model_name
-            )
+                synapse.scoring_method = ScoringMethod.HF_MODEL
+                synapse.model_config = ModelConfig(model_name=self.config.model_name)
 
-        elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
-            # TODO @dev eval task for aws mturk method as well, means we need WorkerIDs, etc.
-            # send off to MTurk workers in a non-blocking way
-            loop = asyncio.get_event_loop()
-            task = functools.partial(
-                MTurkUtils.create_mturk_task,
-                prompt=synapse.prompt,
-                completions=synapse.completions,
-                reward_in_dollars=0.01,
-            )
-            await loop.run_in_executor(self.executor, task)
-        else:
-            bt.logging.error("Unrecognized scoring method!")
+            elif scoring_method.casefold() == ScoringMethod.LLM_API:
+                llm_provider = Provider(self.config.llm_provider)
+                model_name = self.config.model_name
+                scores_response = await ModelUtils._llm_api_score(
+                    provider=llm_provider,
+                    model_name=model_name,
+                    prompt=synapse.prompt,
+                    completions=synapse.completions,
+                )
+                for completion in synapse.completions:
+                    matching_score_item = next(
+                        (
+                            item
+                            for item in scores_response.scores
+                            if item.completion_id == completion.cid
+                        ),
+                        [None],
+                    )
+
+                    if matching_score_item:
+                        synapse.ranks.append(
+                            Rank(
+                                cid=completion.cid,
+                                score=matching_score_item.score,
+                            )
+                        )
+                synapse.scoring_method = ScoringMethod.LLM_API
+                synapse.model_config = ModelConfig(
+                    provider=llm_provider, model_name=model_name
+                )
+
+            elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
+                # TODO @dev eval task for aws mturk method as well, means we need WorkerIDs, etc.
+                # send off to MTurk workers in a non-blocking way
+                loop = asyncio.get_event_loop()
+                task = functools.partial(
+                    MTurkUtils.create_mturk_task,
+                    prompt=synapse.prompt,
+                    completions=synapse.completions,
+                    reward_in_dollars=0.01,
+                )
+                await loop.run_in_executor(self.executor, task)
+            else:
+                bt.logging.error("Unrecognized scoring method!")
+        except:
+            traceback.print_exc()
 
         return synapse
 
@@ -165,10 +171,17 @@ class Miner(BaseMinerNeuron):
 
         caller_uid = self.metagraph.hotkeys.index(caller_hotkey)
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
-        if not validator_neuron.validator_permit:
+        if is_miner(self.metagraph, caller_uid):
             return True, "Not a validator"
 
-        MIN_VALIDATOR_STAKE = 20_000
+        # TODO @dev INCREASE BEFORE LAUNCH
+        # TODO @dev INCREASE BEFORE LAUNCH
+        # TODO @dev INCREASE BEFORE LAUNCH
+        # TODO @dev INCREASE BEFORE LAUNCH
+        # TODO @dev INCREASE BEFORE LAUNCH
+        # TODO @dev INCREASE BEFORE LAUNCH
+        # MIN_VALIDATOR_STAKE = 20_000
+        MIN_VALIDATOR_STAKE = 500
         if validator_neuron.stake.tao < float(MIN_VALIDATOR_STAKE):
             bt.logging.warning(
                 f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
@@ -192,6 +205,20 @@ class Miner(BaseMinerNeuron):
             f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
         )
         return priority
+
+    def resync_metagraph(self):
+        # Copies state of metagraph before syncing.
+        previous_metagraph = copy.deepcopy(self.metagraph)
+
+        # Sync the metagraph.
+        self.metagraph.sync(subtensor=self.subtensor)
+
+        # Check if the metagraph axon info has changed.
+        if previous_metagraph.axons == self.metagraph.axons:
+            bt.logging.info("Metagraph unchanged")
+            return
+
+        bt.logging.info("Metagraph updated")
 
 
 async def log_miner_status():
