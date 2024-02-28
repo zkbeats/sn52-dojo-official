@@ -17,7 +17,7 @@ from tenacity import (
 
 import bittensor as bt
 
-from commons.utils import get_device
+from commons.utils import get_device, log_retry_info
 from template.protocol import ModelConfig, ScoringMethod
 
 
@@ -79,13 +79,6 @@ def hf_classify_accuracy(batch, model, tokenizer, device):
     accuracy = total_chosen / len(batch)
     bt.logging.info(f"Accuracy: {accuracy}")
     return accuracy
-
-
-def log_retry_info(retry_state):
-    """Meant to be used with tenaicty's before_sleep callback"""
-    bt.logging.warning(
-        f"Retry attempt {retry_state.attempt_number} failed with exception: {retry_state.outcome.exception()}",
-    )
 
 
 async def llm_classify_accuracy(

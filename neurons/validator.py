@@ -11,16 +11,15 @@ from torch.nn import functional as F
 import bittensor as bt
 import numpy as np
 import torch
-from xarray import Dataset
 from commons.data_manager import DataManager
 from commons.dataset.dataset import SeedDataManager
-from commons.dataset.hf_utils import HuggingFaceUtils, DatasetItem
-from commons.evals import EvalUtils
+from commons.dataset.hf_utils import HuggingFaceUtils
+from commons.evals import EvalUtils, log_retry_info
 from commons.factory import Factory
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
 
-from commons.utils import get_epoch_time, get_new_uuid
+from commons.utils import get_epoch_time, get_new_uuid, serve_axon
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     Completion,
@@ -31,7 +30,8 @@ from template.protocol import (
     ScoringMethod,
     SCORING_METHOD_PRIORITY,
 )
-from template.utils.uids import get_random_miner_uids
+from template.utils.uids import get_random_miner_uids, is_miner
+from tenacity import Retrying, RetryError, stop_after_attempt
 
 
 def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
@@ -83,8 +83,7 @@ class Validator(BaseNeuron):
             return True, "Unrecognized hotkey"
 
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
-        if neuron.validator_permit:
+        if not is_miner(self.metagraph, caller_uid):
             bt.logging.warning(
                 f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
             )
@@ -300,7 +299,7 @@ class Validator(BaseNeuron):
         responses: List[RankingRequest] = await self.dendrite(
             axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
-        bt.logging.info(f"Received responses: {responses}")
+        bt.logging.info(f"Received {len(responses)} responses")
 
         valid_responses = [
             response
@@ -357,7 +356,15 @@ class Validator(BaseNeuron):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        # TODO add retry mechanism for axon serve rate limit
+
+        serve_success = serve_axon(self.subtensor, self.axon, self.config)
+        if serve_success:
+            bt.logging.success("Successfully served axon for validator!")
+        else:
+            bt.logging.error("Failed to serve axon for validator, exiting.")
+            exit()
+
         self.axon.start()
         bt.logging.info(
             f"Serving validator axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
@@ -370,7 +377,6 @@ class Validator(BaseNeuron):
             while True:
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # Run multiple forwards concurrently.
                 self.loop.run_until_complete(self.send_request())
 
                 # # Check if we should exit.
@@ -381,7 +387,7 @@ class Validator(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                time.sleep(30)
+                time.sleep(24)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -523,10 +529,10 @@ class Validator(BaseNeuron):
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
-            bt.logging.info("Metagraph unchanged, skipping resync...")
+            bt.logging.info("Metagraph unchanged")
             return
 
-        bt.logging.info("Metagraph updated, attempting resync...")
+        bt.logging.info("Metagraph updated")
         # hotkey has been replaced, so we reset score
         preserved_uids = [
             uid

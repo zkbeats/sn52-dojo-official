@@ -16,12 +16,11 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import torch
-import asyncio
 import threading
 import traceback
 
 import bittensor as bt
+from commons.utils import serve_axon
 
 from template.base.neuron import BaseNeuron
 
@@ -65,7 +64,12 @@ class BaseMinerNeuron(BaseNeuron):
         bt.logging.info(
             f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        serve_success = serve_axon(self.subtensor, self.axon, self.config)
+        if serve_success:
+            bt.logging.success("Successfully served axon for miner!")
+        else:
+            bt.logging.error("Failed to serve axon for miner, exiting.")
+            exit()
 
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
@@ -74,22 +78,15 @@ class BaseMinerNeuron(BaseNeuron):
 
         # This loop maintains the miner's operations until intentionally stopped.
         try:
-            while not self.should_exit:
-                while (
-                    self.block - self.metagraph.last_update[self.uid]
-                    < self.config.neuron.epoch_length
-                ):
-                    # Wait before checking again.
-                    time.sleep(6)
-
-                    # Check if we should exit.
-                    if self.should_exit:
-                        break
+            while True:
+                # Check if we should exit.
+                if self.should_exit:
+                    break
 
                 # Sync metagraph and potentially set weights.
                 self.sync()
                 self.step += 1
-                time.sleep(1)
+                time.sleep(12)
 
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -98,7 +95,7 @@ class BaseMinerNeuron(BaseNeuron):
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
-        except Exception as e:
+        except Exception:
             bt.logging.error(traceback.format_exc())
 
     def run_in_background_thread(self):
