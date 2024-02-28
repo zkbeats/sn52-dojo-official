@@ -33,10 +33,10 @@ class DataManager:
             return None
 
     @classmethod
-    async def load(cls, path) -> Optional[List[DendriteQueryResponse]]:
+    async def load(cls, path):
         # Load the list of Pydantic objects from the pickle file
         async with cls._lock:
-            return cls._load_without_lock(path)
+            return await cls._load_without_lock(path)
 
     @classmethod
     async def _save_without_lock(cls, path, data: Any):
