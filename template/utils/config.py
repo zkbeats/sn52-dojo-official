@@ -22,8 +22,6 @@ import argparse
 import bittensor as bt
 
 from commons.reward_model.models import ModelZoo
-from commons.scoring import Scoring
-from commons.utils import get_device
 
 
 def check_config(config: bt.config):
