@@ -186,7 +186,7 @@ class Miner(BaseMinerNeuron):
         Lower values indicate that the request should be processed later.
         """
         current_timestamp = datetime.fromtimestamp(get_epoch_time())
-        dt = current_timestamp - datetime.fromtimestamp(synapse.timestamp)
+        dt = current_timestamp - datetime.fromtimestamp(synapse.epoch_timestamp)
         priority = float(dt.total_seconds())
         bt.logging.debug(
             f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
