@@ -14,7 +14,7 @@ import torch
 from commons.data_manager import DataManager
 from commons.dataset.dataset import SeedDataManager
 from commons.dataset.hf_utils import HuggingFaceUtils
-from commons.evals import EvalUtils, log_retry_info
+from commons.evals import EvalUtils
 from commons.factory import Factory
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
@@ -31,7 +31,6 @@ from template.protocol import (
     SCORING_METHOD_PRIORITY,
 )
 from template.utils.uids import get_random_miner_uids, is_miner
-from tenacity import Retrying, RetryError, stop_after_attempt
 
 
 def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
@@ -225,15 +224,15 @@ class Validator(BaseNeuron):
             )
             return
 
-        current_time = datetime.fromtimestamp(get_epoch_time())
+        current_time = get_epoch_time()
         filtered_data = [
-            d
-            for d in data
-            if current_time - datetime.fromtimestamp(d.request.epoch_timestamp)
-            >= timedelta(hours=8)
+            d for d in data if (current_time - d.request.epoch_timestamp) >= 8 * 3600
         ]
+        bt.logging.info(
+            f"Got {len(filtered_data)} requests past deadline and ready to score"
+        )
         if not filtered_data:
-            bt.logging.debug(
+            bt.logging.warning(
                 "Skipping scoring as no ranking data has been persisted for at least 8 hours."
             )
             return
