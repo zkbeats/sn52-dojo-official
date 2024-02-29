@@ -43,7 +43,7 @@ class ModelConfig(BaseModel):
 
 class RankingRequest(bt.Synapse):
     # filled in by validator
-    epoch_timestamp: int = Field(
+    epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
         allow_mutation=False,
