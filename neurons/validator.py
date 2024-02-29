@@ -180,7 +180,7 @@ class Validator(BaseNeuron):
             for r in d.responses:
                 participant = r.axon.hotkey
                 if participant in self.hotkey_to_accuracy:
-                    bt.logging.warning(
+                    bt.logging.trace(
                         f"Participant {participant} already has an accuracy score... skipping"
                     )
                     continue
@@ -234,9 +234,8 @@ class Validator(BaseNeuron):
 
         consumed_responses = []
         for d in filtered_data:
-            ranking_result = Scoring.consensus_score(responses=d.responses)
-            ranking_result = Scoring.adjust_score(
-                ranking_result, hotkey_to_weights=self.hotkey_to_accuracy
+            ranking_result = Scoring.consensus_score(
+                responses=d.responses, hotkey_to_multiplier=self.hotkey_to_accuracy
             )
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
@@ -299,7 +298,6 @@ class Validator(BaseNeuron):
         responses: List[RankingRequest] = await self.dendrite(
             axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
-        bt.logging.info(f"Received {len(responses)} responses")
 
         valid_responses = [
             response
@@ -312,6 +310,8 @@ class Validator(BaseNeuron):
         if not len(valid_responses):
             bt.logging.warning("No valid responses received from miners.")
             return
+        else:
+            bt.logging.success(f"Received {len(valid_responses)} valid responses")
 
         response_data = DendriteQueryResponse(
             request=synapse,
