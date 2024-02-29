@@ -114,6 +114,7 @@ class Miner(BaseMinerNeuron):
                     completions=synapse.completions,
                     reward_in_dollars=0.01,
                 )
+                synapse.scoring_method = ScoringMethod.AWS_MTURK
                 await loop.run_in_executor(self.executor, task)
             else:
                 bt.logging.error("Unrecognized scoring method!")
@@ -134,7 +135,7 @@ class Miner(BaseMinerNeuron):
 
         uid = self.metagraph.hotkeys.index(hotkey)
         axon = self.metagraph.axons[uid]
-        await self.dendrite(
+        await self.dendrite.forward(
             axons=[axon],
             synapse=synapse,
             deserialize=False,

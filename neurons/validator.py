@@ -166,7 +166,9 @@ class Validator(BaseNeuron):
             f"Sending back consensus to miners for request id: {synapse.request_id}"
         )
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
-        await self.dendrite(axons=axons, synapse=synapse, deserialize=False, timeout=12)
+        await self.dendrite.forward(
+            axons=axons, synapse=synapse, deserialize=False, timeout=12
+        )
 
     async def calculate_miner_classification_accuracy(self):
         data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
@@ -209,6 +211,10 @@ class Validator(BaseNeuron):
         """While this function is triggered every X time period in AsyncIOScheduler,
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
+        if not self.axon.info().is_serving:
+            bt.logging.warning("Axon is not serving yet...")
+            return
+
         bt.logging.debug(
             f"Scheduled update score and send feedback triggered at time: {time.time()}"
         )
@@ -295,7 +301,7 @@ class Validator(BaseNeuron):
             return
 
         # The dendrite client queries the network.
-        responses: List[RankingRequest] = await self.dendrite(
+        responses: List[RankingRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
 
@@ -308,7 +314,7 @@ class Validator(BaseNeuron):
         ]
 
         if not len(valid_responses):
-            bt.logging.warning("No valid responses received from miners.")
+            bt.logging.error("No valid responses received from miners.")
             return
         else:
             bt.logging.success(f"Received {len(valid_responses)} valid responses")
@@ -348,6 +354,8 @@ class Validator(BaseNeuron):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
+        # manually always register and always sync metagraph when application starts
+        self.resync_metagraph()
         self.sync()
 
         bt.logging.info(
@@ -582,30 +590,6 @@ class Validator(BaseNeuron):
             self.device
         )
         bt.logging.debug(f"Updated scores: {self.scores}")
-
-    def save_state(self):
-        """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
-
-        # Save the state of the validator to file.
-        torch.save(
-            {
-                "step": self.step,
-                "scores": self.scores,
-                "hotkeys": self.hotkeys,
-            },
-            self.config.neuron.full_path + "/state.pt",
-        )
-
-    def load_state(self):
-        """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
-
-        # Load the state of the validator from file.
-        state = torch.load(self.config.neuron.full_path + "/state.pt")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
 
 
 async def log_validator_status():

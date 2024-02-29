@@ -56,7 +56,8 @@ class BaseMinerNeuron(BaseNeuron):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
-        # Check that miner is registered on the network.
+        # manually always register and always sync metagraph when application starts
+        self.resync_metagraph()
         self.sync()
 
         # Serve passes the axon information to the network + netuid we are hosting on.
