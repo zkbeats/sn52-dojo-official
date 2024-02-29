@@ -3,6 +3,7 @@ import os
 from typing import List, Union
 
 import bittensor as bt
+from fastapi.encoders import jsonable_encoder
 import huggingface_hub
 from dotenv import load_dotenv
 from huggingface_hub import CommitOperationAdd
@@ -70,9 +71,9 @@ class HuggingFaceUtils:
         new_data = {
             "prompt": prompt,
             # each response: {'response': '<response text>', 'metadata': {'model_name': ...}}
-            "completions": completions,
+            "completions": jsonable_encoder(completions),
             "num_completions": len(completions),
-            "best_completion": best_completion.text,
+            "best_completion": str(best_completion.text),
         }
 
         # Append new_data to the existing_data list and write it back to the file
