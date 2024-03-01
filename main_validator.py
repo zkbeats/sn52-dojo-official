@@ -10,8 +10,7 @@ from commons.api.middleware import LimitContentLengthMiddleware
 from commons.factory import Factory
 from neurons.validator import log_validator_status
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.combining import OrTrigger
-from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 
 load_dotenv()
@@ -34,24 +33,9 @@ async def main():
         job_defaults={"max_instances": 3, "misfire_grace_time": 3}
     )
 
-    every_30_min_trigger = CronTrigger(
-        minute="*/30",
-        hour="*",
-        day="*",
-        month="*",
-    )
-    hourly_trigger = CronTrigger(
-        minute=0,
-        hour="*",
-        day="*",
-        month="*",
-    )
-    daily_trigger = CronTrigger(
-        minute=0,
-        hour=0,
-        day="*",
-        month="*",
-    )
+    every_30_min_trigger = IntervalTrigger(minutes=30)
+    hourly_trigger = IntervalTrigger(minutes=0, hours=1)
+    daily_trigger = IntervalTrigger(hours=24)
 
     scheduler.add_job(validator.update_score_and_send_feedback, trigger=hourly_trigger)
     scheduler.add_job(
