@@ -23,7 +23,7 @@ class DataManager:
             with open(str(path), "rb") as file:
                 return pickle.load(file)
         except FileNotFoundError as e:
-            bt.logging.warning(f"File not found at {path}... , exception:{e}")
+            bt.logging.error(f"File not found at {path}... , exception:{e}")
             return None
         except pickle.PickleError as e:
             bt.logging.error(f"Pickle error: {e}")
@@ -43,7 +43,7 @@ class DataManager:
         try:
             with open(str(path), "wb") as file:
                 pickle.dump(data, file)
-                bt.logging.debug(f"Saved data to {path}")
+                bt.logging.success(f"Saved data to {path}")
                 return True
         except Exception as e:
             bt.logging.error(f"Failed to save data to file: {e}")
@@ -55,7 +55,7 @@ class DataManager:
             async with cls._lock:
                 with open(str(path), "wb") as file:
                     pickle.dump(data, file)
-                    bt.logging.debug(f"Saved data to {path}")
+                    bt.logging.success(f"Saved data to {path}")
                     return True
         except Exception as e:
             bt.logging.error(f"Failed to save data to file: {e}")
