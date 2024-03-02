@@ -119,7 +119,7 @@ class BaseMinerNeuron(BaseNeuron):
         if self.is_running:
             bt.logging.debug("Stopping miner in background thread.")
             self.should_exit = True
-            self.thread.join(5)
+            self.thread.join()
             self.is_running = False
             bt.logging.debug("Stopped")
 
