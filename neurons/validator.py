@@ -178,8 +178,10 @@ class Validator(BaseNeuron):
                 "Skipping classification accuracy as no ranking data found."
             )
             return
-        loop = asyncio.get_running_loop()
-        tasks = []
+
+        bt.logging.info(
+            f"Looping through {len(data)} requests to calculate miner classification accuracy"
+        )
         for d in data:
             for r in d.responses:
                 participant = r.axon.hotkey
@@ -195,18 +197,17 @@ class Validator(BaseNeuron):
                     )
                     continue
 
-                task = functools.partial(
-                    EvalUtils.classification_accuracy,
-                    scoring_method=r.scoring_method,
-                    model_config=r.model_config,
+                accuracy = await EvalUtils.classification_accuracy(
+                    scoring_method=r.scoring_method, model_config=r.model_config
                 )
-                tasks.append(loop.run_in_executor(self.executor, task))
+                if participant in self.hotkey_to_accuracy:
+                    bt.logging.warning(
+                        f"Participant {participant} already has an accuracy score... skipping"
+                    )
+                    continue
 
-        # Gather the results of the tasks
-        for task, response in zip(tasks, data):
-            participant = response.axon.hotkey
-            accuracy = await task
-            self.hotkey_to_accuracy[participant] = accuracy
+                self.hotkey_to_accuracy[participant] = accuracy
+
         return
 
     async def reset_accuracy(self):
