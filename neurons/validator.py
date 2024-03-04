@@ -42,6 +42,12 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 class Validator(BaseNeuron):
     def __init__(self):
         super(Validator, self).__init__()
+        self.should_exit: bool = False
+        self.is_running: bool = False
+        self.thread: threading.Thread = None
+        self.lock = asyncio.Lock()
+        self.hotkey_to_accuracy = defaultdict(float)
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.axon.attach(
             forward_fn=self.forward_mturk_response,
@@ -55,17 +61,10 @@ class Validator(BaseNeuron):
         bt.logging.info("Building validation weights.")
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
         self.load_state()
+        bt.logging.debug(f"Scores state: {self.scores}")
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
-
-        # Instantiate runners
-        self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
-        self.lock = asyncio.Lock()
-        self.hotkey_to_accuracy = defaultdict(float)
-        self.executor = ThreadPoolExecutor(max_workers=4)
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
@@ -183,9 +182,12 @@ class Validator(BaseNeuron):
         for d in data:
             for r in d.responses:
                 participant = r.axon.hotkey
-                if participant in self.hotkey_to_accuracy:
-                    bt.logging.trace(
-                        f"Participant {participant} already has an accuracy score... skipping"
+                if (
+                    participant in self.hotkey_to_accuracy
+                    and self.hotkey_to_accuracy[participant] > 0
+                ):
+                    bt.logging.debug(
+                        f"Participant {participant} already has an accuracy score of {self.hotkey_to_accuracy[participant]} skipping"
                     )
                     continue
 
@@ -199,11 +201,6 @@ class Validator(BaseNeuron):
                 accuracy = await EvalUtils.classification_accuracy(
                     scoring_method=r.scoring_method, model_config=r.model_config
                 )
-                if participant in self.hotkey_to_accuracy:
-                    bt.logging.warning(
-                        f"Participant {participant} already has an accuracy score... skipping"
-                    )
-                    continue
 
                 self.hotkey_to_accuracy[participant] = accuracy
 
@@ -492,14 +489,15 @@ class Validator(BaseNeuron):
         # Replace any NaN values with 0.
         normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
 
+        bt.logging.debug(f"Raw scores: {self.scores}")
         bt.logging.debug(f"normalized weights: {normalized_weights}")
         bt.logging.debug(f"normalized weights uids: {self.metagraph.uids}")
 
         if torch.count_nonzero(normalized_weights).item() == 0:
-            bt.logging.warning(
-                "All weights are zero, therefore no valid weights to set"
-            )
+            bt.logging.error("All weights are zero, therefore no valid weights to set")
             return
+
+        bt.logging.success("Some weights are non zero.... time to set them!")
 
         # Process the raw weights to final_weights via subtensor limitations.
         (
@@ -609,14 +607,19 @@ class Validator(BaseNeuron):
     def save_state(self):
         """Saves the state of the validator to a file."""
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(DataManager.validator_save(self.scores))
+        loop.run_until_complete(
+            DataManager.validator_save(self.scores, self.hotkey_to_accuracy)
+        )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         loop = asyncio.get_event_loop()
-        success, scores = loop.run_until_complete(DataManager.validator_load())
+        success, scores, hotkey_to_accuracy = loop.run_until_complete(
+            DataManager.validator_load()
+        )
         if success:
             self.scores = scores
+            self.hotkey_to_accuracy = hotkey_to_accuracy
 
 
 async def log_validator_status():
