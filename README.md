@@ -49,6 +49,7 @@
   - [Validator Scoring](#validator-scoring)
   - [Consensus \& Classification Accuracy](#consensus--classification-accuracy)
 - [Building a reward model](#building-a-reward-model)
+- [Roadmap](#roadmap)
 - [License](#license)
 
 </details>
@@ -62,25 +63,22 @@
 # Introduction
 Reinforcement Learning Human Feedback (RLHF) is based on reward models that are trained with preference datasets. These preference datasets and reward models are built by large private companies like OpenAI, Anthropic, Google, Meta, etc. While they release aligned LLMs, they don't release the Reward Model. Hence, we don't have a say in determining which responses are good or bad. _Why should big corporations have the power to decide what is good or bad?_ __Let's decentralize that power, by having a decentralized, consensus-based Reward Model.__
 
-Introducing Dojo, the Reward Modelling Subnet, where participants in this subnet are given the power to decide what is good or bad, and these results are collectively evaluated using our consensus mechanism. We also introduce the first of its kind by connecting our subnet layer to an external application layer (Amazon Mechanical Turk) to allow the subnet to access a globally available and 24/7 workforce to provide high quality human intelligence task feedback.
+Introducing the Dojo, a subnet where participants are given the power to decide what is good or bad, and these results are collectively evaluated using our consensus mechanism. We also introduce the first of its kind by connecting our subnet layer to an external application layer (Amazon Mechanical Turk) to allow the subnet to access a globally available and 24/7 workforce to provide high quality human intelligence task feedback.
 
 # Features
-<ul style="list-style-type:none; padding-left:0;">
-  <li>🤗 Open Source Reward Models</li>
-  <li>👨‍💻 Human Feedback Loop</li>
-  <li>📝 Text-based Reward Models</li>
-  <li>🖼️ Image-based Reward Models</li>
-  <li>🧧 Low minimum cost to participate</li>
-</ul>
+🤗 Open Source Reward Models<br>
+👨‍💻 Human Feedback Loop<br>
+📝 Text-based Reward Models<br>
+🧧 Low minimum cost to participate<br>
 
 # Use Cases
-Our Reward Modelling subnet provides decentralised, consensus-based Reward Modelling that allows applications to be built on top of it. One example use case is fine-tuning of Large Language Models (LLMs), where a model being fine-tuned may query our API to score multiple LLM outputs with respect to a prompt. This may also be used to compare quality of responses among different LLMs.
+Our Dojo subnet provides decentralised, consensus-based Reward Modelling that allows applications to be built on top of it. One example use case is fine-tuning of Large Language Models (LLMs), where a model being fine-tuned may query our API to score multiple LLM outputs with respect to a prompt. This may also be used to compare quality of responses among different LLMs.
 
 Other use cases include text-based and image-based evaluations like on other subnets. In each subnet, they typically need to evaluate text based prompt & responses, so each subnet has to write their own versions of these evaluations and our subnet could abstract these evaluations away and serve all of them, where the scalability is only limited by the modalities (text, image, etc.) that are being supported on this subnet.
 
 # Minimum Requirements
 - Python 3.11 and above
-- [Bittensor](https://github.com/opentensor/bittensor#install)
+- PM2
 
 ## Miner
 - 4 cores
@@ -99,7 +97,7 @@ To get started as a miner or validator, these are the common steps both a miner 
 1. setup python environment
 
 ```bash
-cd sentient-subnet/
+cd dojo-subnet/
 # create new virtual env
 python -m venv env_name 
 # activate our virtual env
@@ -115,7 +113,23 @@ source env_name/bin/activate
 pip install -r requirements.txt
 ```
 
-3. setup bittensor wallet
+3. install pm2 
+
+```bash
+apt-get update
+apt-get install -y ca-certificates curl gnupg
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+NODE_MAJOR=20
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+apt-get update
+apt-get install nodejs -y
+
+npm install -g pm2
+pm2 install pm2-logrotate
+```
+
+4. setup bittensor wallet
 ```bash
 # create new coldkey
 btcli wallet new_coldkey --wallet.name your_coldkey_name
@@ -126,7 +140,7 @@ btcli wallet new_hotkey --wallet.name your_coldkey_name
 Enter hotkey name (default):
 ```
 
-4. prepare .env file
+5. prepare .env file
 
 Copy the `.env.miner.example` or `.env.validator.example` file into a separate `.env` file. These are supposed to contain certain API keys required for your miner/validator to function as expected.
 
@@ -169,7 +183,7 @@ This guide will go through how to setup Amazon Mechanical Turk so that we can se
 
 <details>
 
-<summary>Click me for details!</summary>
+<summary><strong>Click me for details!</strong></summary>
 
 
 #### MTurk Setup
@@ -179,28 +193,33 @@ This guide will go through how to setup Amazon Mechanical Turk so that we can se
 3. Setup an IAM policy to get AWS Access Key ID and Secret
 - Go to https://console.aws.amazon.com/console
 - Use the search bar to search for "IAM" and click on the first result.
-
+- Click on "Users" in the side bar and then go to "Create User".
 <img src="./assets/iam/iam1.jpg">
 
-- Click on "Roles" in the side bar and then go to "Create Role".
+- Specify this IAM user's name, in this case I am using "lambda_mturk_role"
+<img src="./assets/iam/iam6.jpg">
 
+- Set permissions of the IAM user. Click on "Attach policies directly" and search for "AmazonMechanicalTurkFullAccess" using the search bar and select it.
+<img src="./assets/iam/iam7.jpg">
+
+- Go on to the next page and click on "Create User".
+<img src="./assets/iam/iam9.jpg">
+
+- Now that the user is created, head back to the Users section, and click on the name of the user previously created.
+<img src="./assets/iam/iam8.jpg">
+
+- Go to the "Security Credentials" tab, then click on "Create access key".
 <img src="./assets/iam/iam2.jpg">
 
-- Use the search bar to search for "Lambda" and set that as your use case.
-
-<img src="./assets/iam/iam3.jpg">
-
-- Use the search bar to search for the "AmazonMechanicalTurkFullAccess" policy and attach it to your role.
-
+- Select "Application running outside AWS" and set a description to something memorable for future reference. In this case I am using "lambda_mturk_role for subnet" as the description. Then click on "Create access key".
+<img src="./assets/iam/iam5.jpg">
 <img src="./assets/iam/iam4.jpg">
-
-- Set your role name, in this case I have set it to "lambda_mturk_role", then click on "Create Role". 
-
-<img src="./assets/iam/iam5.jpeg">
-
-- Upon successful creation you should see the following message.
-
-<img src="./assets/iam/iam6.jpg">
+- Now get the access key credentials and copy it over to your `.env` file!
+```bash
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_KEY=
+```
+<img src="./assets/iam/iam3.jpg">
 
 <br>
 
@@ -345,9 +364,9 @@ As a miner, you will be evaluated on the classification accuracy on a set of hum
 Coming soon...
 
 # Roadmap
-- 🤖 Integrations with other feedback interfaces using basic.ai, scale, argilla
-- 🔊 Audio-based reward modelling
 - 🌏 Release of API service
+- 🖼️ Image-based Reward Models
+- 🤖 Integrations with other feedback interfaces using basic.ai, scale, argilla
 - 🤗 Release of dataset from consensus
 
 # License
