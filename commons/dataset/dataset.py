@@ -4,6 +4,7 @@ import random
 import bittensor as bt
 
 from datasets import load_dataset
+from commons.dataset.hf_utils import HF_REPO_ID
 from commons.factory import Factory
 
 
@@ -157,7 +158,7 @@ class EvalDatasetManager:
 # }
 
 # TODO @dev change name to actual datset name
-seed_dataset_name = "prooompt/test_dataset"
+seed_dataset_name = HF_REPO_ID
 
 
 def get_seed_dataset():
