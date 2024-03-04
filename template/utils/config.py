@@ -113,7 +113,7 @@ def add_args(parser):
             "--evaluation.num_batches",
             type=int,
             help="Number of batches from dataset to use when evaluating.",
-            default=20,
+            default=10,
         )
 
         parser.add_argument(
