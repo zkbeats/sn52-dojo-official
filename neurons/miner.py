@@ -89,7 +89,7 @@ class Miner(BaseMinerNeuron):
                             for item in scores_response.scores
                             if item.completion_id == completion.cid
                         ),
-                        [None],
+                        None,
                     )
 
                     if matching_score_item:
