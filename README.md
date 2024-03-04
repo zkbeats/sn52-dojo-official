@@ -82,8 +82,8 @@ Other use cases include text-based and image-based evaluations like on other sub
 
 ## Miner
 - 4 cores
-- 16 GB RAM
-- 150GB SSD
+- 8 GB RAM
+- 32GB SSD
 
 ## Validator
 - 8 cores
@@ -343,11 +343,18 @@ To do this you will need to link your AWS account to the request sandbox at http
 
 ## Validating
 
-1. Visit https://huggingface.co/settings/tokens to generate a new token if you haven't done so already, and place this in your `.env` file from earlier.
+1. Visit https://huggingface.co/settings/tokens to generate a new token if you haven't done so already, and place this in the `HF_TOKEN` your `.env` file from earlier.
 
-To start the validator, run the following command
+To start the validator, you are __highly encouraged__ to use the `run.sh` script as the validator code will receive updates frequently.
 ```bash
-python main_validator.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey --logging.debug --axon.port 9500 --neuron.type validator
+pm2 start run.sh --name dojo_validator_autoupdate -- --netuid 1 --subtensor.network finney --wallet.name your_coldkey \
+--wallet.hotkey your_hotkey --logging.debug --axon.port 9500 --neuron.type validator --hf_dataset_contrib.off
+```
+
+If you do not wish to use the bash script, you may run the following:
+```bash
+python main_validator.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
+--logging.debug --axon.port 9500 --neuron.type validator --hf_dataset_contrib.off
 ```
 
 # Types of Requests
