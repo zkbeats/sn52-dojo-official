@@ -151,11 +151,18 @@ Copy the `.env.miner.example` or `.env.validator.example` file into a separate `
 To start the miner, run one of the following command(s):
 ```bash
 # using huggingface model
-python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "hf_model" --model_name "OpenAssistant/reward-model-deberta-v3-large-v2"
+python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
+--logging.debug --axon.port 9599 --neuron.type miner --scoring_method "hf_model" \
+--model_name "OpenAssistant/reward-model-deberta-v3-large-v2"
+
 # using llm api 
-python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "llm_api" --model_name "mistralai/Mixtral-8x7B-Instruct-v0.1"
+python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
+--logging.debug --axon.port 9599 --neuron.type miner --scoring_method "llm_api" \
+--model_name "mistralai/Mixtral-8x7B-Instruct-v0.1"
+
 # using aws mturk, --model_name is not used
-python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "aws_mturk"
+python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
+--logging.debug --axon.port 9599 --neuron.type miner --scoring_method "aws_mturk"
 ```
 
 When providing scoring for prompt & completions, there are currently 3 methods:
@@ -211,10 +218,13 @@ This guide will go through how to setup Amazon Mechanical Turk so that we can se
 - Go to the "Security Credentials" tab, then click on "Create access key".
 <img src="./assets/iam/iam2.jpg">
 
-- Select "Application running outside AWS" and set a description to something memorable for future reference. In this case I am using "lambda_mturk_role for subnet" as the description. Then click on "Create access key".
+- Select "Application running outside AWS". 
 <img src="./assets/iam/iam5.jpg">
+
+- Set a description to something memorable for future reference. In this case I am using "lambda_mturk_role for subnet" as the description. Then click on "Create access key".
 <img src="./assets/iam/iam4.jpg">
-- Now get the access key credentials and copy it over to your `.env` file!
+
+- Now get the access key credentials and copy it over to your `.env` file for the respective variables.
 ```bash
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_KEY=
@@ -307,7 +317,7 @@ MTURK_ENDPOINT_URL="https://mturk-requester-sandbox.us-east-1.amazonaws.com"
 
 <font size="6"> **You are highly encouraged to try out requests on the sandbox environment before trying it out on the production environment!**</font> 
 
-To do this you will need to link your AWS account to the request sandbox at https://requestersandbox.mturk.com, after that try running `scripts/test_aws_mturk.py`
+To do this you will need to link your AWS account to the request sandbox at https://requestersandbox.mturk.com, after that try running `python scripts/test_aws_mturk.py --neuron.type miner --aws_mturk_environment sandbox`
 
 9. Go back to SNS, and set SNS to be a trigger for the Lambda function. Click on "Add Trigger" and select "SNS" from the dropdown. Search for the SNS topic name.
 <!-- # TODO remove the screenshot with ARN inside, and run bfg repo cleaner -->
@@ -320,7 +330,7 @@ To do this you will need to link your AWS account to the request sandbox at http
 10. When publishing MTurk tasks in production, you will definitely hit an error. This is because the monthly spending limit by sending a request to them at https://support.aws.amazon.com/#/contacts/aws-mechanical-turk, asking to raise the monthly spending limit on your account.
 
 
-<img src="./assets/mturk_prod_error.jpg">
+<!-- <img src="./assets/mturk_prod_error.jpg"> -->
 
 <br>
 <blockquote class="callout callout_default" theme="🥳">
