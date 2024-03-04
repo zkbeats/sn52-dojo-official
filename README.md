@@ -320,7 +320,6 @@ MTURK_ENDPOINT_URL="https://mturk-requester-sandbox.us-east-1.amazonaws.com"
 To do this you will need to link your AWS account to the request sandbox at https://requestersandbox.mturk.com, after that try running `python scripts/test_aws_mturk.py --neuron.type miner --aws_mturk_environment sandbox`
 
 9. Go back to SNS, and set SNS to be a trigger for the Lambda function. Click on "Add Trigger" and select "SNS" from the dropdown. Search for the SNS topic name.
-<!-- # TODO remove the screenshot with ARN inside, and run bfg repo cleaner -->
 <img src="./assets/lambda/lambda8.jpg">
 <img src="./assets/lambda/lambda9.jpg">
 <img src="./assets/lambda/lambda10.jpg">
@@ -371,7 +370,7 @@ python main_validator.py --netuid 1 --subtensor.network finney --wallet.name you
 There may be delays in terms of responses from Amazon MTurk workers, so validators have to serve axons as well in order to receive forwarded MTurk responses from miners once they are completed. This breaks the traditional way of only validators calling miners.
 
 ## Validator Scoring
-Due to the need to provide ample time for human feedback, the deadline for each `RankingRequest` is currently set to 8 hours. Only after the deadline has been passed, validators will score all participants responses. This deadline is generous and provides plenty of time for the feedback loop.
+Due to the need to provide ample time for human feedback, the deadline for each `RankingRequest` is currently set to 4 hours. Only after the deadline has been passed, validators will score all participants responses. This deadline is generous and provides plenty of time for the feedback loop.
 
 ## Consensus & Classification Accuracy
 As a miner, you will be evaluated on the classification accuracy on a set of human preference datasets, and this will act as a multiplier towards your consensus score, thus to gain more emissions as a miner you will need to perform better in terms of classification accuracy on some human preference datasets. This is done to incentivise miners to create better reward models because scoring initially uses Spearman correlation. Thus if someone has a better reward model but steers away from consensus, they may be penalised. We want to incentivise people to build better reward models. These classification scores get reset every 24 hours.

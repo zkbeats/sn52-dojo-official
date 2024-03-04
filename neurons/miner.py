@@ -175,14 +175,7 @@ class Miner(BaseMinerNeuron):
         if is_miner(self.metagraph, caller_uid):
             return True, "Not a validator"
 
-        # TODO @dev INCREASE BEFORE LAUNCH
-        # TODO @dev INCREASE BEFORE LAUNCH
-        # TODO @dev INCREASE BEFORE LAUNCH
-        # TODO @dev INCREASE BEFORE LAUNCH
-        # TODO @dev INCREASE BEFORE LAUNCH
-        # TODO @dev INCREASE BEFORE LAUNCH
-        # MIN_VALIDATOR_STAKE = 20_000
-        MIN_VALIDATOR_STAKE = 500
+        MIN_VALIDATOR_STAKE = 20_000
         if validator_neuron.stake.tao < float(MIN_VALIDATOR_STAKE):
             bt.logging.warning(
                 f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
