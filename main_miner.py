@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from commons.api.human_feedback_route import human_feedback_router
-from commons.api.middleware import LimitContentLengthMiddleware
+from commons.api.middleware import IPFilterMiddleware, LimitContentLengthMiddleware
 from commons.factory import Factory
 from neurons.miner import log_miner_status
 
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(LimitContentLengthMiddleware)
+app.add_middleware(IPFilterMiddleware)
 app.include_router(human_feedback_router)
 
 
