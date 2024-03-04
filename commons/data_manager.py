@@ -72,7 +72,6 @@ class DataManager:
             if not path.exists():
                 path.parent.mkdir(parents=True, exist_ok=True)
 
-            # TODO @dev use without lock methods and lock directly hjere
             data = await DataManager._load_without_lock(path=path)
             if not data:
                 # store initial data

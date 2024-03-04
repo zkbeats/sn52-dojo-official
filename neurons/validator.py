@@ -233,14 +233,12 @@ class Validator(BaseNeuron):
             return
 
         current_time = get_epoch_time()
-        # TODO @dev 5 minutes for local testing
-        SECONDS_IN_8H = 8 * 3600
-        SECONDS_IN_5M = 300
+        SECONDS_IN_4H = 4 * 3600
         filtered_data = [
             d
             for d in data
             # if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_8H
-            if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_5M
+            if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_4H
         ]
         bt.logging.info(
             f"Got {len(filtered_data)} requests past deadline and ready to score"
@@ -376,8 +374,6 @@ class Validator(BaseNeuron):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        # TODO add retry mechanism for axon serve rate limit
-
         serve_success = serve_axon(self.subtensor, self.axon, self.config)
         if serve_success:
             bt.logging.success("Successfully served axon for validator!")
@@ -397,11 +393,7 @@ class Validator(BaseNeuron):
             while True:
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # self.loop.run_until_complete(self.send_request())
-                # # TODO @dev fix context issues
                 await self.send_request()
-                # loop = asyncio.get_event_loop()
-                # await loop.run_in_executor(self.executor, self.send_request())
 
                 # # Check if we should exit.
                 if self.should_exit:
