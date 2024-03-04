@@ -577,7 +577,6 @@ class Validator(BaseNeuron):
                 continue
 
             # multiply by the classification accuracy
-            # TODO @dev handle case
             accuracy = self.hotkey_to_accuracy[key]
             if accuracy == 0:
                 raise ValueError(
