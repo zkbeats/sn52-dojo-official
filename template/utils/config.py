@@ -22,8 +22,6 @@ import argparse
 import bittensor as bt
 
 from commons.reward_model.models import ModelZoo
-from commons.scoring import Scoring
-from commons.utils import get_device
 
 
 def check_config(config: bt.config):
@@ -105,13 +103,17 @@ def add_args(parser):
             help="Base path to store data to.",
             default=Path.cwd(),
         )
-
+        parser.add_argument(
+            "--hf_dataset_contrib.off",
+            action="store_true",
+            help="Whether or not to contribute to the Huggingface dataset.",
+            default=False,
+        )
         parser.add_argument(
             "--evaluation.num_batches",
             type=int,
             help="Number of batches from dataset to use when evaluating.",
-            # NOTE @dev this is a little low, but shall leave it low for now and increase in the future
-            default=20,
+            default=10,
         )
 
         parser.add_argument(

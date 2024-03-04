@@ -8,8 +8,40 @@ from typing import Tuple
 import bittensor as bt
 import jsonref
 import requests
+from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 import torch
 from pydantic import BaseModel
+
+
+def log_retry_info(retry_state):
+    """Meant to be used with tenacity's before_sleep callback"""
+    bt.logging.warning(
+        f"Retry attempt {retry_state.attempt_number} failed with exception: {retry_state.outcome.exception()}",
+    )
+
+
+def serve_axon(
+    subtensor: bt.subtensor, axon: bt.axon, config: bt.config, max_attempts: int = 10
+) -> bool:
+    """A wrapper around the underlying self.axon.serve(...) call with retries"""
+    try:
+        for attempt in Retrying(
+            stop=stop_after_attempt(max_attempts),
+            before_sleep=log_retry_info,
+            wait=wait_exponential_jitter(initial=6, max=24, jitter=1),
+        ):
+            with attempt:
+                serve_success = subtensor.serve_axon(netuid=config.netuid, axon=axon)
+                if serve_success:
+                    return True
+
+                raise Exception(
+                    "Failed to serve axon, probaby due to many miners/validators trying to serve in this period."
+                )
+    except RetryError:
+        bt.logging.error(f"Failed to serve axon after {max_attempts} attempts.")
+        pass
+    return False
 
 
 def initialise(

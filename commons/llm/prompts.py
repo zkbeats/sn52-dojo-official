@@ -61,7 +61,7 @@ class PromptBuilder:
             prompt=prompt,
             completions_prompt="\n".join(completion_prompts),
         )
-        bt.logging.debug(f"User prompt: {formatted_prompt}")
+        # bt.logging.debug(f"User prompt: {formatted_prompt}")
         return formatted_prompt
 
     @staticmethod
@@ -69,7 +69,7 @@ class PromptBuilder:
         formatted_prompt = system_score_completion_prompt.format(
             range_lower=score_range.lower, range_upper=score_range.upper
         )
-        bt.logging.debug(f"System prompt: {formatted_prompt}")
+        # bt.logging.debug(f"System prompt: {formatted_prompt}")
         return formatted_prompt
 
     @staticmethod
@@ -90,5 +90,5 @@ class PromptBuilder:
             chosen_idx=chosen_idx,
             rejected_idx=rejected_idx,
         )
-        bt.logging.debug(f"User prompt: {formatted_prompt}")
+        # bt.logging.debug(f"User prompt: {formatted_prompt}")
         return formatted_prompt

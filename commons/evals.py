@@ -1,5 +1,6 @@
 import asyncio
 import torch
+from concurrent.futures import ThreadPoolExecutor
 from commons.dataset.dataset import EvalDatasetManager
 from commons.factory import Factory
 from commons.llm.openai_proxy import Provider
@@ -17,26 +18,48 @@ from tenacity import (
 
 import bittensor as bt
 
-from commons.utils import get_device
+from commons.utils import get_device, log_retry_info
 from template.protocol import ModelConfig, ScoringMethod
 
 
 class EvalUtils:
-    @staticmethod
+    _executor = ThreadPoolExecutor(max_workers=4)
+
+    @classmethod
     async def classification_accuracy(
+        cls,
         scoring_method: ScoringMethod,
         model_config: ModelConfig = None,
     ) -> float:
+        """Non-blocking method to calculate classification accuracy using the specified scoring method."""
         total_accuracy = 0
         num_batches = Factory.get_config().evaluation.num_batches
+
+        # get or create event loop
+        loop = None
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        assert loop is not None
+
         for _ in range(num_batches):
             batch_human_preference = EvalDatasetManager.get_batch()
             if scoring_method == ScoringMethod.HF_MODEL:
                 device = get_device()
                 model = get_cached_model(model_config.model_name).to(device)
                 tokenizer = get_cached_tokenizer(model_config.model_name)
-                batch_accuracy = hf_classify_accuracy(
-                    batch_human_preference, model, tokenizer, device
+                # batch_accuracy = hf_classify_accuracy(
+                #     batch_human_preference, model, tokenizer, device
+                # )
+                # NOTE here we will need to run in executor since the model is not async
+                batch_accuracy = await loop.run_in_executor(
+                    cls._executor,
+                    hf_classify_accuracy,
+                    batch_human_preference,
+                    model,
+                    tokenizer,
+                    device,
                 )
 
             elif scoring_method == ScoringMethod.LLM_API:
@@ -44,7 +67,6 @@ class EvalUtils:
                     batch_human_preference,
                     model_config=model_config,
                 )
-                pass
 
             total_accuracy += batch_accuracy
         accuracy = total_accuracy / num_batches
@@ -79,13 +101,6 @@ def hf_classify_accuracy(batch, model, tokenizer, device):
     accuracy = total_chosen / len(batch)
     bt.logging.info(f"Accuracy: {accuracy}")
     return accuracy
-
-
-def log_retry_info(retry_state):
-    """Meant to be used with tenaicty's before_sleep callback"""
-    bt.logging.warning(
-        f"Retry attempt {retry_state.attempt_number} failed with exception: {retry_state.outcome.exception()}",
-    )
 
 
 async def llm_classify_accuracy(

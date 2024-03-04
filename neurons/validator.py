@@ -1,10 +1,12 @@
 import asyncio
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+import functools
 import threading
 import time
 from traceback import print_exception
+import traceback
 from typing import List, Tuple
-from datetime import datetime, timedelta
 import copy
 from torch.nn import functional as F
 
@@ -13,11 +15,13 @@ import numpy as np
 import torch
 from commons.data_manager import DataManager
 from commons.dataset.dataset import SeedDataManager
+from commons.dataset.hf_utils import HuggingFaceUtils
 from commons.evals import EvalUtils
+from commons.factory import Factory
 from commons.objects import DendriteQueryResponse
 from commons.scoring import Scoring
 
-from commons.utils import get_epoch_time, get_new_uuid
+from commons.utils import get_epoch_time, get_new_uuid, serve_axon
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     Completion,
@@ -28,7 +32,7 @@ from template.protocol import (
     ScoringMethod,
     SCORING_METHOD_PRIORITY,
 )
-from template.utils.uids import get_random_miner_uids
+from template.utils.uids import get_random_miner_uids, is_miner
 
 
 def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
@@ -38,36 +42,29 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 class Validator(BaseNeuron):
     def __init__(self):
         super(Validator, self).__init__()
+        self.should_exit: bool = False
+        self.is_running: bool = False
+        self.thread: threading.Thread = None
+        self.lock = asyncio.Lock()
+        self.hotkey_to_accuracy = defaultdict(float)
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.axon.attach(
             forward_fn=self.forward_mturk_response,
             blacklist_fn=self.blacklist_mturk_response,
         )
 
-        ##### FROM BaseValidatorNeuron ########################################
-        # Save a copy of the hotkeys to local memory.
-        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
+        self.load_state()
+        bt.logging.debug(f"Scores state: {self.scores}")
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
-
-        # Create asyncio event loop to manage async tasks.
-        self.loop = asyncio.get_event_loop()
-
-        # Instantiate runners
-        self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
-        self.lock = asyncio.Lock()
-        self.moving_averaged_scores = None
-        self.hotkey_to_accuracy = defaultdict(float)
-        # self.lock = asyncio.Lock()
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
@@ -80,8 +77,7 @@ class Validator(BaseNeuron):
             return True, "Unrecognized hotkey"
 
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
-        if neuron.validator_permit:
+        if not is_miner(self.metagraph, caller_uid):
             bt.logging.warning(
                 f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
             )
@@ -160,11 +156,17 @@ class Validator(BaseNeuron):
 
     async def send_consensus(self, synapse: RankingResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
-        bt.logging.debug(
-            f"Sending back consensus to miners for request id: {synapse.request_id}"
-        )
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
-        await self.dendrite(axons=axons, synapse=synapse, deserialize=False, timeout=12)
+        if not axons:
+            bt.logging.warning("No axons to send consensus to... skipping")
+        else:
+            bt.logging.debug(
+                f"Sending back consensus to miners for request id: {synapse.request_id}"
+            )
+
+        await self.dendrite.forward(
+            axons=axons, synapse=synapse, deserialize=False, timeout=12
+        )
 
     async def calculate_miner_classification_accuracy(self):
         data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
@@ -174,12 +176,18 @@ class Validator(BaseNeuron):
             )
             return
 
+        bt.logging.info(
+            f"Looping through {len(data)} requests to calculate miner classification accuracy"
+        )
         for d in data:
             for r in d.responses:
                 participant = r.axon.hotkey
-                if participant in self.hotkey_to_accuracy:
-                    bt.logging.warning(
-                        f"Participant {participant} already has an accuracy score... skipping"
+                if (
+                    participant in self.hotkey_to_accuracy
+                    and self.hotkey_to_accuracy[participant] > 0
+                ):
+                    bt.logging.debug(
+                        f"Participant {participant} already has an accuracy score of {self.hotkey_to_accuracy[participant]} skipping"
                     )
                     continue
 
@@ -189,10 +197,13 @@ class Validator(BaseNeuron):
                     )
                     continue
 
+                # TODO @dev ensure that different miners get the same data
                 accuracy = await EvalUtils.classification_accuracy(
                     scoring_method=r.scoring_method, model_config=r.model_config
                 )
+
                 self.hotkey_to_accuracy[participant] = accuracy
+
         return
 
     async def reset_accuracy(self):
@@ -207,6 +218,10 @@ class Validator(BaseNeuron):
         """While this function is triggered every X time period in AsyncIOScheduler,
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
+        if not self.axon.info().is_serving:
+            bt.logging.warning("Axon is not serving yet...")
+            return
+
         bt.logging.debug(
             f"Scheduled update score and send feedback triggered at time: {time.time()}"
         )
@@ -217,24 +232,27 @@ class Validator(BaseNeuron):
             )
             return
 
-        current_time = datetime.fromtimestamp(get_epoch_time())
+        current_time = get_epoch_time()
+        SECONDS_IN_4H = 4 * 3600
         filtered_data = [
             d
             for d in data
-            if current_time - datetime.fromtimestamp(d.request.epoch_timestamp)
-            >= timedelta(hours=8)
+            # if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_8H
+            if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_4H
         ]
+        bt.logging.info(
+            f"Got {len(filtered_data)} requests past deadline and ready to score"
+        )
         if not filtered_data:
-            bt.logging.debug(
+            bt.logging.warning(
                 "Skipping scoring as no ranking data has been persisted for at least 8 hours."
             )
             return
 
         consumed_responses = []
         for d in filtered_data:
-            ranking_result = Scoring.consensus_score(responses=d.responses)
-            ranking_result = Scoring.adjust_score(
-                ranking_result, hotkey_to_weights=self.hotkey_to_accuracy
+            ranking_result = Scoring.consensus_score(
+                responses=d.responses, hotkey_to_multiplier=self.hotkey_to_accuracy
             )
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
             self.update_scores(ranking_result.hotkey_to_score)
@@ -244,6 +262,24 @@ class Validator(BaseNeuron):
             )
             await asyncio.sleep(1)
             consumed_responses.append(d)
+
+            is_contrib_disabled = Factory.get_config().hf_dataset_contrib.off
+
+            if not is_contrib_disabled:
+                prompt = d.request.prompt
+                completions = d.request.completions
+                consensus_scores = [None] * len(completions)
+                for i in range(len(completions)):
+                    consensus_score = ranking_result.cid_to_consensus.get(
+                        completions[i].cid, None
+                    )
+                    if not consensus_score:
+                        continue
+                    consensus_scores[i] = consensus_score
+
+                HuggingFaceUtils.append_data(
+                    prompt, completions, consensus_scores, self.wallet
+                )
 
         # once we have scored certain responses, just remove them
         await DataManager.remove_responses(consumed_responses)
@@ -276,10 +312,9 @@ class Validator(BaseNeuron):
             return
 
         # The dendrite client queries the network.
-        responses: List[RankingRequest] = await self.dendrite(
+        responses: List[RankingRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
-        bt.logging.info(f"Received responses: {responses}")
 
         valid_responses = [
             response
@@ -290,8 +325,10 @@ class Validator(BaseNeuron):
         ]
 
         if not len(valid_responses):
-            bt.logging.warning("No valid responses received from miners.")
+            bt.logging.error("No valid responses received from miners.")
             return
+        else:
+            bt.logging.success(f"Received {len(valid_responses)} valid responses")
 
         response_data = DendriteQueryResponse(
             request=synapse,
@@ -307,7 +344,7 @@ class Validator(BaseNeuron):
     #     ]
     #     await asyncio.gather(*coroutines)
 
-    def run(self):
+    async def run(self):
         """
         Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
 
@@ -328,6 +365,7 @@ class Validator(BaseNeuron):
             Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
         """
 
+        # manually always register and always sync metagraph when application starts
         self.sync()
 
         bt.logging.info(
@@ -336,7 +374,13 @@ class Validator(BaseNeuron):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        serve_success = serve_axon(self.subtensor, self.axon, self.config)
+        if serve_success:
+            bt.logging.success("Successfully served axon for validator!")
+        else:
+            bt.logging.error("Failed to serve axon for validator, exiting.")
+            exit()
+
         self.axon.start()
         bt.logging.info(
             f"Serving validator axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
@@ -349,18 +393,18 @@ class Validator(BaseNeuron):
             while True:
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                # Run multiple forwards concurrently.
-                self.loop.run_until_complete(self.send_request())
+                await self.send_request()
 
                 # # Check if we should exit.
                 if self.should_exit:
+                    bt.logging.info("Validator should stop...")
                     break
 
                 # Sync metagraph and potentially set weights.
                 self.sync()
 
                 self.step += 1
-                time.sleep(30)
+                await asyncio.sleep(24)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -373,18 +417,18 @@ class Validator(BaseNeuron):
             bt.logging.error("Error during validation", str(err))
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
 
-    def run_in_background_thread(self):
-        """
-        Starts the validator's operations in a background thread upon entering the context.
-        This method facilitates the use of the validator in a 'with' statement.
-        """
-        if not self.is_running:
-            bt.logging.debug("Starting validator in background thread.")
-            self.should_exit = False
-            self.thread = threading.Thread(target=self.run, daemon=True)
-            self.thread.start()
-            self.is_running = True
-            bt.logging.debug("Started")
+    # def run_in_background_thread(self):
+    #     """
+    #     Starts the validator's operations in a background thread upon entering the context.
+    #     This method facilitates the use of the validator in a 'with' statement.
+    #     """
+    #     if not self.is_running:
+    #         bt.logging.debug("Starting validator in background thread.")
+    #         self.should_exit = False
+    #         self.thread = threading.Thread(target=self.run, daemon=True)
+    #         self.thread.start()
+    #         self.is_running = True
+    #         bt.logging.debug("Started")
 
     # def stop_run_thread(self):
     #     """
@@ -397,29 +441,29 @@ class Validator(BaseNeuron):
     #         self.is_running = False
     #         bt.logging.debug("Stopped")
 
-    def __enter__(self):
-        self.run_in_background_thread()
-        return self
+    # def __enter__(self):
+    #     self.run_in_background_thread()
+    #     return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        """
-        Stops the validator's background operations upon exiting the context.
-        This method facilitates the use of the validator in a 'with' statement.
+    # def __exit__(self, exc_type, exc_value, traceback):
+    #     """
+    #     Stops the validator's background operations upon exiting the context.
+    #     This method facilitates the use of the validator in a 'with' statement.
 
-        Args:
-            exc_type: The type of the exception that caused the context to be exited.
-                      None if the context was exited without an exception.
-            exc_value: The instance of the exception that caused the context to be exited.
-                       None if the context was exited without an exception.
-            traceback: A traceback object encoding the stack trace.
-                       None if the context was exited without an exception.
-        """
-        if self.is_running:
-            bt.logging.debug("Stopping validator in background thread.")
-            self.should_exit = True
-            self.thread.join(5)
-            self.is_running = False
-            bt.logging.debug("Stopped")
+    #     Args:
+    #         exc_type: The type of the exception that caused the context to be exited.
+    #                   None if the context was exited without an exception.
+    #         exc_value: The instance of the exception that caused the context to be exited.
+    #                    None if the context was exited without an exception.
+    #         traceback: A traceback object encoding the stack trace.
+    #                    None if the context was exited without an exception.
+    #     """
+    #     if self.is_running:
+    #         bt.logging.debug("Stopping validator in background thread.")
+    #         self.should_exit = True
+    #         self.thread.join()
+    #         self.is_running = False
+    #         bt.logging.debug("Stopped")
 
     def set_weights(self):
         """
@@ -432,46 +476,34 @@ class Validator(BaseNeuron):
             bt.logging.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
-        if self.moving_averaged_scores is None:
-            self.moving_averaged_scores = self.scores.clone().detach()
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
-        raw_weights = F.normalize(self.moving_averaged_scores, p=1, dim=0)
-        if torch.all(raw_weights == 0):
-            bt.logging.warning(
-                "All weights are zero, therefore no valid weights to set"
-            )
+        normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
+
+        bt.logging.debug(f"Raw scores: {self.scores}")
+        bt.logging.debug(f"normalized weights: {normalized_weights}")
+        bt.logging.debug(f"normalized weights uids: {self.metagraph.uids}")
+
+        if torch.count_nonzero(normalized_weights).item() == 0:
+            bt.logging.error("All weights are zero, therefore no valid weights to set")
             return
 
-        bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
+        bt.logging.success("Some weights are non zero.... time to set them!")
+
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
             processed_weights,
         ) = bt.utils.weight_utils.process_weights_for_netuid(
             uids=self.metagraph.uids.to("cpu"),
-            weights=raw_weights.to("cpu"),
+            weights=normalized_weights.to("cpu"),
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug("processed_weights", processed_weights)
-        bt.logging.debug("processed_weight_uids", processed_weight_uids)
-
-        # # TODO remove call because this is already inside of nested call inside
-        # of set_weights_extrinsic() function
-
-        # # Convert to uint16 weights and uids.
-        # (
-        #     uint_uids,
-        #     uint_weights,
-        # ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
-        #     uids=processed_weight_uids, weights=processed_weights
-        # )
-        # bt.logging.debug("uint_weights", uint_weights)
-        # bt.logging.debug("uint_uids", uint_uids)
+        bt.logging.debug(f"processed weights {processed_weights}")
+        bt.logging.debug(f"processed weights uids {processed_weight_uids}")
 
         # Set the weights on chain via our subtensor connection.
         result = self.subtensor.set_weights(
@@ -491,8 +523,6 @@ class Validator(BaseNeuron):
 
     def resync_metagraph(self):
         """Sync the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
-        bt.logging.info("checking if we need to resync metagraph...")
-
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
 
@@ -502,10 +532,10 @@ class Validator(BaseNeuron):
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
-            bt.logging.info("Metagraph unchanged, skipping resync...")
+            bt.logging.info("Metagraph unchanged")
             return
 
-        bt.logging.info("Metagraph updated, attempting resync...")
+        bt.logging.info("Metagraph updated")
         # hotkey has been replaced, so we reset score
         preserved_uids = [
             uid
@@ -520,7 +550,6 @@ class Validator(BaseNeuron):
 
         # Update our states
         self.scores = updated_scores
-        self.hotkeys = self.metagraph.hotkeys
 
     def update_scores(self, hotkey_to_scores):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
@@ -532,19 +561,30 @@ class Validator(BaseNeuron):
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
-        rewards = torch.zeros((len(self.hotkeys),))
+        rewards = torch.zeros((len(self.metagraph.axons),))
+        neuron_hotkeys: List[str] = [neuron.hotkey for neuron in self.metagraph.neurons]
         for index, (key, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
             if nan_value_indices[index]:
                 rewards[key] = 0.0
             # search metagraph for hotkey and grab uid
-            uid = self.hotkeys.index(key)
+            try:
+                uid = neuron_hotkeys.index(key)
+            except ValueError:
+                bt.logging.warning(
+                    "Old hotkey found from previous metagraph, skip setting weights"
+                )
+                continue
 
             # multiply by the classification accuracy
             # TODO @dev handle case
-            if (accuracy := self.hotkey_to_accuracy[key]) and accuracy == 0.0:
-                bt.logging.warning(f"Classification accuracy for hotkey {key} is 0")
-
+            accuracy = self.hotkey_to_accuracy[key]
+            if accuracy == 0:
+                raise ValueError(
+                    f"Accuracy for hotkey {key} is 0, waiting for accuracy to be calculated first."
+                )
+            bt.logging.debug(f"Accuracy for hotkey {key} is {accuracy}")
+            bt.logging.debug(f"Pre-multiplier score for hotkey {key} is {value}")
             rewards[uid] = value * accuracy
         bt.logging.debug(f"Rewards: {rewards}")
 
@@ -558,27 +598,20 @@ class Validator(BaseNeuron):
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
-
-        # Save the state of the validator to file.
-        torch.save(
-            {
-                "step": self.step,
-                "scores": self.scores,
-                "hotkeys": self.hotkeys,
-            },
-            self.config.neuron.full_path + "/state.pt",
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(
+            DataManager.validator_save(self.scores, self.hotkey_to_accuracy)
         )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
-
-        # Load the state of the validator from file.
-        state = torch.load(self.config.neuron.full_path + "/state.pt")
-        self.step = state["step"]
-        self.scores = state["scores"]
-        self.hotkeys = state["hotkeys"]
+        loop = asyncio.get_event_loop()
+        success, scores, hotkey_to_accuracy = loop.run_until_complete(
+            DataManager.validator_load()
+        )
+        if success:
+            self.scores = scores
+            self.hotkey_to_accuracy = hotkey_to_accuracy
 
 
 async def log_validator_status():

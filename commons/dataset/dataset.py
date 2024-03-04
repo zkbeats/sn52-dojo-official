@@ -3,10 +3,9 @@ from typing import Dict, Iterable, List, Tuple
 import random
 import bittensor as bt
 
-from datasets import load_dataset, interleave_datasets
+from datasets import load_dataset
 from commons.factory import Factory
 
-from template.protocol import Completion, RankingRequest
 
 seed = 42
 

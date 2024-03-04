@@ -74,14 +74,15 @@ class Scoring:
                 continue
 
             if response.scoring_method == ScoringMethod.AWS_MTURK:
-                # TODO @dev verify this so that there are no work arounds
                 correlations[i] *= 1.2
 
         hotkeys = [r.axon.hotkey for r in responses]
         return hotkeys, correlations, cid_to_average
 
     @staticmethod
-    def consensus_score(responses: List[RankingRequest]):
+    def consensus_score(
+        responses: List[RankingRequest], hotkey_to_multiplier: Dict[str, float]
+    ):
         """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.
         """
@@ -96,35 +97,27 @@ class Scoring:
         # scale values in the range [-1, 1] to [0, 1]
         spearman_correlations = 0.5 * (np.array(spearman_correlations) + 1)
 
+        hotkey_to_score = dict(zip(hotkeys, spearman_correlations.tolist()))
+        for hotkey, weight in hotkey_to_multiplier.items():
+            if hotkey not in hotkey_to_score:
+                bt.logging.trace(
+                    f"Hotkey {hotkey} in multiplier dict not found in {hotkey_to_score.keys()=}"
+                )
+                continue
+
+            hotkey_to_score[hotkey] *= weight
+
+        scores = torch.tensor(list(hotkey_to_score.values()))
+        # ensure sum == 1
+        scores = F.softmax(scores, dim=0)
+
+        hotkey_to_adjusted_score = dict(zip(hotkey_to_score.keys(), scores))
+
         # store in synapse to be forwarded to miners
         ranking_result = RankingResult(
             request_id=responses[0].request_id,
             cid_to_consensus=cid_to_average,
-            hotkey_to_score=dict(zip(hotkeys, spearman_correlations.tolist())),
-        )
-
-        return ranking_result
-
-    @staticmethod
-    def adjust_score(
-        ranking_result: RankingResult, hotkey_to_weights: Dict[str, float]
-    ):
-        """Given a ranking result and a dict of hotkey to weights, will adjust the scores accordingly."""
-        if not ranking_result.hotkey_to_score:
-            raise ValueError("Scores cannot be empty")
-
-        for hotkey, weight in hotkey_to_weights.items():
-            if hotkey not in ranking_result.hotkey_to_score:
-                continue
-
-            ranking_result.hotkey_to_score[hotkey] *= weight
-
-        scores = torch.tensor(list(ranking_result.hotkey_to_score.values()))
-        # ensure sum == 1
-        scores = F.softmax(scores, dim=0)
-
-        ranking_result.hotkey_to_score = dict(
-            zip(ranking_result.hotkey_to_score.keys(), scores)
+            hotkey_to_score=hotkey_to_adjusted_score,
         )
 
         return ranking_result

@@ -81,7 +81,7 @@ class ModelUtils:
         batch_size = 1
         with torch.no_grad():
             logits = model(**inputs).logits
-            assert logits.shape == torch.Size(batch_size, 1)
+            assert logits.shape == torch.Size((batch_size, 1))
             logits = logits[0].cpu().detach()
 
         # squish logits into range [0, 1]
@@ -133,8 +133,6 @@ class ModelUtils:
         user_prompt = PromptBuilder.build_user_eval_human_preference_prompt(
             chosen, rejected, chosen_idx, rejected_idx
         )
-        bt.logging.warning(f"System prompt: {system_prompt}")
-        bt.logging.warning(f"User prompt: {user_prompt}")
         response = await client.chat.completions.create(
             model=model_config.model_name,
             temperature=0,
@@ -147,13 +145,11 @@ class ModelUtils:
         )
         try:
             content = response.choices[0].message.content
-            bt.logging.info("LLM Human pref response: " + content)
+            bt.logging.debug("LLM Human pref response: " + content)
             response = PreferenceResponse.parse_raw(content)
             # NOTE @validator see prompts.py, as this depends on text IDs assigned
             is_chosen = response.preference_text == chosen_idx
-
             return is_chosen
         except Exception as e:
             bt.logging.error(f"Error occurred while trying to parsing response: {e}")
-        bt.logging.info(f"Response: {response}")
         return response

@@ -1,5 +1,5 @@
 <div align="center">
-  <h1 style="border-bottom: 0">Tensorplex Reward Modelling Subnet</h1>
+  <h1 style="border-bottom: 0">Dojo Subnet</h1>
 </div>
 
 <div align="center">
@@ -60,29 +60,32 @@
 ---
 
 # Introduction
-Reinforcement Learning Human Feedback (RLHF) is based on reward model. The reward model is trained with the preference dataset. These preference datasets and reward models are built by large private companies like OpenAI, Anthropic, Google, Meta, etc. While they release aligned LLMs, they don't release the Reward Model. Hence, we don't have a say in determining which responses are good or bad. _Why should big corporations have the power to decide what is good or bad?_ __Let's decentralize that power, by having a decentralized, consensus-based Reward Model.__
+Reinforcement Learning Human Feedback (RLHF) is based on reward models that are trained with preference datasets. These preference datasets and reward models are built by large private companies like OpenAI, Anthropic, Google, Meta, etc. While they release aligned LLMs, they don't release the Reward Model. Hence, we don't have a say in determining which responses are good or bad. _Why should big corporations have the power to decide what is good or bad?_ __Let's decentralize that power, by having a decentralized, consensus-based Reward Model.__
 
-Introducing the Reward Modelling Subnet, where participants in this subnet are given the power to decide what is good or bad, and these results are collectively evaluated using our consensus mechanism. We also introduce the first of its kind by connecting our subnet layer to an external application layer (Amazon Mechanical Turk) to allow the subnet to access a globally available and 24/7 workforce to provide high quality human intelligence task feedback.
+Introducing Dojo, the Reward Modelling Subnet, where participants in this subnet are given the power to decide what is good or bad, and these results are collectively evaluated using our consensus mechanism. We also introduce the first of its kind by connecting our subnet layer to an external application layer (Amazon Mechanical Turk) to allow the subnet to access a globally available and 24/7 workforce to provide high quality human intelligence task feedback.
 
 # Features
 <ul style="list-style-type:none; padding-left:0;">
   <li>🤗 Open Source Reward Models</li>
   <li>👨‍💻 Human Feedback Loop</li>
-  <li>📝 Text-based Reward Scoring</li>
-  <li>🖼️ Multi-Modality (Coming soon...)</li>
+  <li>📝 Text-based Reward Models</li>
+  <li>🖼️ Image-based Reward Models</li>
+  <li>🧧 Low minimum cost to participate</li>
 </ul>
 
 # Use Cases
 Our Reward Modelling subnet provides decentralised, consensus-based Reward Modelling that allows applications to be built on top of it. One example use case is fine-tuning of Large Language Models (LLMs), where a model being fine-tuned may query our API to score multiple LLM outputs with respect to a prompt. This may also be used to compare quality of responses among different LLMs.
+
+Other use cases include text-based and image-based evaluations like on other subnets. In each subnet, they typically need to evaluate text based prompt & responses, so each subnet has to write their own versions of these evaluations and our subnet could abstract these evaluations away and serve all of them, where the scalability is only limited by the modalities (text, image, etc.) that are being supported on this subnet.
 
 # Minimum Requirements
 - Python 3.11 and above
 - [Bittensor](https://github.com/opentensor/bittensor#install)
 
 ## Miner
-- 8 cores
-- 32 GB RAM
-- 150 GB SSD
+- 4 cores
+- 16 GB RAM
+- 150GB SSD
 
 ## Validator
 - 8 cores
@@ -96,7 +99,7 @@ To get started as a miner or validator, these are the common steps both a miner 
 1. setup python environment
 
 ```bash
-cd repo_name/
+cd sentient-subnet/
 # create new virtual env
 python -m venv env_name 
 # activate our virtual env
@@ -118,33 +121,18 @@ pip install -r requirements.txt
 btcli wallet new_coldkey --wallet.name your_coldkey_name
 # create new hotkey
 btcli wallet new_hotkey --wallet.name your_coldkey_name
+
 # you will be prompted with the following...
 Enter hotkey name (default):
 ```
 
 4. prepare .env file
 
-Copy the `.env.example` into a separate `.env` file. These are supposed to contain certain API keys required for your miner/validator to function as expected.
+Copy the `.env.miner.example` or `.env.validator.example` file into a separate `.env` file. These are supposed to contain certain API keys required for your miner/validator to function as expected.
 
 <font size="6">**Remember, never commit this .env file!**</font>
 
 ## Mining
-
-When providing scoring for prompt & completions, there are currently 3 methods:
-- using a HuggingFace model
-- using a LLM like mistralai/Mixtral-8x7B-Instruct-v0.1 via [TogetherAI's Inference endpoints](https://docs.together.ai/docs/inference-models).
-- human feedback via [Amazon Mechanical Turk](https://www.mturk.com/)
-
-<!-- condensed for clarity! -->
-<blockquote class="callout callout_default">
-  <p>
-  ❗ NOTE ❗ that when using APIs, make sure to check the supported models. Currently TogetherAI and OpenAI are supported. For more providers, please send us a request via Discord or help contribute to our repository! See the <a href="./contrib/CONTRIBUTING.md">guidelines for contributing</a>.
-  </p>
-</blockquote>
-
-
-
-Note that in order to Amazon Mechanical Turk, there are additional steps to take, see the [Amazon MTurk setup guide](#amazon-mechanical-turk-setup-guide).
 
 To start the miner, run one of the following command(s):
 ```bash
@@ -156,12 +144,31 @@ python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_co
 python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey --logging.debug --axon.port 9599 --neuron.type miner --scoring_method "aws_mturk"
 ```
 
+When providing scoring for prompt & completions, there are currently 3 methods:
+- using a HuggingFace model
+- using a LLM like mistralai/Mixtral-8x7B-Instruct-v0.1 via [TogetherAI's Inference endpoints](https://docs.together.ai/docs/inference-models).
+- human feedback via [Amazon Mechanical Turk](https://www.mturk.com/)
+
+If you wish to earn a higher miner trust and incentives, you will need to use different scoring methods such as those with human feedback (Amazon Mechanical Turk), and/or have better classification accuracy on human preference datasets.
+
+Note that in order to Amazon Mechanical Turk, there are additional steps to take, see the [Amazon MTurk setup guide](#amazon-mechanical-turk-setup-guide).
+
+<blockquote class="callout callout_default">
+<p>❗NOTE❗ when using APIs, make sure to check the supported models. Currently TogetherAI and OpenAI are supported. For more providers, please send us a request via Discord or help contribute to our repository! 
+
+See the <a href="./contrib/CONTRIBUTING.md">guidelines for contributing</a>.
+</p>
+</blockquote>
+
+<br>
+
 
 ### Amazon Mechanical Turk Setup Guide
 
 This guide will go through how to setup Amazon Mechanical Turk so that we can send tasks to humans that will contribute to scoring requests.
 
 <details>
+
 <summary>Click me for details!</summary>
 
 
@@ -284,18 +291,23 @@ MTURK_ENDPOINT_URL="https://mturk-requester-sandbox.us-east-1.amazonaws.com"
 To do this you will need to link your AWS account to the request sandbox at https://requestersandbox.mturk.com, after that try running `scripts/test_aws_mturk.py`
 
 9. Go back to SNS, and set SNS to be a trigger for the Lambda function. Click on "Add Trigger" and select "SNS" from the dropdown. Search for the SNS topic name.
+<!-- # TODO remove the screenshot with ARN inside, and run bfg repo cleaner -->
 <img src="./assets/lambda/lambda8.jpg">
 <img src="./assets/lambda/lambda9.jpg">
 <img src="./assets/lambda/lambda10.jpg">
 <img src="./assets/lambda/lambda11.jpg">
 
 
-<!-- condensed for clarity! -->
-<blockquote class="callout callout_default" theme="🥳">
-  <h3>🎉 SETUP DONE 🎉</h3>
-  <p>Your AWS MTurk setup is finally done, head back to the <a href="#mining">Mining</a> section to start your miner and start earning daily rewards!</p>
-</blockquote>
+10. When publishing MTurk tasks in production, you will definitely hit an error. This is because the monthly spending limit by sending a request to them at https://support.aws.amazon.com/#/contacts/aws-mechanical-turk, asking to raise the monthly spending limit on your account.
 
+
+<img src="./assets/mturk_prod_error.jpg">
+
+<br>
+<blockquote class="callout callout_default" theme="🥳">
+  <h3>🎉 AWS MTURK SETUP DONE 🎉</h3>
+  <p>Your AWS MTurk setup is finally done, you just need to wait 1-3 days for approval to use MTurk as a scoring method to earn higher incentives! Head back to the <a href="#mining">Mining</a> section to start your miner and start earning daily rewards!</p>
+</blockquote>
 
 </details>
 
@@ -303,8 +315,6 @@ To do this you will need to link your AWS account to the request sandbox at http
 ## Validating
 
 1. Visit https://huggingface.co/settings/tokens to generate a new token if you haven't done so already, and place this in your `.env` file from earlier.
-
-1. setup your huggingface SSH keys
 
 To start the validator, run the following command
 ```bash
@@ -334,6 +344,11 @@ As a miner, you will be evaluated on the classification accuracy on a set of hum
 # Building a reward model
 Coming soon...
 
+# Roadmap
+- 🤖 Integrations with other feedback interfaces using basic.ai, scale, argilla
+- 🔊 Audio-based reward modelling
+- 🌏 Release of API service
+- 🤗 Release of dataset from consensus
 
 # License
 This repository is licensed under the MIT License.

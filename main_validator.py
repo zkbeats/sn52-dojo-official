@@ -4,20 +4,35 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import bittensor as bt
 
 from commons.api.reward_route import reward_router
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.factory import Factory
 from neurons.validator import log_validator_status
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.combining import OrTrigger
-from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
+from contextlib import asynccontextmanager
 
 load_dotenv()
 
 
-app = FastAPI()
+validator = Factory.get_validator()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # BEFORE YIELD == ON STARTUP
+    bt.logging.info("Performing startup tasks...")
+    yield
+    # AFTER YIELD == ON SHUTDOWN
+    bt.logging.info("Performing shutdown tasks...")
+    validator.should_exit = True
+    validator.save_state()
+
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,29 +44,13 @@ app.include_router(reward_router)
 
 
 async def main():
-    validator = Factory.get_validator()
     scheduler = AsyncIOScheduler(
         job_defaults={"max_instances": 3, "misfire_grace_time": 3}
     )
 
-    every_30_min_trigger = CronTrigger(
-        minute="*/30",
-        hour="*",
-        day="*",
-        month="*",
-    )
-    hourly_trigger = CronTrigger(
-        minute=0,
-        hour="*",
-        day="*",
-        month="*",
-    )
-    daily_trigger = CronTrigger(
-        minute=0,
-        hour=0,
-        day="*",
-        month="*",
-    )
+    every_30_min_trigger = IntervalTrigger(minutes=30)
+    hourly_trigger = IntervalTrigger(minutes=0, hours=1)
+    daily_trigger = IntervalTrigger(hours=24)
 
     scheduler.add_job(validator.update_score_and_send_feedback, trigger=hourly_trigger)
     scheduler.add_job(
@@ -69,17 +68,29 @@ async def main():
         reload=False,
     )
     server = uvicorn.Server(config)
-    with validator as v:
-        log_task = asyncio.create_task(log_validator_status())
+    # with validator as v:
+    log_task = asyncio.create_task(log_validator_status())
+    run_task = asyncio.create_task(validator.run())
 
-        await server.serve()
+    await server.serve()
 
-        log_task.cancel()
-        try:
-            await log_task
-        except asyncio.CancelledError:
-            pass
+    log_task.cancel()
+    run_task.cancel()
+    try:
+        await log_task
+    except asyncio.CancelledError:
+        pass
 
+
+# def _start_background_loop(loop):
+#     asyncio.set_event_loop(loop)
+#     loop.run_forever()
+
+# _LOOP = asyncio.new_event_loop()
+# _LOOP_THREAD = threading.Thread(
+#     target=_start_background_loop, args=(_LOOP,), daemon=True
+# )
+# _LOOP_THREAD.start()
 
 if __name__ == "__main__":
     asyncio.run(main())

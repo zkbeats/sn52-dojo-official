@@ -1,4 +1,3 @@
-from commons.dataset.dataset import get_seed_dataset
 from template.utils.config import get_config
 
 
@@ -26,12 +25,16 @@ class Factory:
 
     @classmethod
     def get_seed_dataset_iter(cls):
+        from commons.dataset.dataset import get_seed_dataset
+
         if cls._seed_dataset_iter is None:
             cls._seed_dataset_iter = iter(get_seed_dataset())
         return cls._seed_dataset_iter
 
     @classmethod
     def new_seed_dataset_iter(cls):
+        from commons.dataset.dataset import get_seed_dataset
+
         cls._seed_dataset_iter = iter(get_seed_dataset())
         return cls._seed_dataset_iter
 
