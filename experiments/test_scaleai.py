@@ -164,7 +164,6 @@ def create_task(project_name: str):
         "priority": 30,
         "project": project_name,
         "batch": batch_name,
-        # TODO
         "callback_url": "https://webhook.site/71d292d7-4ef0-41a6-b8d5-b4e1717da367",
         "title": "title",
         "description": "desc",
