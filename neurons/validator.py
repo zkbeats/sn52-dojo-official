@@ -48,13 +48,13 @@ class Validator(BaseNeuron):
             blacklist_fn=self.blacklist_mturk_response,
         )
 
-        ##### FROM BaseValidatorNeuron ########################################
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         bt.logging.info("Building validation weights.")
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
+        self.load_state()
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
@@ -64,10 +64,8 @@ class Validator(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
-        self.moving_averaged_scores = None
         self.hotkey_to_accuracy = defaultdict(float)
         self.executor = ThreadPoolExecutor(max_workers=4)
-        # self.lock = asyncio.Lock()
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
@@ -197,6 +195,7 @@ class Validator(BaseNeuron):
                     )
                     continue
 
+                # TODO @dev ensure that different miners get the same data
                 accuracy = await EvalUtils.classification_accuracy(
                     scoring_method=r.scoring_method, model_config=r.model_config
                 )
@@ -372,7 +371,6 @@ class Validator(BaseNeuron):
         """
 
         # manually always register and always sync metagraph when application starts
-        self.resync_metagraph()
         self.sync()
 
         bt.logging.info(
@@ -489,46 +487,33 @@ class Validator(BaseNeuron):
             bt.logging.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
-        if self.moving_averaged_scores is None:
-            self.moving_averaged_scores = self.scores.clone().detach()
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
-        raw_weights = F.normalize(self.moving_averaged_scores, p=1, dim=0)
-        if torch.all(raw_weights == 0):
+        normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
+
+        bt.logging.debug(f"normalized weights: {normalized_weights}")
+        bt.logging.debug(f"normalized weights uids: {self.metagraph.uids}")
+
+        if torch.count_nonzero(normalized_weights).item() == 0:
             bt.logging.warning(
                 "All weights are zero, therefore no valid weights to set"
             )
             return
 
-        bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", self.metagraph.uids.to("cpu"))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
             processed_weights,
         ) = bt.utils.weight_utils.process_weights_for_netuid(
             uids=self.metagraph.uids.to("cpu"),
-            weights=raw_weights.to("cpu"),
+            weights=normalized_weights.to("cpu"),
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug("processed_weights", processed_weights)
-        bt.logging.debug("processed_weight_uids", processed_weight_uids)
-
-        # # TODO remove call because this is already inside of nested call inside
-        # of set_weights_extrinsic() function
-
-        # # Convert to uint16 weights and uids.
-        # (
-        #     uint_uids,
-        #     uint_weights,
-        # ) = bt.utils.weight_utils.convert_weights_and_uids_for_emit(
-        #     uids=processed_weight_uids, weights=processed_weights
-        # )
-        # bt.logging.debug("uint_weights", uint_weights)
-        # bt.logging.debug("uint_uids", uint_uids)
+        bt.logging.debug(f"processed weights {processed_weights}")
+        bt.logging.debug(f"processed weights uids {processed_weight_uids}")
 
         # Set the weights on chain via our subtensor connection.
         result = self.subtensor.set_weights(
@@ -620,6 +605,18 @@ class Validator(BaseNeuron):
             self.device
         )
         bt.logging.debug(f"Updated scores: {self.scores}")
+
+    def save_state(self):
+        """Saves the state of the validator to a file."""
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(DataManager.validator_save(self.scores))
+
+    def load_state(self):
+        """Loads the state of the validator from a file."""
+        loop = asyncio.get_event_loop()
+        success, scores = loop.run_until_complete(DataManager.validator_load())
+        if success:
+            self.scores = scores
 
 
 async def log_validator_status():

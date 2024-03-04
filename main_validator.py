@@ -29,6 +29,7 @@ async def lifespan(app: FastAPI):
     # AFTER YIELD == ON SHUTDOWN
     bt.logging.info("Performing shutdown tasks...")
     validator.should_exit = True
+    validator.save_state()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -49,9 +50,9 @@ async def main():
 
     # TODO shift back to correct intervals after testing
     # every_30_min_trigger = IntervalTrigger(minutes=30)
-    every_30_min_trigger = IntervalTrigger(minutes=5)
     # hourly_trigger = IntervalTrigger(minutes=0, hours=1)
-    hourly_trigger = IntervalTrigger(minutes=15)
+    every_30_min_trigger = IntervalTrigger(minutes=5)
+    hourly_trigger = IntervalTrigger(minutes=0, hours=10)
     daily_trigger = IntervalTrigger(hours=24)
 
     scheduler.add_job(validator.update_score_and_send_feedback, trigger=hourly_trigger)

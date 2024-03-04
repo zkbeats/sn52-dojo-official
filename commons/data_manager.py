@@ -1,15 +1,18 @@
 import asyncio
-from pathlib import Path
 import pickle
+from pathlib import Path
 from typing import Any, List, Optional
+
+import bittensor as bt
+import torch
+
 from commons.factory import Factory
 from commons.objects import DendriteQueryResponse
-import bittensor as bt
-# import aiofiles
 
 
 class DataManager:
     _lock = asyncio.Lock()
+    _validator_lock = asyncio.Lock()
 
     @staticmethod
     def get_ranking_data_filepath() -> Path:
@@ -103,3 +106,31 @@ class DataManager:
                 new_data.append(d)
 
             await DataManager._save_without_lock(path, new_data)
+
+    @classmethod
+    async def validator_save(cls, scores):
+        """Saves the state of the validator to a file."""
+        bt.logging.info("Saving validator state.")
+        config = Factory.get_config()
+        # Save the state of the validator to file.
+        async with cls._validator_lock:
+            torch.save(
+                {
+                    "scores": scores,
+                },
+                config.neuron.full_path + "/validator_state.pt",
+            )
+
+    @classmethod
+    async def validator_load(cls):
+        """Loads the state of the validator from a file."""
+        bt.logging.info("Loading validator state.")
+        config = Factory.get_config()
+        async with cls._validator_lock:
+            try:
+                # Load the state of the validator from file.
+                state = torch.load(config.neuron.full_path + "/validator_state.pt")
+                return True, state["scores"]
+            except FileNotFoundError:
+                bt.logging.error("Validator state file not found.")
+                return False, None
