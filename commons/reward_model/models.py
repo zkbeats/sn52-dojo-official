@@ -1,4 +1,4 @@
-from enum import StrEnum
+from strenum import StrEnum
 from functools import lru_cache
 from typing import List, Union
 

@@ -1,4 +1,4 @@
-from enum import StrEnum
+from strenum import StrEnum
 from typing import Dict, List, Optional
 import bittensor as bt
 from pydantic import BaseModel, Field

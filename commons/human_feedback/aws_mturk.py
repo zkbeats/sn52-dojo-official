@@ -1,7 +1,7 @@
 import os
 import textwrap
 from collections import defaultdict
-from enum import StrEnum
+from strenum import StrEnum
 from typing import Any, Dict, List
 
 import bittensor as bt

@@ -1,7 +1,6 @@
 from functools import lru_cache
 import os
-from enum import StrEnum
-
+from strenum import StrEnum
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 

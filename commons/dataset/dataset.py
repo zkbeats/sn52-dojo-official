@@ -1,4 +1,4 @@
-from enum import StrEnum
+from strenum import StrEnum
 from typing import Dict, Iterable, List, Tuple
 import random
 import bittensor as bt
