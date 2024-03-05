@@ -1,5 +1,4 @@
-import asyncio
-from http import HTTPStatus
+import bittensor as bt
 import time
 from fastapi import Request
 import httpx
@@ -26,16 +25,21 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
     _allowed_networks = []
 
     @classmethod
-    async def get_allowed_networks(cls):
-        return [ip_network(ip_range) for ip_range in allowed_ip_ranges]
+    async def _get_allowed_networks(cls):
+        return [ip_network(ip_range) for ip_range in await cls._get_allowed_ip_ranges()]
 
     @classmethod
-    async def get_allowed_ip_ranges(cls):
+    async def _get_allowed_ip_ranges(cls):
         if (time.time() - cls._last_checked) < 300:
             return cls._allowed_ip_ranges
 
         async with httpx.AsyncClient() as client:
+            start_time = time.time()
             response = await client.get(cls._aws_ips_url)
+            elapsed_time = time.time() - start_time
+            bt.logging.debug(
+                f"Sent request to {cls._aws_ips_url}, took {elapsed_time:.2f} seconds"
+            )
             data = response.json()
             cls._allowed_ip_ranges = [
                 ip_range["ip_prefix"]
@@ -46,18 +50,14 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app):
         super().__init__(app)
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.get_allowed_ip_ranges())
-        self.allowed_networks = [ip_network(ip_range) for ip_range in allowed_ip_ranges]
 
     async def dispatch(self, request: Request, call_next):
         client_ip = ip_address(request.client.host)
-        for network in [ip_network(ip_range) for ip_range in self._allowed_ip_ranges]:
+        allowed_networks = [
+            ip_network(ip_range) for ip_range in await self._get_allowed_networks()
+        ]
+        for network in allowed_networks:
             if client_ip in network:
                 response = await call_next(request)
                 return response
         return Response("Forbidden", status_code=403)
-
-
-# Get the list of allowed IP ranges
-allowed_ip_ranges = get_allowed_ip_ranges()
