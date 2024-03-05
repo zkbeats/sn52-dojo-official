@@ -82,15 +82,5 @@ async def main():
         pass
 
 
-# def _start_background_loop(loop):
-#     asyncio.set_event_loop(loop)
-#     loop.run_forever()
-
-# _LOOP = asyncio.new_event_loop()
-# _LOOP_THREAD = threading.Thread(
-#     target=_start_background_loop, args=(_LOOP,), daemon=True
-# )
-# _LOOP_THREAD.start()
-
 if __name__ == "__main__":
     asyncio.run(main())
