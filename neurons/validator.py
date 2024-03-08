@@ -98,6 +98,7 @@ class Validator(BaseNeuron):
             access_key_id=aws_credentials.access_key_id,
             secret_access_key=aws_credentials.secret_access_key,
             session_token=aws_credentials.session_token,
+            environment=aws_credentials.environment,
         )
         res = temp_client.list_assignments_for_hit(HITId=hit_id)
         answers = [parse_assignment(assignment) for assignment in res["Assignments"]]
@@ -270,6 +271,65 @@ class Validator(BaseNeuron):
             self.hotkey_to_accuracy.clear()
         return
 
+    async def process_request(self, synapse: RankingRequest) -> RankingRequest:
+        """Process request from miners, specifically filling out the ranks fields"""
+        bt.logging.debug(
+            f"Processing miner's request for scoring method: {synapse.scoring_method}"
+        )
+
+        if synapse.scoring_method == ScoringMethod.HF_MODEL:
+            loop = asyncio.get_event_loop()
+            tasks = [
+                loop.run_in_executor(
+                    None,
+                    ModelUtils._hf_score,
+                    synapse.model_config.model_name,
+                    synapse.prompt,
+                    completion.text,
+                )
+                for completion in synapse.completions
+            ]
+            scores = await asyncio.gather(*tasks)
+            for completion, score in zip(synapse.completions, scores):
+                synapse.ranks.append(
+                    Rank(
+                        cid=completion.cid,
+                        score=score,
+                    )
+                )
+
+        elif synapse.scoring_method == ScoringMethod.LLM_API:
+            llm_provider = synapse.model_config.provider
+            model_name = synapse.model_config.model_name
+            scores_response = await ModelUtils._llm_api_score(
+                provider=llm_provider,
+                model_name=model_name,
+                prompt=synapse.prompt,
+                completions=synapse.completions,
+            )
+            for completion in synapse.completions:
+                matching_score_item = next(
+                    (
+                        item
+                        for item in scores_response.scores
+                        if item.completion_id == completion.cid
+                    ),
+                    None,
+                )
+                if not matching_score_item:
+                    continue
+
+                synapse.ranks.append(
+                    Rank(
+                        cid=completion.cid,
+                        score=matching_score_item.score,
+                    )
+                )
+        else:
+            bt.logging.error("Unrecognized scoring method!")
+
+        return synapse
+
     async def update_score_and_send_feedback(self):
         """While this function is triggered every X time period in AsyncIOScheduler,
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
@@ -293,7 +353,6 @@ class Validator(BaseNeuron):
         filtered_data = [
             d
             for d in data
-            # if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_8H
             if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_4H
         ]
         bt.logging.info(
@@ -307,6 +366,9 @@ class Validator(BaseNeuron):
 
         consumed_responses = []
         for d in filtered_data:
+            for i in range(len(d.responses)):
+                d.responses[i] = await self.process_request(d.responses[i])
+
             ranking_result = Scoring.consensus_score(
                 responses=d.responses, hotkey_to_multiplier=self.hotkey_to_accuracy
             )

@@ -115,10 +115,10 @@ class MTurkUtils:
         access_key_id: str = AWS_ACCESS_KEY_ID,
         secret_access_key: str = AWS_SECRET_KEY,
         session_token: str = None,
+        environment: str = Factory.get_config().aws_mturk_environment,
     ):
-        config = Factory.get_config()
         if cls._mturk_client is None:
-            env_config = get_environment_config(config.aws_mturk_environment)
+            env_config = get_environment_config(environment)
             kwargs = {
                 "aws_access_key_id": access_key_id,
                 "aws_secret_access_key": secret_access_key,
@@ -254,7 +254,7 @@ class MTurkUtils:
         bt.logging.info(
             f"Taking the average of set of scores: {completion_id_to_scores}"
         )
-        return completion_id_to_scores
+        return event_payload["HITId"], completion_id_to_scores
 
     @staticmethod
     def build_description(num_completions):
