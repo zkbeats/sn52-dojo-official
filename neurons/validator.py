@@ -1,12 +1,12 @@
 import asyncio
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-import functools
+import xml.etree.ElementTree as ET
+import json
 import threading
 import time
 from traceback import print_exception
-import traceback
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import copy
 from torch.nn import functional as F
 
@@ -18,12 +18,15 @@ from commons.dataset.dataset import SeedDataManager
 from commons.dataset.hf_utils import HuggingFaceUtils
 from commons.evals import EvalUtils
 from commons.factory import Factory
+from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.objects import DendriteQueryResponse
+from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
 
 from commons.utils import get_epoch_time, get_new_uuid, serve_axon
 from template.base.neuron import BaseNeuron
 from template.protocol import (
+    AWSCredentials,
     Completion,
     MTurkResponse,
     Rank,
@@ -85,6 +88,48 @@ class Validator(BaseNeuron):
 
         return False, "Valid request received from miner"
 
+    @staticmethod
+    def verify_mturk_task(
+        aws_credentials: AWSCredentials,
+        hit_id: str,
+        completion_id_to_score: Dict[str, float],
+    ):
+        temp_client = MTurkUtils.get_client(
+            access_key_id=aws_credentials.access_key_id,
+            secret_access_key=aws_credentials.secret_access_key,
+            session_token=aws_credentials.session_token,
+        )
+        res = temp_client.list_assignments_for_hit(HITId=hit_id)
+        answers = [parse_assignment(assignment) for assignment in res["Assignments"]]
+        if not answers:
+            return False, "No assignments found for HIT"
+
+        cids_to_check = set(completion_id_to_score.keys())
+        # example of answers variable
+        # [{'Answer': [{'taskAnswers': [{'cid_a6f41ad1-d8a8-4bf3-a698-1b431bf2edac': 5.68, 'cid_f95cae4d-38ed-4911-b97a-f92a0c3bad9a': 7.49}]}], 'HITId': '3MG8450X3U3J7MRIYLXCI5SO1CIUPJ'}]
+        for answer in answers:
+            task_answers = answer.get("Answer", [])
+            for task_answer in task_answers:
+                for completion_id, score in task_answer.get("taskAnswers", {}).items():
+                    if completion_id not in cids_to_check:
+                        bt.logging.warning(
+                            f"Completion ID {completion_id} found in MTurk task answers is not in the expected set."
+                        )
+                        return (
+                            False,
+                            f"Unexpected completion ID {completion_id} in MTurk task answers.",
+                        )
+                    elif completion_id_to_score[completion_id] != score:
+                        bt.logging.warning(
+                            f"Score mismatch for completion ID {completion_id}: expected {completion_id_to_score[completion_id]}, got {score} from MTurk task answers."
+                        )
+                        return (
+                            False,
+                            f"Score mismatch for completion ID {completion_id}.",
+                        )
+
+        return True, "All checks passed"
+
     async def forward_mturk_response(self, synapse: MTurkResponse):
         """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
         # 1. check request from RankingRequest
@@ -134,6 +179,17 @@ class Validator(BaseNeuron):
                         f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
                     )
                     continue
+
+            is_verified, reason = self.verify_mturk_task(
+                synapse.aws_credentials,
+                synapse.mturk_hit_id,
+                synapse.completion_id_to_score,
+            )
+            if not is_verified:
+                bt.logging.error(
+                    f"MTurk task verification failed due to reason:{reason}"
+                )
+                return
 
             request_copy = copy.deepcopy(d.request)
             for cid in found_cids:
@@ -321,7 +377,6 @@ class Validator(BaseNeuron):
             for response in responses
             if len(response.ranks) > 0
             and response.scoring_method in [method for method in ScoringMethod]
-            and response.scoring_method != ScoringMethod.AWS_MTURK
         ]
 
         if not len(valid_responses):

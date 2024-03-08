@@ -1,8 +1,9 @@
 import os
 import textwrap
 from collections import defaultdict
-from strenum import StrEnum
 from typing import Any, Dict, List
+import xml.etree.ElementTree as ET
+import json
 
 import bittensor as bt
 import boto3
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 from commons.factory import Factory
 
 from commons.llm.prompts import ScoreRange
-from template.protocol import Completion
+from template.protocol import AWSCredentials, Completion
 
 load_dotenv()
 
@@ -21,15 +22,7 @@ AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 US_EAST_REGION = "us-east-1"
 # should look like the form: arn:aws:sns:us-east-1:1234567890:sns_topic_name
 AWS_SNS_ARN_ID = os.getenv("AWS_SNS_ARN_ID")
-
-
-class MTurkEventTypes(StrEnum):
-    AssignmentAccepted = "AssignmentAccepted"
-    AssignmentSubmitted = "AssignmentSubmitted"
-    AssignmentReturned = "AssignmentReturned"
-    AssignmentAbandoned = "AssignmentAbandoned"
-    HITReviewable = "HITReviewable"
-    HITExpired = "HITExpired"
+AWS_ASSUME_ROLE_ARN = os.getenv("AWS_ASSUME_ROLE_ARN")
 
 
 # ensure regions in 'endpoint' key matches
@@ -61,28 +54,83 @@ def get_environment_config(environment: str) -> Dict[str, Any]:
     return current_env
 
 
-def get_aws_client(environment_name):
-    env_config = get_environment_config(environment_name)
-    mturk_client = boto3.client(
-        "mturk",
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        region_name=US_EAST_REGION,
-        endpoint_url=env_config["endpoint_url"],
-    )
-    return mturk_client
+def parse_assignment(assignment):
+    result = {
+        # "WorkerId": assignment["WorkerId"],
+        "Answer": [],
+        "HITId": assignment["HITId"],
+    }
+
+    ns = {
+        "mt": "http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2005-10-01/QuestionFormAnswers.xsd"
+    }
+    root = ET.fromstring(assignment["Answer"])
+
+    for a in root.findall("mt:Answer", ns):
+        name = a.find("mt:QuestionIdentifier", ns).text
+        value = a.find("mt:FreeText", ns).text
+        result["Answer"].append({name: json.loads(value)})
+    return result
+
+
+class STSUtils:
+    _sts_client = None
+
+    @classmethod
+    def get_client(
+        cls,
+        access_key_id: str = AWS_ACCESS_KEY_ID,
+        secret_access_key: str = AWS_SECRET_KEY,
+    ):
+        if cls._sts_client is None:
+            kwargs = {
+                "aws_access_key_id": access_key_id,
+                "aws_secret_access_key": secret_access_key,
+                "region_name": US_EAST_REGION,
+            }
+            sts_client = boto3.client("sts", **kwargs)
+            cls._sts_client = sts_client
+        return cls._sts_client
+
+    @classmethod
+    def assume_role(cls, role_arn: str = AWS_ASSUME_ROLE_ARN):
+        assert isinstance(role_arn, str)
+        client = cls.get_client()
+        res = client.assume_role(RoleArn=role_arn, RoleSessionName="subnet_validator")
+
+        return AWSCredentials(
+            access_key_id=res["Credentials"]["AccessKeyId"],
+            secret_access_key=res["Credentials"]["SecretAccessKey"],
+            session_token=res["Credentials"]["SessionToken"],
+            access_expiration=res["Credentials"]["Expiration"],
+        )
 
 
 class MTurkUtils:
-    _aws_client = None
+    _mturk_client = None
 
     @classmethod
-    def get_client(cls):
+    def get_client(
+        cls,
+        access_key_id: str = AWS_ACCESS_KEY_ID,
+        secret_access_key: str = AWS_SECRET_KEY,
+        session_token: str = None,
+    ):
         config = Factory.get_config()
-        if MTurkUtils._aws_client is None:
-            MTurkUtils._aws_client = get_aws_client(config.aws_mturk_environment)
+        if cls._mturk_client is None:
+            env_config = get_environment_config(config.aws_mturk_environment)
+            kwargs = {
+                "aws_access_key_id": access_key_id,
+                "aws_secret_access_key": secret_access_key,
+                "region_name": US_EAST_REGION,
+                "endpoint_url": env_config["endpoint_url"],
+            }
+            if session_token:
+                kwargs["aws_session_token"] = session_token
+            mturk_client = boto3.client("mturk", **kwargs)
+            cls._mturk_client = mturk_client
 
-        return MTurkUtils._aws_client
+        return cls._mturk_client
 
     @staticmethod
     def encode_task_key(completion_id: str):
@@ -120,6 +168,7 @@ class MTurkUtils:
         """Create a human intellgence task to send to AWS MTurk workers."""
         payout_auto_approval_seconds = 3600 * 24
         success = False
+        hit_id = None
         try:
             new_hit = MTurkUtils.get_client().create_hit(
                 Title=title,
@@ -148,6 +197,7 @@ class MTurkUtils:
                 "HITID = " + new_hit["HIT"]["HITId"] + " (Use to Get Results)"
             )
 
+            hit_id = new_hit["HIT"]["HITId"]
             try:
                 hit_type_id = new_hit["HIT"]["HITTypeId"]
                 MTurkUtils.get_client().update_notification_settings(
@@ -167,12 +217,12 @@ class MTurkUtils:
                 bt.logging.error("Failed to update notification settings: " + str(e))
                 pass
 
-            return success
+            return success, hit_id
         except botocore.exceptions.ClientError as e:
             bt.logging.error(
                 f"Error occurred while trying to create hit... exception: {e}"
             )
-            return False
+            return False, None
 
     @staticmethod
     async def handle_mturk_event(event_payload: Dict):

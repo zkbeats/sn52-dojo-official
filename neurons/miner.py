@@ -9,17 +9,15 @@ from typing import Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 import bittensor as bt
+from commons.factory import Factory
 from commons.llm.openai_proxy import Provider
-from commons.human_feedback.aws_mturk import MTurkUtils
-from commons.reward_model.models import ModelUtils
-from commons.scoring import Scoring
+from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.utils import get_epoch_time
 
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     ModelConfig,
     MTurkResponse,
-    Rank,
     RankingRequest,
     RankingResult,
     ScoringMethod,
@@ -60,48 +58,14 @@ class Miner(BaseMinerNeuron):
 
             scoring_method = self.config.scoring_method
             if scoring_method.casefold() == ScoringMethod.HF_MODEL:
-                for completion in synapse.completions:
-                    score = ModelUtils._hf_score(
-                        self.config.model_name, synapse.prompt, completion.text
-                    )
-                    synapse.ranks.append(
-                        Rank(
-                            cid=completion.cid,
-                            score=score,
-                        )
-                    )
                 synapse.scoring_method = ScoringMethod.HF_MODEL
                 synapse.model_config = ModelConfig(model_name=self.config.model_name)
 
             elif scoring_method.casefold() == ScoringMethod.LLM_API:
-                llm_provider = Provider(self.config.llm_provider)
-                model_name = self.config.model_name
-                scores_response = await ModelUtils._llm_api_score(
-                    provider=llm_provider,
-                    model_name=model_name,
-                    prompt=synapse.prompt,
-                    completions=synapse.completions,
-                )
-                for completion in synapse.completions:
-                    matching_score_item = next(
-                        (
-                            item
-                            for item in scores_response.scores
-                            if item.completion_id == completion.cid
-                        ),
-                        None,
-                    )
-
-                    if matching_score_item:
-                        synapse.ranks.append(
-                            Rank(
-                                cid=completion.cid,
-                                score=matching_score_item.score,
-                            )
-                        )
                 synapse.scoring_method = ScoringMethod.LLM_API
                 synapse.model_config = ModelConfig(
-                    provider=llm_provider, model_name=model_name
+                    provider=Provider(self.config.llm_provider),
+                    model_name=self.config.model_name,
                 )
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
@@ -115,7 +79,9 @@ class Miner(BaseMinerNeuron):
                     reward_in_dollars=0.01,
                 )
                 synapse.scoring_method = ScoringMethod.AWS_MTURK
-                await loop.run_in_executor(self.executor, task)
+                success, hit_id = await loop.run_in_executor(self.executor, task)
+                if success:
+                    synapse.mturk_hit_id = hit_id
             else:
                 bt.logging.error("Unrecognized scoring method!")
         except:
@@ -132,6 +98,11 @@ class Miner(BaseMinerNeuron):
                 f"No hotkey found for completion ids: {synapse.completion_id_to_score.keys()}"
             )
             return
+        # generate temporary credentials to send to the validator
+        if not synapse.aws_credentials:
+            credentials = STSUtils.assume_role()
+            credentials.environment = Factory.get_config().aws_mturk_environment
+            synapse.aws_credentials = credentials
 
         uid = self.metagraph.hotkeys.index(hotkey)
         axon = self.metagraph.axons[uid]
