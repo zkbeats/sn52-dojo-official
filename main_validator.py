@@ -1,4 +1,4 @@
-import commons.patch_logging  # noqa: F401
+from commons.logging.patch_logging import apply_patch
 import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -16,6 +16,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from contextlib import asynccontextmanager
 
 load_dotenv()
+apply_patch()
 
 
 validator = Factory.get_validator()

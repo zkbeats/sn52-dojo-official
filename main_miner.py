@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-import commons.patch_logging
+from commons.logging.patch_logging import apply_patch
 import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -13,6 +13,7 @@ from commons.factory import Factory
 from neurons.miner import log_miner_status
 
 load_dotenv()
+apply_patch()
 
 miner = Factory.get_miner()
 

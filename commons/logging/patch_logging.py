@@ -52,5 +52,8 @@ def custom_format(cls, prefix: object, sufix: object = None):
 
 
 original_format = logging._format
-# monkey patch
-logging._format = classmethod(custom_format)
+
+
+def apply_patch():
+    # monkey patch
+    logging._format = classmethod(custom_format)
