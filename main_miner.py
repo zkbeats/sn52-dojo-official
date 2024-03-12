@@ -1,9 +1,11 @@
+from contextlib import asynccontextmanager
 import commons.patch_logging
 import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import bittensor as bt
 
 from commons.api.human_feedback_route import human_feedback_router
 from commons.api.middleware import IPFilterMiddleware, LimitContentLengthMiddleware
@@ -11,6 +13,19 @@ from commons.factory import Factory
 from neurons.miner import log_miner_status
 
 load_dotenv()
+
+miner = Factory.get_miner()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # BEFORE YIELD == ON STARTUP
+    bt.logging.info("Performing startup tasks...")
+    yield
+    # AFTER YIELD == ON SHUTDOWN
+    bt.logging.info("Performing shutdown tasks...")
+    miner.should_exit = True
+
 
 app = FastAPI()
 app.add_middleware(
@@ -25,7 +40,6 @@ app.include_router(human_feedback_router)
 
 
 async def main():
-    miner = Factory.get_miner()
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
