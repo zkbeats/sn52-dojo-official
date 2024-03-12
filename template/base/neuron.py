@@ -66,16 +66,13 @@ class BaseNeuron(ABC):
         self.step = 0
 
     @abstractmethod
-    def run(self):
-        ...
+    def run(self): ...
 
     @abstractmethod
-    def resync_metagraph(self):
-        ...
+    def resync_metagraph(self): ...
 
     @abstractmethod
-    def set_weights(self):
-        ...
+    def set_weights(self): ...
 
     def sync(self):
         """

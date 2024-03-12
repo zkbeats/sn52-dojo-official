@@ -1,3 +1,4 @@
+from datetime import datetime
 from strenum import StrEnum
 from typing import Dict, List, Optional
 import bittensor as bt
@@ -53,10 +54,6 @@ class RankingRequest(bt.Synapse):
         description="Unique identifier for the request",
         allow_mutation=False,
     )
-    pid: str = Field(
-        default_factory=get_new_uuid,
-        description="Unique identifier for the prompt",
-    )
     prompt: str = Field(
         description="Prompt or query from the user sent the LLM",
         allow_mutation=False,
@@ -69,7 +66,6 @@ class RankingRequest(bt.Synapse):
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    # filled in by miners
     ranks: List[Rank] = Field(
         default=[], description="List of ranks for each completion"
     )
@@ -79,6 +75,7 @@ class RankingRequest(bt.Synapse):
     model_config: Optional[ModelConfig] = Field(
         description="Model configuration for Huggingface / LLM API scoring"
     )
+    mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
 
 
 class RankingResult(bt.Synapse):
@@ -94,5 +91,15 @@ class RankingResult(bt.Synapse):
     )
 
 
+class AWSCredentials(BaseModel):
+    access_key_id: str
+    secret_access_key: str
+    session_token: str
+    access_expiration: datetime
+    environment: str
+
+
 class MTurkResponse(bt.Synapse):
+    mturk_hit_id: str
+    aws_credentials: Optional[AWSCredentials]
     completion_id_to_score: Dict[str, float]

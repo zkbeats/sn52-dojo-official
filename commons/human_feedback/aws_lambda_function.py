@@ -54,7 +54,11 @@ def lambda_handler(event, context):
 
 # Function to parse the Answer XML object
 def parse_answers(assignment):
-    result = {"WorkerId": assignment["WorkerId"], "Answer": []}
+    result = {
+        "HITId": assignment["HITId"],
+        "WorkerId": assignment["WorkerId"],
+        "Answer": [],
+    }
 
     ns = {
         "mt": "http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2005-10-01/QuestionFormAnswers.xsd"
