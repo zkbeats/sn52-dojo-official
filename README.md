@@ -233,6 +233,57 @@ AWS_SECRET_KEY=
 
 <br>
 
+Next you will need o create a new role, which will allow validators to verify that the MTurk task was actually completed on the platform.
+
+1. Go to IAM > Roles > Create Role
+2. Select "Custom trust policy" and paste the following JSON.
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Statement1",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+```
+<img src="./assets/role/role1.jpg">
+
+3. Skip the adding permissions step, and set a role name.
+4. Go back to IAM > Roles and click on the role you just created, then go to Permissions > Create Inline Policy.
+<img src="./assets/role/role3.jpg">
+
+
+5. Now search for "MechanicalTurk" and allow the following functions to be called. You permissions JSON should look like the following:
+<img src="./assets/role/role2.jpg">
+
+```json
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Sid": "VisualEditor0",
+			"Effect": "Allow",
+			"Action": "mechanicalturk:ListAssignmentsForHIT",
+			"Resource": "*"
+		}
+	]
+}
+```
+6. Set your policy name, then Create policy and now your role should have a minimal policy that allows only 1 function to be called.
+
+<img src="./assets/role/role4.jpg">
+
+7. Grab the ARN, which should look like `arn:aws:iam::1234567890:role/role_name` and place it into the `AWS_ASSUME_ROLE_ARN` env variable.
+
+<br>
+ 
+
 We will now need to setup AWS Simple Notification Service (SNS) and AWS Lambda, where AWS SNS is for subscribing to MTurk events and AWS Lambda executes code that will forward the responses to our miner.
 
 #### AWS SNS
