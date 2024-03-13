@@ -8,7 +8,7 @@ import uvicorn
 import bittensor as bt
 
 from commons.api.human_feedback_route import human_feedback_router
-from commons.api.middleware import IPFilterMiddleware, LimitContentLengthMiddleware
+from commons.api.middleware import AWSIPFilterMiddleware, LimitContentLengthMiddleware
 from commons.factory import Factory
 from neurons.miner import log_miner_status
 
@@ -36,7 +36,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(LimitContentLengthMiddleware)
-app.add_middleware(IPFilterMiddleware)
+app.add_middleware(AWSIPFilterMiddleware)
 app.include_router(human_feedback_router)
 
 

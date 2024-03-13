@@ -18,11 +18,14 @@ class LimitContentLengthMiddleware(BaseHTTPMiddleware):
         return Response(status_code=413)
 
 
-class IPFilterMiddleware(BaseHTTPMiddleware):
+class AWSIPFilterMiddleware(BaseHTTPMiddleware):
+    """Middleware to ensure that only requests from AWS Servers are allowed."""
+
     _aws_ips_url = "https://ip-ranges.amazonaws.com/ip-ranges.json"
     _allowed_ip_ranges = []
     _last_checked: float = 0
     _allowed_networks = []
+    _allowed_regions = {US_EAST_REGION}
 
     @classmethod
     async def _get_allowed_networks(cls):
@@ -44,7 +47,7 @@ class IPFilterMiddleware(BaseHTTPMiddleware):
             cls._allowed_ip_ranges = [
                 ip_range["ip_prefix"]
                 for ip_range in data["prefixes"]
-                if ip_range["region"] == US_EAST_REGION
+                if ip_range["region"] in [US_EAST_REGION]
             ]
         return cls._allowed_ip_ranges
 
