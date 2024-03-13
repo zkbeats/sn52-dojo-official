@@ -9,15 +9,15 @@ import bittensor as bt
 import jsonref
 import requests
 import torch
-import wandb
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 import template
+import wandb
 
 
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
-    run_name = f"{config.neuron_type}-{my_uid}-{template.__version__}"
+    run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
     config.run_name = run_name
