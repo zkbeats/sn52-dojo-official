@@ -62,7 +62,7 @@ def get_cached_tokenizer(
 
 class ModelUtils:
     @staticmethod
-    def _hf_score(
+    def hf_score_text(
         model_name: ModelName,
         prompt,
         completion,
@@ -93,7 +93,7 @@ class ModelUtils:
         return score
 
     @staticmethod
-    async def _llm_api_score(
+    async def llm_api_score_text(
         provider: Provider, model_name: str, prompt: str, completions: List[Completion]
     ):
         client = get_openai_client(provider)

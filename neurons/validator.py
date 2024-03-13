@@ -280,7 +280,7 @@ class Validator(BaseNeuron):
             tasks = [
                 loop.run_in_executor(
                     None,
-                    ModelUtils._hf_score,
+                    ModelUtils.hf_score_text,
                     synapse.model_config.model_name,
                     synapse.prompt,
                     completion.text,
@@ -299,7 +299,7 @@ class Validator(BaseNeuron):
         elif synapse.scoring_method == ScoringMethod.LLM_API:
             llm_provider = synapse.model_config.provider
             model_name = synapse.model_config.model_name
-            scores_response = await ModelUtils._llm_api_score(
+            scores_response = await ModelUtils.llm_api_score_text(
                 provider=llm_provider,
                 model_name=model_name,
                 prompt=synapse.prompt,

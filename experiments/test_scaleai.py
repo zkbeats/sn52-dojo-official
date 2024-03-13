@@ -254,7 +254,7 @@ async def add_scores_to_dataset():
             completions = [
                 Completion(text=r["response"]) for r in row_data["responses"]
             ]
-            scores_response: ScoresResponse = await ModelUtils._llm_api_score(
+            scores_response: ScoresResponse = await ModelUtils.llm_api_score_text(
                 model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
                 provider=Provider.TOGETHER_AI,
                 completions=completions,
