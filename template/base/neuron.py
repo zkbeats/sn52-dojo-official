@@ -20,7 +20,6 @@ from abc import ABC, abstractmethod
 import bittensor as bt
 
 from commons.factory import Factory
-
 from commons.utils import initialise, ttl_get_block
 from template import __spec_version__ as spec_version
 

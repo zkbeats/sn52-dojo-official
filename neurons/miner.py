@@ -1,19 +1,19 @@
 import asyncio
 import copy
-from datetime import datetime
+import functools
 import threading
 import time
-import functools
 import traceback
-from typing import Dict, Tuple
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Dict, Tuple
 
 import bittensor as bt
-from commons.factory import Factory
-from commons.llm.openai_proxy import Provider
-from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
-from commons.utils import get_epoch_time
 
+from commons.factory import Factory
+from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
+from commons.llm.openai_proxy import Provider
+from commons.utils import get_epoch_time
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     ModelConfig,
@@ -79,7 +79,7 @@ class Miner(BaseMinerNeuron):
                     reward_in_dollars=0.01,
                 )
                 synapse.scoring_method = ScoringMethod.AWS_MTURK
-                success, hit_id = await loop.run_in_executor(self.executor, task)
+                success, hit_id = await loop.run_in_executor(None, task)
                 if success:
                     synapse.mturk_hit_id = hit_id
             else:

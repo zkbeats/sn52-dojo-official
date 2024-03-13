@@ -8,9 +8,39 @@ from typing import Tuple
 import bittensor as bt
 import jsonref
 import requests
-from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 import torch
 from pydantic import BaseModel
+from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
+
+import template
+import wandb
+
+
+def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
+    run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
+    config.uid = my_uid
+    config.hotkey = wallet.hotkey.ss58_address
+    config.run_name = run_name
+    config.version = template.__version__
+
+    # Initialize the wandb run for the single project
+    kwargs = {
+        "name": run_name,
+        "project": "subnet",
+        "entity": "tensorplex",
+        "config": config,
+        "dir": config.full_path,
+        "reinit": True,
+    }
+    run = wandb.init(**kwargs)
+
+    # Sign the run to ensure it's from the correct hotkey
+    signature = wallet.hotkey.sign(run.id.encode()).hex()
+    config.signature = signature
+    wandb.config.update(config, allow_val_change=True)
+
+    bt.logging.success(f"Started wandb run with {kwargs=}")
+    return run
 
 
 def log_retry_info(retry_state):
@@ -193,12 +223,9 @@ class PydanticUtils:
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import time
-import math
-import hashlib as rpccheckhealth
-from math import floor
-from typing import Callable, Any
 from functools import lru_cache, update_wrapper
+from math import floor
+from typing import Any, Callable
 
 
 # LRU Cache with TTL

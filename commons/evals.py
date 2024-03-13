@@ -1,14 +1,7 @@
 import asyncio
+
+import bittensor as bt
 import torch
-from concurrent.futures import ThreadPoolExecutor
-from commons.dataset.dataset import EvalDatasetManager
-from commons.factory import Factory
-from commons.llm.openai_proxy import Provider
-from commons.reward_model.models import (
-    ModelUtils,
-    get_cached_model,
-    get_cached_tokenizer,
-)
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -16,15 +9,18 @@ from tenacity import (
     wait_exponential,
 )
 
-import bittensor as bt
-
+from commons.dataset.dataset import EvalDatasetManager
+from commons.factory import Factory
+from commons.reward_model.models import (
+    ModelUtils,
+    get_cached_model,
+    get_cached_tokenizer,
+)
 from commons.utils import get_device, log_retry_info
 from template.protocol import ModelConfig, ScoringMethod
 
 
 class EvalUtils:
-    _executor = ThreadPoolExecutor(max_workers=4)
-
     @classmethod
     async def classification_accuracy(
         cls,
@@ -54,7 +50,7 @@ class EvalUtils:
                 # )
                 # NOTE here we will need to run in executor since the model is not async
                 batch_accuracy = await loop.run_in_executor(
-                    cls._executor,
+                    None,
                     hf_classify_accuracy,
                     batch_human_preference,
                     model,
