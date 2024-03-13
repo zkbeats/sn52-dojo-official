@@ -399,6 +399,7 @@ class Validator(BaseNeuron):
                 consensus_scores[i] = consensus_score
             wandb_data = jsonable_encoder(
                 {
+                    "modality": "text",
                     "prompt": d.request.prompt,
                     "completions": d.request.completions,
                     "num_completions": len(d.request.completions),
