@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import bittensor as bt
+import wandb
 
 from commons.api.human_feedback_route import human_feedback_router
 from commons.api.middleware import AWSIPFilterMiddleware, LimitContentLengthMiddleware
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
     # AFTER YIELD == ON SHUTDOWN
     bt.logging.info("Performing shutdown tasks...")
     miner.should_exit = True
+    wandb.finish()
 
 
 app = FastAPI()

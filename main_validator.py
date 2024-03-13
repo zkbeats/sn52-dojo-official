@@ -1,19 +1,20 @@
-from commons.logging.patch_logging import apply_patch
 import asyncio
+from contextlib import asynccontextmanager
+
+import bittensor as bt
+import uvicorn
+import wandb
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import bittensor as bt
 
-from commons.api.reward_route import reward_router
 from commons.api.middleware import LimitContentLengthMiddleware
+from commons.api.reward_route import reward_router
 from commons.factory import Factory
+from commons.logging.patch_logging import apply_patch
 from neurons.validator import log_validator_status
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-
-from contextlib import asynccontextmanager
 
 load_dotenv()
 apply_patch()
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
     bt.logging.info("Performing shutdown tasks...")
     validator.should_exit = True
     validator.save_state()
+    wandb.finish()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -69,7 +71,6 @@ async def main():
         reload=False,
     )
     server = uvicorn.Server(config)
-    # with validator as v:
     log_task = asyncio.create_task(log_validator_status())
     run_task = asyncio.create_task(validator.run())
 
