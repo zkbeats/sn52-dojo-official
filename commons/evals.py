@@ -13,7 +13,7 @@ from commons.dataset.dataset import EvalDatasetManager
 from commons.factory import Factory
 from commons.reward_model.models import (
     ModelUtils,
-    get_cached_model,
+    get_cached_text_model,
     get_cached_tokenizer,
 )
 from commons.utils import get_device, log_retry_info
@@ -43,7 +43,7 @@ class EvalUtils:
             batch_human_preference = EvalDatasetManager.get_batch()
             if scoring_method == ScoringMethod.HF_MODEL:
                 device = get_device()
-                model = get_cached_model(model_config.model_name).to(device)
+                model = get_cached_text_model(model_config.model_name).to(device)
                 tokenizer = get_cached_tokenizer(model_config.model_name)
                 # batch_accuracy = hf_classify_accuracy(
                 #     batch_human_preference, model, tokenizer, device

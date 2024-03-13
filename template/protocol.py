@@ -9,6 +9,11 @@ from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
 
 
+class Modality(StrEnum):
+    TEXT = "text"
+    IMAGE = "image"
+
+
 class ScoringMethod(StrEnum):
     HF_MODEL = "hf_model"
     LLM_API = "llm_api"
@@ -77,6 +82,7 @@ class RankingRequest(bt.Synapse):
         description="Model configuration for Huggingface / LLM API scoring"
     )
     mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
+    modality: Modality = Field(description="Type of modality")
 
 
 class RankingResult(bt.Synapse):

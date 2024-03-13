@@ -1,9 +1,12 @@
+import os
 from functools import lru_cache
 from typing import List, Union
 
 import bittensor as bt
+import ImageReward
 import torch
 from dotenv import load_dotenv
+from PIL import Image
 from strenum import StrEnum
 from torch.nn import functional as F
 from transformers import (
@@ -43,13 +46,18 @@ max_num_miners = 256
 
 
 @lru_cache(maxsize=max_num_miners)
-def get_cached_model(model_name: ModelName):
+def get_cached_text_model(model_name: ModelName):
     # use num_labels kwarg to make sure _hf_score function works
     model_kwargs = {"num_labels": 1}
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name, **model_kwargs
     ).eval()
     return model
+
+
+@lru_cache(maxsize=max_num_miners)
+def get_cached_image_model(model_name: ModelName = "ImageReward-v1.0"):
+    return ImageReward.load(model_name).eval()
 
 
 @lru_cache(maxsize=max_num_miners)
@@ -62,12 +70,31 @@ def get_cached_tokenizer(
 
 class ModelUtils:
     @staticmethod
+    def score_images(prompt, images: List[Image.Image]):
+        prompt = "a painting of an ocean with clouds and birds, day time, low depth field effect"
+        for i in range(len(images)):
+            img = images[i]
+            if isinstance(img, Image.Image):
+                continue
+            elif isinstance(img, str):
+                if os.path.isfile(img):
+                    with Image.open(img) as image:
+                        images[i] = image
+
+        model = get_cached_image_model()
+        with torch.no_grad():
+            ranking, scores = model.inference_rank(prompt, images)
+            bt.logging.debug(f"Images ranking = {ranking}")
+            bt.logging.debug(f"Images rewards = {scores}")
+        return scores, ranking
+
+    @staticmethod
     def hf_score_text(
         model_name: ModelName,
         prompt,
         completion,
     ):
-        model = get_cached_model(model_name)
+        model = get_cached_text_model(model_name)
         tokenizer = get_cached_tokenizer(model_name)
         question_ = tokenizer.apply_chat_template(
             conversation=[{"role": "user", "content": prompt}],

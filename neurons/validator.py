@@ -26,6 +26,7 @@ from template.protocol import (
     AWSCredentials,
     Completion,
     DendriteQueryResponse,
+    Modality,
     MTurkResponse,
     Rank,
     RankingRequest,
@@ -424,6 +425,7 @@ class Validator(BaseNeuron):
         if synapse is None:
             prompt, completions = SeedDataManager.get_prompt_and_completions()
             synapse = RankingRequest(
+                modality=Modality.TEXT,
                 n_completions=len(completions),
                 pid=get_new_uuid(),
                 prompt=prompt,
