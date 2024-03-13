@@ -347,6 +347,7 @@ class Validator(BaseNeuron):
             return
 
         current_time = get_epoch_time()
+        # allow enough time for human feedback
         SECONDS_IN_4H = 4 * 3600
         filtered_data = [
             d
@@ -384,9 +385,8 @@ class Validator(BaseNeuron):
             best_completion = None
             max_consensus_score = float("-inf")
             for i in range(len(completions)):
-                consensus_score = ranking_result.cid_to_consensus.get(
-                    completions[i].cid, None
-                )
+                cid = completions[i].cid
+                consensus_score = ranking_result.cid_to_consensus.get(cid, None)
                 if not consensus_score:
                     bt.logging.warning(
                         f"Missing consensus score for request id ({d.request.request_id}) completion id ({cid})"
@@ -466,13 +466,6 @@ class Validator(BaseNeuron):
         await DataManager.append_responses(response=response_data)
         return response_data
 
-    # async def concurrent_forward(self):
-    #     coroutines = [
-    #         self.forward_request()
-    #         for _ in range(self.config.neuron.num_concurrent_forwards)
-    #     ]
-    #     await asyncio.gather(*coroutines)
-
     async def run(self):
         """
         Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
@@ -545,54 +538,6 @@ class Validator(BaseNeuron):
         except Exception as err:
             bt.logging.error("Error during validation", str(err))
             bt.logging.debug(print_exception(type(err), err, err.__traceback__))
-
-    # def run_in_background_thread(self):
-    #     """
-    #     Starts the validator's operations in a background thread upon entering the context.
-    #     This method facilitates the use of the validator in a 'with' statement.
-    #     """
-    #     if not self.is_running:
-    #         bt.logging.debug("Starting validator in background thread.")
-    #         self.should_exit = False
-    #         self.thread = threading.Thread(target=self.run, daemon=True)
-    #         self.thread.start()
-    #         self.is_running = True
-    #         bt.logging.debug("Started")
-
-    # def stop_run_thread(self):
-    #     """
-    #     Stops the validator's operations that are running in the background thread.
-    #     """
-    #     if self.is_running:
-    #         bt.logging.debug("Stopping validator in background thread.")
-    #         self.should_exit = True
-    #         self.thread.join(5)
-    #         self.is_running = False
-    #         bt.logging.debug("Stopped")
-
-    # def __enter__(self):
-    #     self.run_in_background_thread()
-    #     return self
-
-    # def __exit__(self, exc_type, exc_value, traceback):
-    #     """
-    #     Stops the validator's background operations upon exiting the context.
-    #     This method facilitates the use of the validator in a 'with' statement.
-
-    #     Args:
-    #         exc_type: The type of the exception that caused the context to be exited.
-    #                   None if the context was exited without an exception.
-    #         exc_value: The instance of the exception that caused the context to be exited.
-    #                    None if the context was exited without an exception.
-    #         traceback: A traceback object encoding the stack trace.
-    #                    None if the context was exited without an exception.
-    #     """
-    #     if self.is_running:
-    #         bt.logging.debug("Stopping validator in background thread.")
-    #         self.should_exit = True
-    #         self.thread.join()
-    #         self.is_running = False
-    #         bt.logging.debug("Stopped")
 
     def set_weights(self):
         """
