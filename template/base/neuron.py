@@ -20,8 +20,7 @@ from abc import ABC, abstractmethod
 import bittensor as bt
 
 from commons.factory import Factory
-
-from commons.utils import initialise, ttl_get_block
+from commons.utils import init_wandb, initialise, ttl_get_block
 from template import __spec_version__ as spec_version
 
 
@@ -64,6 +63,8 @@ class BaseNeuron(ABC):
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
         self.step = 0
+
+        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     @abstractmethod
     def run(self): ...

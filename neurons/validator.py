@@ -1,31 +1,29 @@
 import asyncio
-from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
-import xml.etree.ElementTree as ET
-import json
+import copy
 import threading
 import time
+from collections import defaultdict
 from traceback import print_exception
-from typing import List, Tuple, Dict
-import copy
-from torch.nn import functional as F
+from typing import Dict, List, Tuple
 
 import bittensor as bt
 import numpy as np
 import torch
+from fastapi.encoders import jsonable_encoder
+from torch.nn import functional as F
+
 from commons.data_manager import DataManager
 from commons.dataset.dataset import SeedDataManager
-from commons.dataset.hf_utils import HuggingFaceUtils
 from commons.evals import EvalUtils
-from commons.factory import Factory
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
+from commons.logging.wandb_logging import wandb_log
 from commons.objects import DendriteQueryResponse
 from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
-
 from commons.utils import get_epoch_time, get_new_uuid, serve_axon
 from template.base.neuron import BaseNeuron
 from template.protocol import (
+    SCORING_METHOD_PRIORITY,
     AWSCredentials,
     Completion,
     MTurkResponse,
@@ -33,7 +31,6 @@ from template.protocol import (
     RankingRequest,
     RankingResult,
     ScoringMethod,
-    SCORING_METHOD_PRIORITY,
 )
 from template.utils.uids import get_random_miner_uids, is_miner
 
@@ -50,7 +47,6 @@ class Validator(BaseNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         self.hotkey_to_accuracy = defaultdict(float)
-        self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.axon.attach(
             forward_fn=self.forward_mturk_response,
@@ -107,11 +103,12 @@ class Validator(BaseNeuron):
 
         cids_to_check = set(completion_id_to_score.keys())
         # example of answers variable
-        # [{'Answer': [{'taskAnswers': [{'cid_a6f41ad1-d8a8-4bf3-a698-1b431bf2edac': 5.68, 'cid_f95cae4d-38ed-4911-b97a-f92a0c3bad9a': 7.49}]}], 'HITId': '3MG8450X3U3J7MRIYLXCI5SO1CIUPJ'}]
+        # [{'Answer': [{'taskAnswers': [{'a6f41ad1-d8a8-4bf3-a698-1b431bf2edac': 5.68, 'f95cae4d-38ed-4911-b97a-f92a0c3bad9a': 7.49}]}], 'HITId': '3MG8450X3U3J7MRIYLXCI5SO1CIUPJ'}]
         for answer in answers:
             task_answers = answer.get("Answer", [])
             for task_answer in task_answers:
-                for completion_id, score in task_answer.get("taskAnswers", {}).items():
+                for task_key, score in task_answer.get("taskAnswers", {}).items():
+                    completion_id = MTurkUtils.decode_task_key(task_key)
                     if completion_id not in cids_to_check:
                         bt.logging.warning(
                             f"Completion ID {completion_id} found in MTurk task answers is not in the expected set."
@@ -381,23 +378,38 @@ class Validator(BaseNeuron):
             await asyncio.sleep(1)
             consumed_responses.append(d)
 
-            is_contrib_disabled = Factory.get_config().hf_dataset_contrib.off
-
-            if not is_contrib_disabled:
-                prompt = d.request.prompt
-                completions = d.request.completions
-                consensus_scores = [None] * len(completions)
-                for i in range(len(completions)):
-                    consensus_score = ranking_result.cid_to_consensus.get(
-                        completions[i].cid, None
-                    )
-                    if not consensus_score:
-                        continue
-                    consensus_scores[i] = consensus_score
-
-                HuggingFaceUtils.append_data(
-                    prompt, completions, consensus_scores, self.wallet
+            completions = d.request.completions
+            consensus_scores = [None] * len(completions)
+            best_completion = None
+            max_consensus_score = float("-inf")
+            for i in range(len(completions)):
+                consensus_score = ranking_result.cid_to_consensus.get(
+                    completions[i].cid, None
                 )
+                if not consensus_score:
+                    bt.logging.warning(
+                        f"Missing consensus score for request id ({d.request.request_id}) completion id ({cid})"
+                    )
+                    continue
+                if consensus_score > max_consensus_score:
+                    max_consensus_score = consensus_score
+                    best_completion = completions[i].text
+
+                consensus_scores[i] = consensus_score
+            wandb_data = jsonable_encoder(
+                {
+                    "prompt": d.request.prompt,
+                    "completions": d.request.completions,
+                    "num_completions": len(d.request.completions),
+                    "consensus_scores": consensus_scores,
+                    "best_completion": best_completion,
+                    "responses": d.responses,
+                    "num_responses": len(d.responses),
+                    "hotkey_to_accuracy": self.hotkey_to_accuracy,
+                    "hotkey_to_score": ranking_result.hotkey_to_score,
+                }
+            )
+            asyncio.create_task(wandb_log(wandb_data))
 
         # once we have scored certain responses, just remove them
         await DataManager.remove_responses(consumed_responses)

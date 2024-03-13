@@ -16,9 +16,10 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import argparse
 import os
 from pathlib import Path
-import argparse
+
 import bittensor as bt
 
 from commons.reward_model.models import ModelZoo
@@ -103,12 +104,7 @@ def add_args(parser):
             help="Base path to store data to.",
             default=Path.cwd(),
         )
-        parser.add_argument(
-            "--hf_dataset_contrib.off",
-            action="store_true",
-            help="Whether or not to contribute to the Huggingface dataset.",
-            default=False,
-        )
+
         parser.add_argument(
             "--evaluation.num_batches",
             type=int,
