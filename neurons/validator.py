@@ -449,8 +449,7 @@ class Validator(BaseNeuron):
         valid_responses = [
             response
             for response in responses
-            if len(response.ranks) > 0
-            and response.scoring_method in [method for method in ScoringMethod]
+            if response.scoring_method in [method for method in ScoringMethod]
         ]
 
         if not len(valid_responses):
