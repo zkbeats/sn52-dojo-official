@@ -20,7 +20,7 @@ from commons.logging.wandb_logging import wandb_log
 from commons.objects import DendriteQueryResponse
 from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, get_new_uuid, serve_axon
+from commons.utils import get_epoch_time, get_new_uuid, init_wandb, serve_axon
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     SCORING_METHOD_PRIORITY,
@@ -64,6 +64,7 @@ class Validator(BaseNeuron):
 
         # Init sync with the network. Updates the metagraph.
         self.sync()
+        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
