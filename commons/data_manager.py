@@ -7,7 +7,7 @@ import bittensor as bt
 import torch
 
 from commons.factory import Factory
-from commons.objects import DendriteQueryResponse
+from template.protocol import DendriteQueryResponse
 
 
 class DataManager:

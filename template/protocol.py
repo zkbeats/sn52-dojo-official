@@ -1,10 +1,11 @@
 from datetime import datetime
-from strenum import StrEnum
 from typing import Dict, List, Optional
+
 import bittensor as bt
 from pydantic import BaseModel, Field
-from commons.llm.openai_proxy import Provider
+from strenum import StrEnum
 
+from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
 
 
@@ -103,3 +104,25 @@ class MTurkResponse(bt.Synapse):
     mturk_hit_id: str
     aws_credentials: Optional[AWSCredentials]
     completion_id_to_score: Dict[str, float]
+
+
+class DendriteQueryResponse(BaseModel):
+    class Config:
+        allow_mutation = True
+
+    request: RankingRequest
+    responses: List[RankingRequest]
+
+
+class ScoreItem(BaseModel):
+    completion_id: str
+    score: float
+
+
+# meant to be used with JSON mode
+class ScoresResponse(BaseModel):
+    scores: List[ScoreItem]
+
+
+class PreferenceResponse(BaseModel):
+    preference_text: int

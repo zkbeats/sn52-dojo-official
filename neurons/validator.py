@@ -17,7 +17,6 @@ from commons.dataset.dataset import SeedDataManager
 from commons.evals import EvalUtils
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.logging.wandb_logging import wandb_log
-from commons.objects import DendriteQueryResponse
 from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, serve_axon
@@ -26,6 +25,7 @@ from template.protocol import (
     SCORING_METHOD_PRIORITY,
     AWSCredentials,
     Completion,
+    DendriteQueryResponse,
     MTurkResponse,
     Rank,
     RankingRequest,

@@ -1,10 +1,10 @@
-from strenum import StrEnum
 from functools import lru_cache
 from typing import List, Union
 
 import bittensor as bt
-from dotenv import load_dotenv
 import torch
+from dotenv import load_dotenv
+from strenum import StrEnum
 from torch.nn import functional as F
 from transformers import (
     AutoModelForSequenceClassification,
@@ -15,9 +15,13 @@ from transformers import (
 
 from commons.llm.openai_proxy import Provider, get_openai_client
 from commons.llm.prompts import PromptBuilder, ScoreRange
-from commons.objects import PreferenceResponse, ScoresResponse
-from commons.utils import PydanticUtils, get_device
-from template.protocol import Completion, ModelConfig
+from commons.utils import PydanticUtils
+from template.protocol import (
+    Completion,
+    ModelConfig,
+    PreferenceResponse,
+    ScoresResponse,
+)
 
 load_dotenv()
 
