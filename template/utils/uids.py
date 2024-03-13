@@ -19,9 +19,7 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
 def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     """Check if uid is a validator."""
     stakes = metagraph.S.tolist()
-    if len(stakes) <= 64:
-        return stakes[uid] < 1_000
-    return not metagraph.neurons[uid].validator_permit
+    return stakes[uid] < 1_000
 
 
 def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
