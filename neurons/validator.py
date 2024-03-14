@@ -17,7 +17,6 @@ from commons.dataset.dataset import SeedDataManager
 from commons.evals import EvalUtils
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.logging.wandb_logging import wandb_log
-from commons.objects import DendriteQueryResponse
 from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, serve_axon
@@ -26,6 +25,8 @@ from template.protocol import (
     SCORING_METHOD_PRIORITY,
     AWSCredentials,
     Completion,
+    DendriteQueryResponse,
+    Modality,
     MTurkResponse,
     Rank,
     RankingRequest,
@@ -280,7 +281,7 @@ class Validator(BaseNeuron):
             tasks = [
                 loop.run_in_executor(
                     None,
-                    ModelUtils._hf_score,
+                    ModelUtils.hf_score_text,
                     synapse.model_config.model_name,
                     synapse.prompt,
                     completion.text,
@@ -299,7 +300,7 @@ class Validator(BaseNeuron):
         elif synapse.scoring_method == ScoringMethod.LLM_API:
             llm_provider = synapse.model_config.provider
             model_name = synapse.model_config.model_name
-            scores_response = await ModelUtils._llm_api_score(
+            scores_response = await ModelUtils.llm_api_score_text(
                 provider=llm_provider,
                 model_name=model_name,
                 prompt=synapse.prompt,
@@ -424,6 +425,7 @@ class Validator(BaseNeuron):
         if synapse is None:
             prompt, completions = SeedDataManager.get_prompt_and_completions()
             synapse = RankingRequest(
+                modality=Modality.TEXT,
                 n_completions=len(completions),
                 pid=get_new_uuid(),
                 prompt=prompt,

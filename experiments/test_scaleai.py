@@ -1,22 +1,17 @@
-import asyncio
-from distutils.command import build
-from enum import unique
 import os
-import time
-from typing import List, Optional
-from uuid import uuid4
 from datetime import datetime
+from typing import Optional
+from uuid import uuid4
 
 import scaleapi
 from dotenv import load_dotenv
 from scaleapi.exceptions import ScaleDuplicateResource, ScaleInvalidRequest
 from scaleapi.tasks import TaskType
+
 from commons.llm.openai_proxy import Provider
 from commons.llm.prompts import ScoreRange
-from commons.objects import ScoreItem, ScoresResponse
-
 from commons.reward_model.models import ModelUtils
-from template.protocol import Completion
+from template.protocol import Completion, ScoreItem, ScoresResponse
 
 load_dotenv()
 
@@ -26,7 +21,6 @@ scale_api_key = os.getenv("SCALE_API_KEY")
 client = scaleapi.ScaleClient(api_key=scale_api_key)
 
 import textwrap
-
 
 score_range = ScoreRange(lower=1, upper=10)
 
@@ -84,7 +78,7 @@ def create_project(project_name: str) -> Optional[bool]:
     }
     try:
         _ = client.create_project(**project_payload)
-    except ScaleDuplicateResource as e:
+    except ScaleDuplicateResource:
         # may get duplicate resource error although project was created properly...
         pass
 
@@ -93,7 +87,7 @@ def create_project(project_name: str) -> Optional[bool]:
         try:
             # need to create first batch in order to "complete setup"
             _ = client.create_batch(project=project_name, batch_name=batch_name)
-        except Exception as e:
+        except Exception:
             pass
 
     print(f"Successfully created project? {is_project_created}")
@@ -142,7 +136,7 @@ def create_task(project_name: str):
     try:
         batch = client.create_batch(project=project_name, batch_name=batch_name)
         print("Created batch successfully")
-    except ScaleDuplicateResource as e:
+    except ScaleDuplicateResource:
         print("Batch already exists... skipping creation")
         batch = client.get_batch(batch_name)
         pass
@@ -260,7 +254,7 @@ async def add_scores_to_dataset():
             completions = [
                 Completion(text=r["response"]) for r in row_data["responses"]
             ]
-            scores_response: ScoresResponse = await ModelUtils._llm_api_score(
+            scores_response: ScoresResponse = await ModelUtils.llm_api_score_text(
                 model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
                 provider=Provider.TOGETHER_AI,
                 completions=completions,
@@ -300,7 +294,7 @@ def one_time_finalise(project_name):
     batch_name = build_batch_name(project_name)
     try:
         batch = client.create_batch(project=project_name, batch_name=batch_name)
-    except ScaleDuplicateResource as e:
+    except ScaleDuplicateResource:
         print("Batch already exists... skipping creation")
         batch = client.get_batch(batch_name)
 
