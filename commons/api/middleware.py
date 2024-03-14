@@ -1,10 +1,12 @@
-import bittensor as bt
 import time
-from fastapi import Request
+from ipaddress import ip_address, ip_network
+
+import bittensor as bt
 import httpx
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from ipaddress import ip_network, ip_address
+
 from commons.human_feedback.aws_mturk import US_EAST_REGION
 
 MAX_CONTENT_LENGTH = 1 * 1024 * 1024
@@ -39,7 +41,8 @@ class AWSIPFilterMiddleware(BaseHTTPMiddleware):
         async with httpx.AsyncClient() as client:
             start_time = time.time()
             response = await client.get(cls._aws_ips_url)
-            elapsed_time = time.time() - start_time
+            cls._last_checked = time.time()
+            elapsed_time = cls._last_checked - start_time
             bt.logging.debug(
                 f"Sent request to {cls._aws_ips_url}, took {elapsed_time:.2f} seconds"
             )
