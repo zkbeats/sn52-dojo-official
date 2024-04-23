@@ -19,7 +19,7 @@ from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.logging.wandb_logging import wandb_log
 from commons.reward_model.models import ModelUtils
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, get_new_uuid, init_wandb, serve_axon
+from commons.utils import get_epoch_time, get_new_uuid, init_wandb
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     SCORING_METHOD_PRIORITY,
@@ -495,20 +495,6 @@ class Validator(BaseNeuron):
 
         bt.logging.info(
             f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-        )
-
-        # Serve passes the axon information to the network + netuid we are hosting on.
-        # This will auto-update if the axon port of external ip have changed.
-        serve_success = serve_axon(self.subtensor, self.axon, self.config)
-        if serve_success:
-            bt.logging.success("Successfully served axon for validator!")
-        else:
-            bt.logging.error("Failed to serve axon for validator, exiting.")
-            exit()
-
-        self.axon.start()
-        bt.logging.info(
-            f"Serving validator axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
 
         bt.logging.info(f"Validator starting at block: {self.block}")
