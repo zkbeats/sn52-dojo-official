@@ -31,7 +31,6 @@ def get_openai_kwargs(provider: Provider):
     raise ValueError(f"Unknown provider specified , provider: {provider}")
 
 
-@lru_cache(maxsize=10)
 def get_openai_client(provider: Provider):
     # known_providers = [provider.value for provider in Provider]
     # TODO @dev use instructor when bittensor migrates to pydantic v2
@@ -43,7 +42,6 @@ def get_openai_client(provider: Provider):
     return AsyncOpenAI(api_key=kwargs["api_key"], base_url=kwargs["base_url"])
 
 
-@lru_cache(maxsize=10)
 def get_sync_openai_client(provider: Provider):
     # known_providers = [provider.value for provider in Provider]
     # TODO @dev use instructor when bittensor migrates to pydantic v2
