@@ -52,7 +52,7 @@ def build_code_generation_question_prompt(
     - The interactions must require the programmer to have a mental model of any objects being visualized.
     - The question generated must require the programmer to code using only Python, or Javascript with HTML and CSS.
     - You must not provide any example code snippets, because you must let the programmer solve the question by themselves.
-    - If the generated question is in Python, it should command the usage of built-in libraries or third-party visualization libraries like plotly, matplotlib and tkinter. You must discourage the usage of libraries like pygame.
+    - If the generated question is in Python, it must use built-in libraries. The only third-party visualization library allowed is bokeh.
     - If the generated question is in Javascript, it should command the usage of built-in libraries or use visualization libraries like three.js, D3.js.
 
     Coding Question:
@@ -327,7 +327,7 @@ async def generate_answer(client: AsyncOpenAI, model: str, question: str):
                 return model, completion
     except RetryError:
         bt.logging.error(
-            f"Failed to generate completion after {MAX_RETRIES} attempts for generating code answer"
+            f"Failed to generate completion after {MAX_RETRIES} attempts for generating code answer for {model}"
         )
         pass
 
@@ -382,13 +382,27 @@ async def build_prompt_responses_pair():
     results = await asyncio.gather(
         *[generate_answer(client, ans_model, prompt) for ans_model in sel_ans_models]
     )
-
-    for model, answer in results:
-        print(f"Got answer for model: {model}, answer: {answer}")
+    res = {"prompt": prompt, "responses": []}
+    for model, result in results:
+        if not result:
+            continue
+        res["responses"].append(
+            {
+                "model": model,
+                "completion": {
+                    "code": result["code"],
+                    "language": result["language"],
+                    "installation_commands": result["installation_commands"],
+                    "additional_notes": result["additional_notes"],
+                },
+            }
+        )
+    return res
 
 
 async def main():
-    await build_prompt_responses_pair()
+    res = await build_prompt_responses_pair()
+    print(f"{res=}")
 
 
 if __name__ == "__main__":
