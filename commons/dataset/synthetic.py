@@ -87,13 +87,44 @@ def parse_openai_json_mode_response(completion_content: str):
     return parsed
 
 
-def parse_code_response(strictjson_response: dict[str, Any]) -> dict:
-    """Ensures consistent format of 'code' key"""
+def detect_chars_until_first_word(text: str):
+    pattern = r"^.*?(?=\b\w)"
+    match = re.search(pattern, text)
+    if not match:
+        return None
+    return match.group()
+
+
+def parse_code_response(strictjson_response: dict[str, Any], model: str) -> dict:
+    """ensures consistent format of 'code' key"""
     if "code" not in strictjson_response:
-        raise ValueError("No code key found in strictjson response")
-    code = extract_strictjson_code(strictjson_response["code"])
-    if code:
-        strictjson_response["code"] = code
+        # bt.logging.warning(f"{strictjson_response.keys()}")
+        raise ValueError(f"No code key found in strictjson response for model: {model}")
+
+    try:
+        # using re.match to check the first character, is a letter a-z (case insensitive)
+        code_text = strictjson_response["code"]
+        if re.match(r"^[a-zA-Z]", code_text):
+            detected_chars = detect_chars_until_first_word(code_text)
+            is_all_same_char = (
+                True if detected_chars and len(set(detected_chars)) == 1 else False
+            )
+            if (
+                detected_chars
+                and is_all_same_char
+                and code_text.startswith(detected_chars)
+                and code_text.endswith(detected_chars)
+            ):
+                code_text = code_text[len(detected_chars) : -len(detected_chars)]
+                if len(code_text) > 0:
+                    strictjson_response["code"] = code_text
+    except Exception as e:
+        pass
+
+    # code = extract_strictjson_code(strictjson_response["code"])
+    # if code:
+    #     strictjson_response["code"] = code
+    # return strictjson_response
     return strictjson_response
 
 
@@ -281,6 +312,7 @@ async def generate_answer(client: AsyncOpenAI, model: str, question: str):
                     user="Remember to provide the code solution according your previous instructions.",
                     callable_llm=callable_llm,
                 )
+                completion = parse_code_response(completion, model)
 
                 # TODO parse the response because of weird triple backticks or quotes
                 # try:
