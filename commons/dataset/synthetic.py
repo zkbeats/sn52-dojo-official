@@ -42,9 +42,7 @@ class CodeAnswer(BaseModel):
     )
 
 
-def build_code_generation_question_prompt(
-    num_requirements: int = random.choices([3, 4, 5], weights=[0.5, 0.3, 0.2])[0],
-) -> str:
+def build_code_generation_question_prompt(num_requirements: int) -> str:
     bt.logging.info(f"Generating question with {num_requirements} requirements")
     CODE_GEN_PROMPT = """
     System:
@@ -116,15 +114,11 @@ def parse_code_response(strictjson_response: dict[str, Any], model: str) -> dict
                 and code_text.endswith(detected_chars)
             ):
                 code_text = code_text[len(detected_chars) : -len(detected_chars)]
-                if len(code_text) > 0:
+                if len(code_text):
                     strictjson_response["code"] = code_text
     except Exception as e:
         pass
 
-    # code = extract_strictjson_code(strictjson_response["code"])
-    # if code:
-    #     strictjson_response["code"] = code
-    # return strictjson_response
     return strictjson_response
 
 
@@ -137,6 +131,7 @@ def build_code_answer_prompt(question) -> str:
     - You must provide all code required to ensure that your solution is complete.
     - Do not leave out any details for brevity.
     - Additionally, ensure that your code solution directly executes any functions required to provide the solution to the task.
+    - Your solution must not involve the useage of a terminal. If you require any inputs from the user, you must provide the functionality of the user input in your code.
 
     Question:
     {question}
@@ -181,13 +176,21 @@ async def generate_question(client: AsyncOpenAI, model: str) -> Optional[str]:
         "messages": [
             {
                 "role": "system",
-                "content": build_code_generation_question_prompt(),
+                "content": build_code_generation_question_prompt(
+                    random.choices([3, 4, 5], weights=[0.5, 0.3, 0.2])[0]
+                ),
             }
         ],
         "temperature": 0.2,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "top_p": random.uniform(0.9, 1.0),
     }
+
+    if model == "codellama/codellama-70b-instruct":
+        # perform provider routing
+        kwargs["extra_body"] = {
+            "provider": {"order": ["Together"]},
+        }
 
     if model.startswith("openai"):
         kwargs["seed"] = random.randint(0, 1e9)
@@ -287,7 +290,7 @@ async def generate_strictjson_answer(sys, user, callable_llm: Callable):
     return result
 
 
-async def generate_answer(client: AsyncOpenAI, model: str, question: str):
+async def generate_answer(model: str, question: str):
     """Generates a coding question answer for a given coding question."""
     MAX_RETRIES = 3
 
@@ -359,13 +362,13 @@ async def build_prompt_responses_pair():
 
     # NOTE @dev LLMs here were selected to be able to compare against the EvalPLus leaderboard
     answer_models = [
-        "phind/phind-codellama-34b-v2",
+        # "phind/phind-codellama-34b",
+        # "codellama/codellama-70b-instruct",
         "microsoft/wizardlm-2-8x22b",
         "gpt-4-turbo-2024-04-09",
         "anthropic/claude-3-opus-20240229",
         "anthropic/claude-3-sonnet-20240229",
         "anthropic/claude-3-haiku-20240307",
-        "codellama/codellama-70b-instruct",
         "mistralai/mistral-large",
         "google/gemini-pro-1.5",
         "cognitivecomputations/dolphin-mixtral-8x7b",
@@ -380,7 +383,7 @@ async def build_prompt_responses_pair():
     sel_ans_models = random.sample(answer_models, num_samples)
 
     results = await asyncio.gather(
-        *[generate_answer(client, ans_model, prompt) for ans_model in sel_ans_models]
+        *[generate_answer(ans_model, prompt) for ans_model in sel_ans_models]
     )
     res = {"prompt": prompt, "responses": []}
     for model, result in results:
