@@ -3,7 +3,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
-from typing import Tuple
+from typing import Tuple, Type
 
 import bittensor as bt
 import jsonref
@@ -12,11 +12,16 @@ import torch
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
-import template
 import wandb
 
 
+def get_new_uuid():
+    return str(uuid.uuid4())
+
+
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
+    import template
+
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
@@ -124,14 +129,6 @@ def get_external_ip() -> str:
     return response.text.strip()
 
 
-def get_new_uuid():
-    return str(uuid.uuid4())
-
-
-def get_epoch_time():
-    return time.time()
-
-
 def get_device() -> str:
     if torch.cuda.is_available():
         return "cuda"
@@ -202,7 +199,18 @@ class PydanticUtils:
         required = resolved_schema.get("required", [])
         resolved_schema = remove_key(resolved_schema, "required")
         resolved_schema["required"] = required
-        return {"type": "json_object", "schema": resolved_schema}
+        # return {"type": "json_object", "schema": resolved_schema}
+        return resolved_schema
+
+    @classmethod
+    def build_minimal_json(cls, model: Type[BaseModel]):
+        return {
+            field_name: model.__fields__[field_name].field_info.description
+            for field_name in model.__fields__
+            if model.__fields__[field_name].field_info.description
+        }
+
+        # {'code': {'description': 'Code solution to the question', 'type': 'string'}, 'language': {'description': 'Programming language of the code', 'type': 'string'}, 'installation_commands': {'description': 'Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run', 'type': 'string'}, 'additional_notes': {'description': 'Any additional notes or comments about the code solution', 'type': 'string'}}, 'required': ['code', 'language', 'installation_commands']}
 
 
 # The MIT License (MIT)
