@@ -5,9 +5,6 @@ import torch
 import random
 import bittensor as bt
 import bisect
-from Crypto.Hash import keccak
-
-from commons.utils import get_new_uuid
 
 
 def get_all_serving_uids(metagraph: bt.metagraph):
@@ -91,11 +88,6 @@ class MinerUidSelector:
 
     @classmethod
     def hash_function(cls, key):
-        def keccak256_hash(data):
-            k = keccak.new(digest_bits=256)
-            k.update(data.encode("utf-8"))
-            return k.hexdigest()
-
         return int(keccak256_hash(key), 16)
 
     @classmethod

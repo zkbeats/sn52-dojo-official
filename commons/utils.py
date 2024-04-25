@@ -9,6 +9,7 @@ import bittensor as bt
 import jsonref
 import requests
 import torch
+from Crypto.Hash import keccak
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
@@ -17,6 +18,12 @@ import wandb
 
 def get_new_uuid():
     return str(uuid.uuid4())
+
+
+def keccak256_hash(data):
+    k = keccak.new(digest_bits=256)
+    k.update(data.encode("utf-8"))
+    return k.hexdigest()
 
 
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
