@@ -53,6 +53,7 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     async def forward_ranking_request(self, synapse: RankingRequest) -> RankingRequest:
+        # TODO call Dojo APIs
         try:
             print(f"Miner received request, type={str(synapse.__class__.__name__)}")
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse

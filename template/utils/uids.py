@@ -6,6 +6,8 @@ import random
 import bittensor as bt
 import bisect
 
+from commons.utils import keccak256_hash
+
 
 def get_all_serving_uids(metagraph: bt.metagraph):
     uids = [uid for uid in range(metagraph.n.item()) if metagraph.axons[uid].is_serving]
