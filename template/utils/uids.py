@@ -52,8 +52,7 @@ def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
     return uids
 
 
-# TODO v2
-class HashRing:
+class MinerUidSelector:
     _instance = None
     ring = []
     nodes_hash_map = {}
@@ -61,10 +60,20 @@ class HashRing:
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(HashRing, cls).__new__(cls)
+            cls._instance = super(MinerUidSelector, cls).__new__(cls)
             cls.ring = []
             cls.nodes_hash_map = {}
         return cls._instance
+
+    @staticmethod
+    def extract_miner_uids(metagraph: bt.metagraph):
+        # TODO perf: perform a health check synapse to be able to ensure reachability
+        uids = [
+            uid
+            for uid in range(metagraph.n.item())
+            if metagraph.axons[uid].is_serving and is_miner(metagraph, uid)
+        ]
+        return uids
 
     @classmethod
     def __init__(cls, nodes: Optional[List[int]] = None):
@@ -122,63 +131,32 @@ class HashRing:
         return nodes
 
 
-nodes = list(range(1, 193))
-ch = HashRing(nodes)
-requests_per_node = defaultdict(int)
-for _ in range(100_000):
-    request_key = str(uuid.uuid4())
-    target_nodes = ch.get_target_uids(request_key)
-    for node in target_nodes:
-        requests_per_node[node] += 1
+if __name__ == "__main__":
+    # example usage... always call __init__ then get_target_uids
+    miner_uids = list(range(1, 193))
+    # when actual usage occurs...
+    # miner_uids = MinerUidSelector.extract_miner_uids(metagraph)
+    ch = MinerUidSelector(miner_uids)
+    requests_per_node = defaultdict(int)
+    for _ in range(100_000):
+        request_key = str(uuid.uuid4())
+        target_nodes = ch.get_target_uids(request_key)
+        for node in target_nodes:
+            requests_per_node[node] += 1
 
-for node, count in requests_per_node.items():
-    print(f"Node {node} received {count} requests.")
+    for node, count in requests_per_node.items():
+        print(f"Node {node} received {count} requests.")
 
-import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt
 
-nodes = list(requests_per_node.keys())
-requests = list(requests_per_node.values())
+    miner_uids = list(requests_per_node.keys())
+    requests = list(requests_per_node.values())
 
-plt.figure(figsize=(10, 6))
-plt.bar(nodes, requests, color="skyblue")
-plt.xlabel("Node")
-plt.ylabel("Number of Requests")
-plt.title("Distribution of Requests per Node")
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
-
-# TODO v3
-# from uhashring import HashRing
-
-# requests_per_node = defaultdict(int)
-# nodes = list(range(1, 193))
-# # create a consistent hash ring of 3 nodes of weight 1
-# hr = HashRing(nodes=[str(node) for node in nodes])
-
-# # Generate 100 UUIDs and tabulate requests per node
-# for _ in range(100_000):
-#     request_key = str(uuid.uuid4())
-#     target_nodes = hr.get_node(request_key)
-#     requests_per_node[int(target_nodes)] += 1
-#     # for node in target_nodes:
-#     #     requests_per_node[node] += 1
-
-# # Print the total number of requests per node
-# for node, count in requests_per_node.items():
-#     print(f"Node {node} received {count} requests.")
-
-# import matplotlib.pyplot as plt
-
-# # Convert requests_per_node to lists for plotting
-# nodes = list(requests_per_node.keys())
-# requests = list(requests_per_node.values())
-
-# plt.figure(figsize=(10, 6))
-# plt.bar(nodes, requests, color="skyblue")
-# plt.xlabel("Node")
-# plt.ylabel("Number of Requests")
-# plt.title("Distribution of Requests per Node")
-# plt.xticks(rotation=45)
-# plt.tight_layout()
-# plt.show()
+    plt.figure(figsize=(10, 6))
+    plt.bar(miner_uids, requests, color="skyblue")
+    plt.xlabel("Node")
+    plt.ylabel("Number of Requests")
+    plt.title("Distribution of Requests per Node")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
