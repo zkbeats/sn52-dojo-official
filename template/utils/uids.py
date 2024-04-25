@@ -52,6 +52,16 @@ def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
     return uids
 
 
+def extract_miner_uids(metagraph: bt.metagraph):
+    # TODO perf: perform a health check synapse to be able to ensure reachability
+    uids = [
+        uid
+        for uid in range(metagraph.n.item())
+        if metagraph.axons[uid].is_serving and is_miner(metagraph, uid)
+    ]
+    return uids
+
+
 class MinerUidSelector:
     _instance = None
     ring = []
@@ -64,16 +74,6 @@ class MinerUidSelector:
             cls.ring = []
             cls.nodes_hash_map = {}
         return cls._instance
-
-    @staticmethod
-    def extract_miner_uids(metagraph: bt.metagraph):
-        # TODO perf: perform a health check synapse to be able to ensure reachability
-        uids = [
-            uid
-            for uid in range(metagraph.n.item())
-            if metagraph.axons[uid].is_serving and is_miner(metagraph, uid)
-        ]
-        return uids
 
     @classmethod
     def __init__(cls, nodes: Optional[List[int]] = None):

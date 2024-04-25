@@ -7,6 +7,7 @@ from traceback import print_exception
 from typing import Dict, List, Tuple
 
 import bittensor as bt
+from itsdangerous import URLSafeTimedSerializer
 import numpy as np
 import torch
 from fastapi.encoders import jsonable_encoder
@@ -33,7 +34,13 @@ from template.protocol import (
     RankingResult,
     ScoringMethod,
 )
-from template.utils.uids import get_random_miner_uids, is_miner
+from template.utils.config import get_config
+from template.utils.uids import (
+    get_random_miner_uids,
+    is_miner,
+    extract_miner_uids,
+    MinerUidSelector,
+)
 
 
 def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
@@ -432,12 +439,13 @@ class Validator(BaseNeuron):
                 completions=[Completion(text=c) for c in completions],
             )
 
-        miner_uids = get_random_miner_uids(
-            metagraph=self.metagraph, k=self.config.neuron.sample_size
+        all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
+        sel_miner_uids = MinerUidSelector(all_miner_uids).get_target_uids(
+            key=synapse.request_id, k=get_config().neuron.sample_size
         )
         axons = [
             self.metagraph.axons[uid]
-            for uid in miner_uids
+            for uid in sel_miner_uids
             if self.metagraph.axons[uid].hotkey.casefold()
             != self.wallet.hotkey.ss58_address.casefold()
         ]
