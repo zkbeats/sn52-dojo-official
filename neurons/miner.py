@@ -14,6 +14,7 @@ from commons.factory import Factory
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time
+from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     ModelConfig,
@@ -146,10 +147,9 @@ class Miner(BaseMinerNeuron):
         if is_miner(self.metagraph, caller_uid):
             return True, "Not a validator"
 
-        MIN_VALIDATOR_STAKE = 20_000
-        if validator_neuron.stake.tao < float(MIN_VALIDATOR_STAKE):
+        if validator_neuron.stake.tao < float(VALIDATOR_MIN_STAKE):
             bt.logging.warning(
-                f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {MIN_VALIDATOR_STAKE}, current stake: {validator_neuron.stake.tao}"
+                f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {VALIDATOR_MIN_STAKE}, current stake: {validator_neuron.stake.tao}"
             )
             return True, "Insufficient validator stake"
 
