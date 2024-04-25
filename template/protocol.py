@@ -4,30 +4,35 @@ from typing import Dict, List, Optional
 import bittensor as bt
 from pydantic import BaseModel, Field
 from strenum import StrEnum
+from commons.dataset.synthetic import CodeAnswer
 
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
 
 
-class Modality(StrEnum):
+class TaskType(StrEnum):
     TEXT = "text"
     IMAGE = "image"
+    CODE_GENERATION = "code_generation"
 
 
 class ScoringMethod(StrEnum):
     HF_MODEL = "hf_model"
     LLM_API = "llm_api"
     AWS_MTURK = "aws_mturk"
+    DOJO = "dojo_worker"
 
 
-SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
-    ScoringMethod.HF_MODEL: 1,
-    ScoringMethod.LLM_API: 0,
-    ScoringMethod.AWS_MTURK: 2,
-}
+# # higher value in this map are priortised and allowed to override data on the miner side
+# SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
+#     ScoringMethod.HF_MODEL: 1,
+#     ScoringMethod.LLM_API: 0,
+#     ScoringMethod.AWS_MTURK: 2,
+#     ScoringMethod.DOJO_WORKER: 3,
+# }
 
 
-class Completion(BaseModel):
+class Completion(CodeAnswer):
     class Config:
         allow_mutation = False
 
@@ -35,7 +40,8 @@ class Completion(BaseModel):
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
-    text: str = Field(description="Text of the completion")
+    model: str = Field(description="Model that generated the completion")
+    # text: str = Field(description="Text of the completion")
 
 
 class Rank(BaseModel):
@@ -64,10 +70,6 @@ class RankingRequest(bt.Synapse):
         description="Prompt or query from the user sent the LLM",
         allow_mutation=False,
     )
-    n_completions: int = Field(
-        description="Number of completions for miner to score/rank",
-        allow_mutation=False,
-    )
     completions: List[Completion] = Field(
         description="List of completions for the prompt",
         allow_mutation=False,
@@ -78,11 +80,12 @@ class RankingRequest(bt.Synapse):
     scoring_method: Optional[str] = Field(
         decscription="Method to use for scoring completions"
     )
-    model_config: Optional[ModelConfig] = Field(
-        description="Model configuration for Huggingface / LLM API scoring"
-    )
+    # model_config: Optional[ModelConfig] = Field(
+    #     description="Model configuration for Huggingface / LLM API scoring"
+    # )
     mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
-    modality: Modality = Field(description="Type of modality")
+    dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
+    task: TaskType = Field(description="Type of task")
 
 
 class RankingResult(bt.Synapse):
