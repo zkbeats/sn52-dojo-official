@@ -20,6 +20,10 @@ def get_new_uuid():
     return str(uuid.uuid4())
 
 
+def get_epoch_time():
+    return time.time()
+
+
 def keccak256_hash(data):
     k = keccak.new(digest_bits=256)
     k.update(data.encode("utf-8"))
