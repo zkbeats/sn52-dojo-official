@@ -50,7 +50,7 @@ def build_code_generation_question_prompt(num_requirements: int) -> str:
     - The interactions must require the programmer to have a mental model of any objects being visualized.
     - The question generated must require the programmer to code using only Python, or Javascript with HTML and CSS.
     - You must not provide any example code snippets, because you must let the programmer solve the question by themselves.
-    - If the generated question is in Python, it must use built-in libraries. The only third-party visualization library allowed is bokeh.
+    - If the generated question is in Python, it must use built-in libraries. The only third-party visualization library allowed is plotly, matplotlib.
     - If the generated question is in Javascript, it should command the usage of built-in libraries or use visualization libraries like three.js, D3.js.
 
     Coding Question:
