@@ -9,6 +9,7 @@ import scipy
 from attr import define, field
 import torch
 from torch.nn import functional as F
+from sklearn.metrics import cohen_kappa_score
 
 from template.protocol import (
     CriteriaType,
@@ -96,6 +97,26 @@ class Scoring:
         return ranking_result
 
     @staticmethod
+    def _process_responses(responses: List[FeedbackRequest]):
+        model_id_to_avg_rank = _calculate_average_rank_by_model(responses)
+        # shape (num miners, num completions)
+        all_miner_ranks = [
+            [
+                x.rank_id
+                for x in sorted(
+                    response.completions, key=lambda x: model_id_to_avg_rank[x.model_id]
+                )
+            ]
+            for response in responses
+        ]
+        all_miner_ranks = np.array(all_miner_ranks)
+        bt.logging.trace(all_miner_ranks.shape)
+
+        # compute spearman correlation and handle nan values
+        avg_ranks = np.array([i + 1 for i in range(len(model_id_to_avg_rank.keys()))])
+        return avg_ranks, all_miner_ranks
+
+    @staticmethod
     def consensus_score(criteria: CriteriaType, responses: List[FeedbackRequest]):
         """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.
@@ -105,6 +126,27 @@ class Scoring:
 
         if criteria == CriteriaType.SCORING:
             return Scoring._spearman_scoring(responses)
+        elif criteria == CriteriaType.PREFERENCE_RANKING:
+            avg_ranks, all_miner_ranks = Scoring._process_responses(responses)
+            spearman_corr = [
+                scipy.stats.spearmanr(miner_ranks, avg_ranks).statistic
+                for miner_ranks in all_miner_ranks
+            ]
+            cohen_kappa = [
+                cohen_kappa_score(miner_ranks, avg_ranks)
+                for miner_ranks in all_miner_ranks
+            ]
+            dist_penalty = -1 * torch.sum(
+                torch.square(torch.tensor(avg_ranks - all_miner_ranks)), axis=1
+            ).to(dtype=torch.float64)
+            snorm = F.normalize(torch.tensor(spearman_corr), dim=0, p=2)
+            cknorm = F.normalize(torch.tensor(cohen_kappa), dim=0, p=2)
+            dnorm = F.normalize(dist_penalty, dim=0, p=2)
+            bt.logging.trace(snorm)
+            bt.logging.trace(cknorm)
+            bt.logging.trace(dnorm)
+            combined = F.normalize(snorm + cknorm + 1.5 * dnorm, dim=0, p=2)
+            return combined
 
 
 def _calculate_average_rank_by_model(
@@ -191,9 +233,9 @@ async def main():
                 criteria_types=[CriteriaType.PREFERENCE_RANKING],
             )
         )
-    print(_calculate_average_rank_by_model(test_requests))
+    # print(_calculate_average_rank_by_model(test_requests))
+    print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-    print("Done!")
