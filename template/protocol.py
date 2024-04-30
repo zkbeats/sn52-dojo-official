@@ -18,6 +18,7 @@ class TaskType(StrEnum):
 
 class CriteriaType(StrEnum):
     PREFERENCE_RANKING = "preference_ranking"
+    SCORING = "scoring"
 
 
 class ScoringMethod(StrEnum):
@@ -47,6 +48,7 @@ class Completion(CodeAnswer):
     model_id: str = Field(description="Model that generated the completion")
     text: str = Field(description="Text of the completion")
     rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
+    score: float = Field("Score of the completion")
 
 
 # class Rank(BaseModel):
