@@ -66,8 +66,7 @@ class DojoAPI:
         async with cls._http_client as client:
             response = await client.get(url)
             response.raise_for_status()
-            response_data = check_task_completion_status(response.json())
-            return response_data
+            return response.json()
 
     @classmethod
     async def get_task_results_by_task_id(cls, task_id: str):
@@ -76,17 +75,20 @@ class DojoAPI:
         async with cls._http_client as client:
             response = await client.get(url)
             response.raise_for_status()
-            parsed_results = parse_task_results(response.json())
-            return parsed_results
+            return response.json()
 
     @classmethod
     async def get_task_and_results(cls, task_id: str):
         """Returns optional [{'1': 'model hash 1', '2': 'model hash 2'}],
         where '1' and '2' are the explicit rank integers"""
-        completion_status = await cls.get_task_by_id(task_id)
+        completion_status = check_task_completion_status(
+            await cls.get_task_by_id(task_id)
+        )
         if not completion_status:
             return None
-        ranking_results = await cls.get_task_results_by_task_id(task_id)
+        ranking_results = parse_task_results(
+            await cls.get_task_results_by_task_id(task_id)
+        )
         if not ranking_results:
             return None
         return ranking_results
