@@ -483,14 +483,26 @@ class Validator(BaseNeuron):
             # for i in range(len(d.responses)):
             #     is_valid_response = self.validate_response(d.responses[i])
 
-            ranking_result = Scoring.consensus_score(
-                responses=d.responses, hotkey_to_multiplier=self.hotkey_to_accuracy
+            criteria_to_miner_scores = Scoring.calculate_score(
+                criteria_types=d.request.criteria_types,
+                request=d.request,
+                responses=d.responses,
             )
+            # map miner hotkey to scores
+            criteria_to_hotkey_to_scores = defaultdict(lambda: defaultdict(float))
+            for criteria in d.request.criteria_types:
+                for response in d.responses:
+                    miner_scores = criteria_to_miner_scores[criteria]
+                    criteria_to_hotkey_to_scores[criteria][response.axon.hotkey] = (
+                        miner_scores
+                    )
+
             # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            self.update_scores(ranking_result.hotkey_to_score)
+            # TODO update scores for miners here
+            self.update_scores(criteria_to_hotkey_to_scores)
             await self.send_consensus(
-                synapse=ranking_result,
-                hotkeys=list(ranking_result.hotkey_to_score.keys()),
+                synapse=criteria_to_miner_scores,
+                hotkeys=list(criteria_to_miner_scores.hotkey_to_score.keys()),
             )
             await asyncio.sleep(1)
             consumed_responses.append(d)
@@ -501,7 +513,9 @@ class Validator(BaseNeuron):
             max_consensus_score = float("-inf")
             for i in range(len(completions)):
                 cid = completions[i].cid
-                consensus_score = ranking_result.cid_to_consensus.get(cid, None)
+                consensus_score = criteria_to_miner_scores.cid_to_consensus.get(
+                    cid, None
+                )
                 if not consensus_score:
                     bt.logging.warning(
                         f"Missing consensus score for request id ({d.request.request_id}) completion id ({cid})"
@@ -523,7 +537,7 @@ class Validator(BaseNeuron):
                     "responses": d.responses,
                     "num_responses": len(d.responses),
                     "hotkey_to_accuracy": self.hotkey_to_accuracy,
-                    "hotkey_to_score": ranking_result.hotkey_to_score,
+                    "hotkey_to_score": criteria_to_miner_scores.hotkey_to_score,
                 }
             )
             asyncio.create_task(wandb_log(wandb_data))

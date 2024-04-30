@@ -195,14 +195,19 @@ class Scoring:
 
     @staticmethod
     def calculate_score(
-        criteria: CriteriaType,
+        criteria_types: List[CriteriaType],
         request: FeedbackRequest,
         responses: List[FeedbackRequest],
     ):
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
-        gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
-        consensus_score = Scoring.consensus_score(criteria, responses)
-        return 0.65 * gt_score + 0.35 * consensus_score
+        criteria_to_miner_scores = {}
+        for criteria in criteria_types:
+            gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
+            consensus_score = Scoring.consensus_score(criteria, responses)
+            criteria_to_miner_scores[criteria] = torch.tensor(
+                0.65 * gt_score + 0.35 * consensus_score
+            )
+        return criteria_to_miner_scores
 
 
 def _calculate_average_rank_by_model(
