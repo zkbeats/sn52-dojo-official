@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from commons.factory import Factory
 
 from commons.utils import get_new_uuid
-from template.protocol import Completion, RankingRequest, ScoringMethod
+from template.protocol import Completion, FeedbackRequest, ScoringMethod
 import bittensor as bt
 
 load_dotenv()
@@ -34,7 +34,7 @@ class ExternalRequest(BaseModel):
 
 @reward_router.post("/")
 async def reward_request_handler(request: ExternalRequest):
-    synapse = RankingRequest(
+    synapse = FeedbackRequest(
         n_completions=len(request.completions),
         pid=get_new_uuid(),
         prompt=request.prompt,

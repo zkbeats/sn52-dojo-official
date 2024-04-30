@@ -9,7 +9,7 @@ from attr import define, field
 import torch
 from torch.nn import functional as F
 
-from template.protocol import RankingRequest, RankingResult, ScoringMethod
+from template.protocol import FeedbackRequest, RankingResult, ScoringMethod
 
 
 @define(kw_only=True, frozen=True, slots=True)
@@ -21,7 +21,7 @@ class Result:
 
 class Scoring:
     @staticmethod
-    def _map_responses_to_result(responses: List[RankingRequest]):
+    def _map_responses_to_result(responses: List[FeedbackRequest]):
         if len(responses) == 0:
             raise ValueError("Responses cannot be empty")
 
@@ -38,7 +38,7 @@ class Scoring:
         return Result(request_id=request_id, cid_to_hotkey_to_score=data)
 
     @staticmethod
-    def _spearman_correlation(responses: List[RankingRequest]):
+    def _spearman_correlation(responses: List[FeedbackRequest]):
         result = Scoring._map_responses_to_result(responses)
         cid_to_average = {
             cid: np.mean(list(hotkey_scores.values()))
@@ -81,7 +81,7 @@ class Scoring:
 
     @staticmethod
     def consensus_score(
-        responses: List[RankingRequest], hotkey_to_multiplier: Dict[str, float]
+        responses: List[FeedbackRequest], hotkey_to_multiplier: Dict[str, float]
     ):
         """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.

@@ -7,7 +7,7 @@ import bittensor as bt
 import torch
 
 from commons.factory import Factory
-from template.protocol import DendriteQueryResponse, RankingRequest
+from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
 class DataManager:
@@ -91,7 +91,7 @@ class DataManager:
         return
 
     @classmethod
-    async def append_responses(cls, request_id: str, responses: List[RankingRequest]):
+    async def append_responses(cls, request_id: str, responses: List[FeedbackRequest]):
         async with cls._lock:
             _path = DataManager.get_ranking_data_filepath()
             data = await cls._load_without_lock(path=_path)

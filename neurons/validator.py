@@ -28,10 +28,11 @@ from template.protocol import (
     SCORING_METHOD_PRIORITY,
     AWSCredentials,
     Completion,
+    CriteriaType,
     DendriteQueryResponse,
     MTurkResponse,
     # Rank,
-    RankingRequest,
+    FeedbackRequest,
     RankingResult,
     ScoringMethod,
     TaskType,
@@ -44,7 +45,7 @@ from template.utils.uids import (
 )
 
 
-def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequest]:
+def _filter_valid_responses(responses: List[FeedbackRequest]) -> List[FeedbackRequest]:
     return [response for response in responses if len(response.ranks) > 0]
 
 
@@ -64,12 +65,12 @@ class DojoTaskTracker:
 
     @staticmethod
     def filter_dojo_responses(
-        responses: List[RankingRequest],
-    ) -> List[RankingRequest]:
+        responses: List[FeedbackRequest],
+    ) -> List[FeedbackRequest]:
         return list(filter(lambda r: r.scoring_method == ScoringMethod.DOJO, responses))
 
     @classmethod
-    async def update_task_map(cls, responses: List[RankingRequest]):
+    async def update_task_map(cls, responses: List[FeedbackRequest]):
         dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
         async with cls._lock:
             for r in dojo_responses:
@@ -140,7 +141,7 @@ class DojoTaskTracker:
                                     completion.model_id
                                 ]
 
-                        parsed_request = RankingRequest(
+                        parsed_request = FeedbackRequest(
                             request_id=request_id,
                             completions=data.request.completions,
                         )
@@ -399,62 +400,50 @@ class Validator(BaseNeuron):
             self.hotkey_to_accuracy.clear()
         return
 
-    async def process_request(self, synapse: RankingRequest) -> RankingRequest:
+    def validate_response(self, synapse: FeedbackRequest) -> bool:
         """Process request from miners, specifically filling out the ranks fields"""
         bt.logging.debug(
             f"Processing miner's request for scoring method: {synapse.scoring_method}"
         )
-
-        if synapse.scoring_method == ScoringMethod.HF_MODEL:
-            loop = asyncio.get_event_loop()
-            tasks = [
-                loop.run_in_executor(
-                    None,
-                    ModelUtils.hf_score_text,
-                    synapse.model_config.model_name,
-                    synapse.prompt,
-                    completion.text,
-                )
-                for completion in synapse.completions
-            ]
-            scores = await asyncio.gather(*tasks)
-            for completion, score in zip(synapse.completions, scores):
-                synapse.ranks.append(
-                    Rank(
-                        cid=completion.cid,
-                        score=score,
-                    )
-                )
-
-        elif synapse.scoring_method == ScoringMethod.LLM_API:
-            llm_provider = synapse.model_config.provider
-            model_name = synapse.model_config.model_name
-            scores_response = await ModelUtils.llm_api_score_text(
-                provider=llm_provider,
-                model_name=model_name,
-                prompt=synapse.prompt,
-                completions=synapse.completions,
+        if CriteriaType in [synapse.criteria_types]:
+            is_missing_ranks = any(
+                completion.rank_id is None for completion in synapse.completions
             )
-            for completion in synapse.completions:
-                matching_score_item = next(
-                    (
-                        item
-                        for item in scores_response.scores
-                        if item.completion_id == completion.cid
-                    ),
-                    None,
-                )
-                if not matching_score_item:
-                    continue
+            if is_missing_ranks:
+                bt.logging.warning("One or more completions are missing rank IDs.")
+                return False
+        return True
 
-                synapse.ranks.append(
-                    Rank(
-                        cid=completion.cid,
-                        score=matching_score_item.score,
-                    )
-                )
-        else:
-            bt.logging.error("Unrecognized scoring method!")
+        # # TODO remove this code and handover to miner.py side
+        # if synapse.scoring_method == ScoringMethod.LLM_API:
+        #     llm_provider = synapse.model_config.provider
+        #     model_name = synapse.model_config.model_name
+        #     scores_response = await ModelUtils.llm_api_score_text(
+        #         provider=llm_provider,
+        #         model_name=model_name,
+        #         prompt=synapse.prompt,
+        #         completions=synapse.completions,
+        #     )
+        #     for completion in synapse.completions:
+        #         matching_score_item = next(
+        #             (
+        #                 item
+        #                 for item in scores_response.scores
+        #                 if item.completion_id == completion.cid
+        #             ),
+        #             None,
+        #         )
+        #         if not matching_score_item:
+        #             continue
+
+        #         synapse.ranks.append(
+        #             Rank(
+        #                 cid=completion.cid,
+        #                 score=matching_score_item.score,
+        #             )
+        #         )
+        # else:
+        #     bt.logging.error("Unrecognized scoring method!")
 
         return synapse
 
@@ -462,10 +451,6 @@ class Validator(BaseNeuron):
         """While this function is triggered every X time period in AsyncIOScheduler,
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
-        if not self.axon.info().is_serving:
-            bt.logging.warning("Axon is not serving yet...")
-            return
-
         bt.logging.debug(
             f"Scheduled update score and send feedback triggered at time: {time.time()}"
         )
@@ -484,19 +469,19 @@ class Validator(BaseNeuron):
             for d in data
             if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_4H
         ]
-        bt.logging.info(
-            f"Got {len(filtered_data)} requests past deadline and ready to score"
-        )
         if not filtered_data:
             bt.logging.warning(
                 "Skipping scoring as no ranking data has been persisted for at least 8 hours."
             )
             return
 
+        bt.logging.info(
+            f"Got {len(filtered_data)} requests past deadline and ready to score"
+        )
         consumed_responses = []
         for d in filtered_data:
-            for i in range(len(d.responses)):
-                d.responses[i] = await self.process_request(d.responses[i])
+            # for i in range(len(d.responses)):
+            #     is_valid_response = self.validate_response(d.responses[i])
 
             ranking_result = Scoring.consensus_score(
                 responses=d.responses, hotkey_to_multiplier=self.hotkey_to_accuracy
@@ -548,14 +533,14 @@ class Validator(BaseNeuron):
 
     async def send_request(
         self,
-        synapse: RankingRequest = None,
+        synapse: FeedbackRequest = None,
     ):
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
         if synapse is None:
             data = await build_prompt_responses_pair()
-            synapse = RankingRequest(
-                task=TaskType.CODE_GENERATION,
+            synapse = FeedbackRequest(
+                task_type=TaskType.CODE_GENERATION,
                 prompt=data["prompt"],
                 completions=[Completion.parse_obj(d) for d in data["responses"]],
             )
@@ -575,7 +560,7 @@ class Validator(BaseNeuron):
             bt.logging.warning("No axons to query ... skipping")
             return
 
-        responses: List[RankingRequest] = await self.dendrite.forward(
+        responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
 
