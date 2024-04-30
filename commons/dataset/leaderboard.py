@@ -55,7 +55,7 @@ MODEL_MAPPING = {
 }
 
 
-def get_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
+def get_leaderboard_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
     """Returns a sorted list of tuples, (model, score), where index 0
     is the best model
     since we are sorting in reverse order."""
@@ -94,6 +94,7 @@ def get_gt_ranks(models_with_scores: Tuple[str, float]):
     sorted_models_with_scores = sorted(
         models_with_scores, key=lambda x: x[1], reverse=True
     )
+    print(f"{sorted_models_with_scores=}")
 
     gt_ranks = []
     for model, _ in models_with_scores:
@@ -101,22 +102,22 @@ def get_gt_ranks(models_with_scores: Tuple[str, float]):
             (i for i, (m, _) in enumerate(sorted_models_with_scores) if m == model),
             None,
         )
-        if not found_idx:
+        if found_idx is None:
             bt.logging.error(f"Model: {model} not found")
             continue
-        gt_ranks.append(found_idx)
+        gt_ranks.append(found_idx + 1)
 
     return gt_ranks
 
 
-def d_gt(miner_ranks, ground_truth_ranks):
+def diff_gt(all_miner_ranks, ground_truth_ranks):
     """Calculate difference between a miner's ranks and the ground truth"""
-    if isinstance(miner_ranks, list):
-        miner_ranks = np.array(miner_ranks)
+    if isinstance(all_miner_ranks, list):
+        all_miner_ranks = np.array(all_miner_ranks)
     if isinstance(ground_truth_ranks, list):
         ground_truth_ranks = np.array(ground_truth_ranks)
 
-    return np.linalg.norm(miner_ranks - ground_truth_ranks, ord=2)
+    return np.linalg.norm(all_miner_ranks - ground_truth_ranks, ord=2, axis=1)
 
 
 if __name__ == "__main__":
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     sampled_models = random.sample(answer_models, N)
     print(f"{sampled_models=}")
 
-    model_with_scores = get_scores(answer_models)
+    model_with_scores = get_leaderboard_scores(answer_models)
     for model, score in model_with_scores:
         print(f"{model}: {score}")
 

@@ -10,6 +10,7 @@ from attr import define, field
 import torch
 from torch.nn import functional as F
 from sklearn.metrics import cohen_kappa_score
+from commons.dataset.leaderboard import diff_gt, get_gt_ranks, get_leaderboard_scores
 
 from template.protocol import (
     CriteriaType,
@@ -97,9 +98,10 @@ class Scoring:
         return ranking_result
 
     @staticmethod
-    def _process_responses(responses: List[FeedbackRequest]):
+    def _process_for_ranking(responses: List[FeedbackRequest]):
         model_id_to_avg_rank = _calculate_average_rank_by_model(responses)
         # shape (num miners, num completions)
+        # order ranks based on their order in the sorted dict
         all_miner_ranks = [
             [
                 x.rank_id
@@ -127,7 +129,7 @@ class Scoring:
         if criteria == CriteriaType.SCORING:
             return Scoring._spearman_scoring(responses)
         elif criteria == CriteriaType.PREFERENCE_RANKING:
-            avg_ranks, all_miner_ranks = Scoring._process_responses(responses)
+            avg_ranks, all_miner_ranks = Scoring._process_for_ranking(responses)
             spearman_corr = [
                 scipy.stats.spearmanr(miner_ranks, avg_ranks).statistic
                 for miner_ranks in all_miner_ranks
@@ -145,8 +147,62 @@ class Scoring:
             bt.logging.trace(snorm)
             bt.logging.trace(cknorm)
             bt.logging.trace(dnorm)
-            combined = F.normalize(snorm + cknorm + 1.5 * dnorm, dim=0, p=2)
-            return combined
+            combined_sm = F.softmax(snorm + cknorm + 1.5 * dnorm, dim=0)
+            bt.logging.trace(f"{combined_sm}")
+            return combined_sm
+
+    @staticmethod
+    def cmp_ground_truth(
+        criteria: CriteriaType,
+        request: FeedbackRequest,
+        responses: List[FeedbackRequest],
+    ):
+        if criteria == CriteriaType.SCORING:
+            raise NotImplementedError("Not implemented yet")
+        elif criteria == CriteriaType.PREFERENCE_RANKING:
+            # already sorting according to score
+            model_score_tuples = get_leaderboard_scores(
+                [completion.model_id for completion in request.completions]
+            )
+            # ensure we have the same ordering by model id
+            model_ids_sorted = [model[0] for model in model_score_tuples]
+            all_miner_ranks = [
+                [
+                    completion.rank_id
+                    for completion in sorted(
+                        response.completions,
+                        key=lambda x: model_ids_sorted.index(x.model_id),
+                    )
+                ]
+                for response in responses
+            ]
+
+            gt_ranks = get_gt_ranks(models_with_scores=model_score_tuples)
+            bt.logging.trace(f"{gt_ranks=}")
+            """Calculate difference between a miner's ranks and the ground truth"""
+            if isinstance(all_miner_ranks, list):
+                all_miner_ranks = np.array(all_miner_ranks)
+            if isinstance(gt_ranks, list):
+                ground_truth_ranks = np.array(gt_ranks)
+
+            diff_gt = -1 * np.linalg.norm(
+                all_miner_ranks - ground_truth_ranks, ord=2, axis=1
+            )
+            bt.logging.trace(f"{diff_gt=}")
+            diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
+            bt.logging.trace(f"{diff_gt_sm=}")
+            return diff_gt_sm
+
+    @staticmethod
+    def calculate_score(
+        criteria: CriteriaType,
+        request: FeedbackRequest,
+        responses: List[FeedbackRequest],
+    ):
+        """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
+        gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
+        consensus_score = Scoring.consensus_score(criteria, responses)
+        return 0.65 * gt_score + 0.35 * consensus_score
 
 
 def _calculate_average_rank_by_model(
@@ -178,14 +234,34 @@ def calculate_average_rank_by_model(
     return sorted_dict
 
 
-async def main():
+def generate_test_data() -> List[FeedbackRequest]:
     from template.protocol import Completion, CriteriaType, TaskType
     import random
 
     test_requests = []
+
+    all_models = [
+        "mistralai/mixtral-8x22b-instruct",
+        "openai/gpt-4-turbo-2024-04-09",
+        "openai/gpt-4-1106-preview",
+        "openai/gpt-3.5-turbo-1106",
+        "meta-llama/llama-3-70b-instruct",
+        "anthropic/claude-3-opus-20240229",
+        "anthropic/claude-3-sonnet-20240229",
+        "anthropic/claude-3-haiku-20240307",
+        "mistralai/mistral-large",
+        "google/gemini-pro-1.5",
+        "cognitivecomputations/dolphin-mixtral-8x7b",
+        "cohere/command-r-plus",
+        "google/gemini-pro-1.0",
+        "meta-llama/llama-3-8b-instruct",
+    ]
+
+    model_ids = random.sample(all_models, 4)
     for i in range(1, 11):
         ranks = list(range(1, 5))
         random.shuffle(ranks)
+        random.shuffle(model_ids)
         test_requests.append(
             FeedbackRequest(
                 request_id=f"req{i}",
@@ -193,7 +269,7 @@ async def main():
                 completions=[
                     Completion(
                         cid=f"c{i}1",
-                        model_id="m1",
+                        model_id=model_ids[0],
                         text=f"Text {i}1",
                         rank_id=ranks[0],
                         code="",
@@ -202,7 +278,7 @@ async def main():
                     ),
                     Completion(
                         cid=f"c{i}2",
-                        model_id="m2",
+                        model_id=model_ids[1],
                         text=f"Text {i}2",
                         rank_id=ranks[1],
                         code="",
@@ -211,7 +287,7 @@ async def main():
                     ),
                     Completion(
                         cid=f"c{i}3",
-                        model_id="m3",
+                        model_id=model_ids[2],
                         text=f"Text {i}3",
                         rank_id=ranks[2],
                         code="",
@@ -220,7 +296,7 @@ async def main():
                     ),
                     Completion(
                         cid=f"c{i}4",
-                        model_id="m4",
+                        model_id=model_ids[3],
                         text=f"Text {i}4",
                         rank_id=ranks[3],
                         code="",
@@ -234,8 +310,26 @@ async def main():
             )
         )
     # print(_calculate_average_rank_by_model(test_requests))
-    print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
+    # print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
+    return test_requests
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    test_requests = generate_test_data()[:5]
+    for tr in test_requests:
+        for completion in tr.completions:
+            print((completion.model_id, completion.rank_id), end=" ")
+        print()
+
+    print(
+        Scoring.cmp_ground_truth(
+            CriteriaType.PREFERENCE_RANKING, test_requests[0], test_requests
+        )
+    )
+
+    print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
+    print(
+        Scoring.calculate_score(
+            CriteriaType.PREFERENCE_RANKING, test_requests[0], test_requests
+        )
+    )
