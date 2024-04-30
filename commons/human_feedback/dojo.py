@@ -39,7 +39,7 @@ def _extract_ranking_result_data(result_data: List[Dict]) -> Dict[str, str]:
     return {}
 
 
-def parse_task_results(response_json: Dict):
+def parse_task_results(response_json: Dict) -> List[Dict[str, str]]:
     task_results = response_json.get("body", {}).get("taskResults", [])
     parsed_results = []
     for t in task_results:
