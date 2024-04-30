@@ -50,7 +50,7 @@ def build_code_generation_question_prompt(num_requirements: int) -> str:
     - The interactions must require the programmer to have a mental model of any objects being visualized.
     - The question generated must require the programmer to code using only Python, or Javascript with HTML and CSS.
     - You must not provide any example code snippets, because you must let the programmer solve the question by themselves.
-    - If the generated question is in Python, it must use built-in libraries. The only third-party visualization library allowed is bokeh.
+    - If the generated question is in Python, it must use built-in libraries. The only third-party visualization library allowed is plotly, matplotlib.
     - If the generated question is in Javascript, it should command the usage of built-in libraries or use visualization libraries like three.js, D3.js.
 
     Coding Question:
@@ -338,48 +338,17 @@ async def generate_answer(model: str, question: str):
 
 
 async def build_prompt_responses_pair():
+    import template
+
     client = get_openai_client(Provider.OPENROUTER)
     # use these models because we can specify seed
-    generator_models = [
-        "openai/gpt-3.5-turbo",
-        "openai/gpt-3.5-turbo-0125",
-        "openai/gpt-3.5-turbo-1106",
-        "openai/gpt-3.5-turbo-0613",
-        "openai/gpt-3.5-turbo-0301",
-        "openai/gpt-3.5-turbo-16k",
-        "openai/gpt-4-turbo",
-        "openai/gpt-4-turbo-preview",
-        "openai/gpt-4-1106-preview",
-        "openai/gpt-4",
-        "openai/gpt-4-0314",
-        "openai/gpt-4-32k",
-        "openai/gpt-4-32k-0314",
-        "openai/gpt-4-vision-preview",
-        "openai/gpt-3.5-turbo-instruct",
-    ]
-
-    prompt = await generate_question(client, random.choice(generator_models))
+    prompt = await generate_question(client, random.choice(template.GENERATOR_MODELS))
 
     # NOTE @dev LLMs here were selected to be able to compare against the EvalPLus leaderboard
-    answer_models = [
-        # "phind/phind-codellama-34b",
-        # "codellama/codellama-70b-instruct",
-        "microsoft/wizardlm-2-8x22b",
-        "gpt-4-turbo-2024-04-09",
-        "anthropic/claude-3-opus-20240229",
-        "anthropic/claude-3-sonnet-20240229",
-        "anthropic/claude-3-haiku-20240307",
-        "mistralai/mistral-large",
-        "google/gemini-pro-1.5",
-        "cognitivecomputations/dolphin-mixtral-8x7b",
-        "cohere/command-r-plus",
-        "google/gemini-pro-1.0",
-        "meta-llama/llama-3-8b-instruct",
-    ]
-
     # randomly sampled from pool of models
+    answer_models = template.ANSWER_MODELS
     IS_TEST = os.getenv("IS_TEST", False)
-    num_samples = len(answer_models) if IS_TEST else 4
+    num_samples = len(template.answer_models) if IS_TEST else 4
     sel_ans_models = random.sample(answer_models, num_samples)
 
     results = await asyncio.gather(
