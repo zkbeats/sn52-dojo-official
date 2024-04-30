@@ -30,7 +30,7 @@ from template.protocol import (
     Completion,
     DendriteQueryResponse,
     MTurkResponse,
-    Rank,
+    # Rank,
     RankingRequest,
     RankingResult,
     ScoringMethod,
@@ -50,9 +50,12 @@ def _filter_valid_responses(responses: List[RankingRequest]) -> List[RankingRequ
 
 class DojoTaskTracker:
     _instance = None
-    request_id_to_miner_to_task_ids = defaultdict(lambda: defaultdict(list))
-    lock = asyncio.Lock()
-    _api_url = os.getenv("DOJO_WORKER_API_URL")
+    # request id to miner hotkey to task ids
+    _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+    _lock = asyncio.Lock()
+    _background_tasks = set()
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -66,9 +69,9 @@ class DojoTaskTracker:
         return list(filter(lambda r: r.scoring_method == ScoringMethod.DOJO, responses))
 
     @classmethod
-    def update_task_map(cls, responses: List[RankingRequest]):
+    async def update_task_map(cls, responses: List[RankingRequest]):
         dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
-        with cls.lock:
+        async with cls._lock:
             for r in dojo_responses:
                 if not r.request_id:
                     bt.logging.error(
@@ -87,7 +90,7 @@ class DojoTaskTracker:
                     )
                     continue
 
-                cls.request_id_to_miner_to_task_ids[r.request_id][r.axon.hotkey].append(
+                cls._rid_to_mhotkey_to_task_id[r.request_id][r.axon.hotkey] = (
                     r.dojo_task_id
                 )
             bt.logging.info(
@@ -96,34 +99,74 @@ class DojoTaskTracker:
 
     @classmethod
     async def monitor_task_completions(cls):
-        # TODO implement locking
+        SLEEP_SECONDS = 10
         while True:
             bt.logging.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
-            for (
-                request_id,
-                miner_to_task_ids,
-            ) in cls.request_id_to_miner_to_task_ids.items():
-                for miner, task_ids in miner_to_task_ids.items():
-                    if not task_ids:
-                        continue
-                    task_responses: List[List | None] = await asyncio.gather(
-                        *[DojoAPI.get_task_and_results(task_id) for task_id in task_ids]
-                    )
+            async with cls._lock:
+                if not cls._rid_to_mhotkey_to_task_id:
+                    bt.logging.warning("No Dojo tasks to monitor")
+                    await asyncio.sleep(SLEEP_SECONDS)
+                    continue
 
-                    # filter None, since get_task_and_results returns None if task is not completed
-                    ranking_results: List[List] = list(
-                        filter(
-                            lambda r: r,
-                            task_responses,
+                for (
+                    request_id,
+                    miner_to_task_id,
+                ) in cls._rid_to_mhotkey_to_task_id.items():
+                    for miner_hotkey, task_id in miner_to_task_id.items():
+                        if not task_id:
+                            bt.logging.warning(
+                                f"No task ID found for miner hotkey: {miner_hotkey}"
+                            )
+                            continue
+
+                        task_results = await DojoAPI.get_task_and_results(task_id)
+                        if not task_results:
+                            bt.logging.warning(
+                                f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
+                            )
+                            continue
+
+                        data = await DataManager.get_by_request_id(request_id)
+                        if not data.request:
+                            bt.logging.error(
+                                f"No request on disk found for request id: {request_id}"
+                            )
+                            continue
+
+                        model_id_to_rank = _parse_dojo_task_results(task_results)
+                        for completion in data.request.completions:
+                            if completion.model_id in model_id_to_rank:
+                                completion.rank_id = model_id_to_rank[
+                                    completion.model_id
+                                ]
+
+                        parsed_request = RankingRequest(
+                            request_id=request_id,
+                            completions=data.request.completions,
                         )
-                    )
-                    # TODO for each ranking result append to our Datamanager
-            await asyncio.sleep(10)
-        return
+                        await DataManager.append_responses(request_id, [parsed_request])
+            await asyncio.sleep(SLEEP_SECONDS)
 
 
-def parse_dojo_results(results: List[Dict]):
-    pass
+def _parse_dojo_task_results(results: List[Dict]):
+    """Given a list of task results from Dojo API, calculate the average across multiple task results
+    to determine a final ranking"""
+    parsed_results = defaultdict(int)
+
+    for result in results:
+        for rank, model_hash in result.items():
+            rank_int = int(rank)
+            parsed_results[model_hash] += rank_int
+
+    sorted_model_hash_count = dict(
+        sorted(parsed_results.items(), key=lambda item: item[1])
+    )
+    # TODO handle edge case where total ranks for all models are the same
+    # TODO handle edge case where same ranks sum for 2 different model hashes
+    return {
+        model_id: rank
+        for rank, model_id in enumerate(sorted_model_hash_count.keys(), start=1)
+    }
 
 
 class Validator(BaseNeuron):
@@ -503,23 +546,6 @@ class Validator(BaseNeuron):
         # once we have scored certain responses, just remove them
         await DataManager.remove_responses(consumed_responses)
 
-    async def poll_dojo_tasks(self):
-        # TODO prioritise tasks that have an earlier created_at
-        data = DojoTaskTracker().request_id_to_miner_to_task_ids
-        if not data:
-            bt.logging.warning("No Dojo task IDs to poll")
-            return
-
-        for _, miner_hotkey_to_task_ids in data.items():
-            for miner_hotkey, task_ids in miner_hotkey_to_task_ids.items():
-                results = asyncio.gather(
-                    *[
-                        DojoTaskTracker.monitor_task_completions(task_id)
-                        for task_id in task_ids
-                    ]
-                )
-                # TODO parse results
-
     async def send_request(
         self,
         synapse: RankingRequest = None,
@@ -554,14 +580,14 @@ class Validator(BaseNeuron):
         )
 
         dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
-        DojoTaskTracker().update_task_map(dojo_responses)
+        await DojoTaskTracker().update_task_map(dojo_responses)
         non_dojo_responses = list(filter(lambda r: r not in dojo_responses, responses))
 
         response_data = DendriteQueryResponse(
             request=synapse,
             responses=non_dojo_responses,
         )
-        await DataManager.append_responses(response=response_data)
+        await DataManager.save_response(response=response_data)
         return
 
     async def run(self):
@@ -775,3 +801,16 @@ async def log_validator_status():
     while True:
         bt.logging.info(f"Validator running... {time.time()}")
         await asyncio.sleep(20)
+
+
+if __name__ == "__main__":
+
+    async def main():
+        validator = Validator()
+        await asyncio.gather(
+            validator.run(),
+            DojoTaskTracker().monitor_task_completions(),
+            log_validator_status(),
+        )
+
+    asyncio.run(main())

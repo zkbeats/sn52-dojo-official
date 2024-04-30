@@ -23,13 +23,13 @@ class ScoringMethod(StrEnum):
     DOJO = "dojo_worker"
 
 
-# # higher value in this map are priortised and allowed to override data on the miner side
-# SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
-#     ScoringMethod.HF_MODEL: 1,
-#     ScoringMethod.LLM_API: 0,
-#     ScoringMethod.AWS_MTURK: 2,
-#     ScoringMethod.DOJO_WORKER: 3,
-# }
+# higher value in this map are priortised and allowed to override data on the miner side
+SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
+    ScoringMethod.HF_MODEL: 1,
+    ScoringMethod.LLM_API: 0,
+    ScoringMethod.AWS_MTURK: 2,
+    ScoringMethod.DOJO: 3,
+}
 
 
 class Completion(CodeAnswer):
@@ -40,13 +40,15 @@ class Completion(CodeAnswer):
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
-    model: str = Field(description="Model that generated the completion")
-    # text: str = Field(description="Text of the completion")
+    model_id: str = Field(description="Model that generated the completion")
+    text: str = Field(description="Text of the completion")
+    rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
 
 
-class Rank(BaseModel):
-    cid: str = Field(description="Unique identifier for the completion")
-    score: float = Field(default=0.0, description="Score of the completion")
+# class Rank(BaseModel):
+#     cid: str = Field(description="Unique identifier for the completion")
+#     score: Optional[float] = Field(default=0.0, description="Score of the completion")
+#     rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
 
 
 class ModelConfig(BaseModel):
@@ -74,9 +76,10 @@ class RankingRequest(bt.Synapse):
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    ranks: List[Rank] = Field(
-        default=[], description="List of ranks for each completion"
-    )
+    # TODO refactor, this has been shifted to Completion obj directly
+    # ranks: List[Rank] = Field(
+    #     default=[], description="List of ranks for each completion"
+    # )
     scoring_method: Optional[str] = Field(
         decscription="Method to use for scoring completions"
     )

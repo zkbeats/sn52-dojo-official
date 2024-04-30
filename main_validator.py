@@ -60,7 +60,6 @@ async def main():
         validator.calculate_miner_classification_accuracy, trigger=every_30_min_trigger
     )
     scheduler.add_job(validator.reset_accuracy, trigger=daily_trigger)
-    scheduler.add_job(validator.poll_dojo_tasks, trigger=IntervalTrigger(minutes=2))
     scheduler.start()
 
     config = uvicorn.Config(
