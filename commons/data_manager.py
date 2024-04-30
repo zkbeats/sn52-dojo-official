@@ -71,7 +71,7 @@ class DataManager:
             return False
 
     @classmethod
-    async def append_responses(cls, response: DendriteQueryResponse):
+    async def save_response(cls, response: DendriteQueryResponse):
         path = DataManager.get_ranking_data_filepath()
         async with cls._lock:
             # ensure parent path exists
@@ -88,8 +88,35 @@ class DataManager:
             assert isinstance(data, list)
             data.append(response)
             await DataManager._save_without_lock(path, data)
-
         return
+
+    @classmethod
+    async def append_responses(cls, request_id: str, responses: List[RankingRequest]):
+        async with cls._lock:
+            _path = DataManager.get_ranking_data_filepath()
+            data = await cls._load_without_lock(path=_path)
+            found_response_index = next(
+                (i for i, x in enumerate(data) if x.request.request_id == request_id),
+                None,
+            )
+            if not found_response_index:
+                return
+
+            data[found_response_index].responses.extend(responses)
+            # overwrite the data
+            await cls._save_without_lock(_path, data)
+        return
+
+    @classmethod
+    async def get_by_request_id(cls, request_id):
+        async with cls._lock:
+            _path = DataManager.get_ranking_data_filepath()
+            data = await cls._load_without_lock(path=_path)
+            found_response = next(
+                (x for x in data if x.request.request_id == request_id),
+                None,
+            )
+            return found_response
 
     @classmethod
     async def remove_responses(
