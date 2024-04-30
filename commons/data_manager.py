@@ -7,12 +7,18 @@ import bittensor as bt
 import torch
 
 from commons.factory import Factory
-from template.protocol import DendriteQueryResponse
+from template.protocol import DendriteQueryResponse, RankingRequest
 
 
 class DataManager:
     _lock = asyncio.Lock()
     _validator_lock = asyncio.Lock()
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(DataManager, cls).__new__(cls)
+        return cls._instance
 
     @staticmethod
     def get_ranking_data_filepath() -> Path:
