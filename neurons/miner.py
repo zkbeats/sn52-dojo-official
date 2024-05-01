@@ -4,24 +4,20 @@ import functools
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, Tuple
 
 import bittensor as bt
-from httpx import request
 
 from commons.factory import Factory
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
-from commons.llm.openai_proxy import Provider
 from commons.reward_model.models import ModelUtils
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     CriteriaType,
-    ModelConfig,
     FeedbackRequest,
     ScoringResult,
     ScoringMethod,

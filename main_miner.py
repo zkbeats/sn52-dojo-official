@@ -1,16 +1,12 @@
-from contextlib import asynccontextmanager
-from commons.logging.patch_logging import apply_patch
 import asyncio
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import bittensor as bt
-import wandb
+import signal
 
-from commons.api.human_feedback_route import human_feedback_router
-from commons.api.middleware import AWSIPFilterMiddleware, LimitContentLengthMiddleware
+import bittensor as bt
+from dotenv import load_dotenv
+
+import wandb
 from commons.factory import Factory
+from commons.logging.patch_logging import apply_patch
 from neurons.miner import log_miner_status
 
 load_dotenv()
@@ -19,49 +15,34 @@ apply_patch()
 miner = Factory.get_miner()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # BEFORE YIELD == ON STARTUP
-    bt.logging.info("Performing startup tasks...")
-    yield
-    # AFTER YIELD == ON SHUTDOWN
+async def shutdown(signal, loop):
+    """Cleanup tasks tied to the service's shutdown."""
+    bt.logging.info(f"Received exit signal {signal.name}...")
     bt.logging.info("Performing shutdown tasks...")
     miner.should_exit = True
     wandb.finish()
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    [task.cancel() for task in tasks]
 
-
-app = FastAPI()
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.add_middleware(LimitContentLengthMiddleware)
-app.add_middleware(AWSIPFilterMiddleware)
-app.include_router(human_feedback_router)
+    bt.logging.info(f"Cancelling {len(tasks)} outstanding tasks")
+    await asyncio.gather(*tasks, return_exceptions=True)
+    loop.stop()
+    bt.logging.info("Shutdown complete.")
 
 
 async def main():
-    config = uvicorn.Config(
-        app=app,
-        host="0.0.0.0",
-        port=Factory.get_config().api.port,
-        workers=1,
-        log_level="info",
-        reload=False,
-    )
-    server = uvicorn.Server(config)
-    with miner as m:
-        log_task = asyncio.create_task(log_miner_status())
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(
+            sig, lambda s=sig: asyncio.create_task(shutdown(s, loop))
+        )
 
-        await server.serve()
-        # once the server is closed, cancel the logging task
-        log_task.cancel()
-        try:
-            await log_task
-        except asyncio.CancelledError:
-            pass
+    await asyncio.gather(
+        *[
+            log_miner_status(),
+            miner.run(),
+        ]
+    )
 
 
 if __name__ == "__main__":
