@@ -12,6 +12,7 @@ import torch
 from torch.nn import functional as F
 from sklearn.metrics import cohen_kappa_score
 from commons.dataset.leaderboard import diff_gt, get_gt_ranks, get_leaderboard_scores
+from commons.dataset.mock import MockData
 
 from template.protocol import (
     CriteriaType,
@@ -234,98 +235,8 @@ def _calculate_average_rank_by_model(
     return sorted_dict
 
 
-def calculate_average_rank_by_model(
-    responses: List[FeedbackRequest], metagraph: bt.metagraph
-):
-    sorted_dict = _calculate_average_rank_by_model(responses)
-    has_conflicting_values = len(set(sorted_dict.values())) != len(sorted_dict.keys())
-    # TODO handle this edge case
-    # if has_conflicting_values:
-    return sorted_dict
-
-
-def generate_test_data() -> List[FeedbackRequest]:
-    from template.protocol import Completion, CriteriaType, TaskType
-    import random
-
-    test_requests = []
-
-    all_models = [
-        "mistralai/mixtral-8x22b-instruct",
-        "openai/gpt-4-turbo-2024-04-09",
-        "openai/gpt-4-1106-preview",
-        "openai/gpt-3.5-turbo-1106",
-        "meta-llama/llama-3-70b-instruct",
-        "anthropic/claude-3-opus-20240229",
-        "anthropic/claude-3-sonnet-20240229",
-        "anthropic/claude-3-haiku-20240307",
-        "mistralai/mistral-large",
-        "google/gemini-pro-1.5",
-        "cognitivecomputations/dolphin-mixtral-8x7b",
-        "cohere/command-r-plus",
-        "google/gemini-pro-1.0",
-        "meta-llama/llama-3-8b-instruct",
-    ]
-
-    model_ids = random.sample(all_models, 4)
-    for i in range(1, 11):
-        ranks = list(range(1, 5))
-        random.shuffle(ranks)
-        random.shuffle(model_ids)
-        test_requests.append(
-            FeedbackRequest(
-                request_id=f"req{i}",
-                prompt=f"Prompt for request {i}",
-                completions=[
-                    Completion(
-                        cid=f"c{i}1",
-                        model_id=model_ids[0],
-                        text=f"Text {i}1",
-                        rank_id=ranks[0],
-                        code="",
-                        language="deez",
-                        installation_commands="",
-                    ),
-                    Completion(
-                        cid=f"c{i}2",
-                        model_id=model_ids[1],
-                        text=f"Text {i}2",
-                        rank_id=ranks[1],
-                        code="",
-                        language="deez",
-                        installation_commands="",
-                    ),
-                    Completion(
-                        cid=f"c{i}3",
-                        model_id=model_ids[2],
-                        text=f"Text {i}3",
-                        rank_id=ranks[2],
-                        code="",
-                        language="deez",
-                        installation_commands="",
-                    ),
-                    Completion(
-                        cid=f"c{i}4",
-                        model_id=model_ids[3],
-                        text=f"Text {i}4",
-                        rank_id=ranks[3],
-                        code="",
-                        language="deez",
-                        installation_commands="",
-                    ),
-                ],
-                scoring_method="dojo_worker",
-                task_type=TaskType.CODE_GENERATION,
-                criteria_types=[CriteriaType.PREFERENCE_RANKING],
-            )
-        )
-    # print(_calculate_average_rank_by_model(test_requests))
-    # print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
-    return test_requests
-
-
 if __name__ == "__main__":
-    test_requests = generate_test_data()[:5]
+    test_requests = MockData.generate_test_data()[:5]
     for tr in test_requests:
         for completion in tr.completions:
             print((completion.model_id, completion.rank_id), end=" ")
