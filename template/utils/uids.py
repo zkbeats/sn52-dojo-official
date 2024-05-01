@@ -111,7 +111,7 @@ class MinerUidSelector:
                 del cls.nodes_hash_map[hash_value]
 
     @classmethod
-    def get_target_uids(cls, key, k: int = 4):
+    def get_target_uids(cls, key, k: int):
         if not cls.ring or k <= 0:
             return []
         hash_value = cls.hash_function(key)
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     requests_per_node = defaultdict(int)
     for _ in range(100_000):
         request_key = str(uuid.uuid4())
-        target_nodes = ch.get_target_uids(request_key)
+        target_nodes = ch.get_target_uids(request_key, k=4)
         for node in target_nodes:
             requests_per_node[node] += 1
 
