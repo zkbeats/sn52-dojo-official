@@ -4,22 +4,20 @@ import functools
 import threading
 import time
 import traceback
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Dict, Tuple
 
 import bittensor as bt
 
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
-from commons.llm.openai_proxy import Provider
-from commons.reward_model.models import ModelUtils
+from commons.reward_model.models import RewardModel
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
-    ModelConfig,
+    CriteriaType,
     FeedbackRequest,
     ScoringResult,
     ScoringMethod,
@@ -37,8 +35,8 @@ class Miner(BaseMinerNeuron):
         # Attach determiners which functions are called when servicing a request.
         bt.logging.info("Attaching forward function to miner axon.")
         self.axon.attach(
-            forward_fn=self.forward_ranking_request,
-            blacklist_fn=self.blacklist_ranking_request,
+            forward_fn=self.forward_feedback_request,
+            blacklist_fn=self.blacklist_feedback_request,
             priority_fn=self.priority_ranking,
         ).attach(forward_fn=self.forward_result)
 
@@ -49,7 +47,6 @@ class Miner(BaseMinerNeuron):
         self.lock = asyncio.Lock()
         # log all incoming requests
         self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
-        # self.executor = ThreadPoolExecutor(max_workers=4)
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
         bt.logging.info("Received scoring result from validators")
@@ -65,7 +62,7 @@ class Miner(BaseMinerNeuron):
         bt.logging.info(f"Miner received score: {found_miner_score}")
         return
 
-    async def forward_ranking_request(
+    async def forward_feedback_request(
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
         bt.logging.info(f"Miner received request id: {synapse.request_id}")
@@ -81,13 +78,12 @@ class Miner(BaseMinerNeuron):
 
             elif scoring_method.casefold() == ScoringMethod.HF_MODEL:
                 synapse.scoring_method = ScoringMethod.HF_MODEL
-                model_name = get_config().model_name
                 loop = asyncio.get_event_loop()
                 tasks = [
                     loop.run_in_executor(
                         None,
-                        ModelUtils.hf_score_text,
-                        model_name,
+                        RewardModel.hf_score_text,
+                        get_config().model_name,
                         synapse.prompt,
                         completion.text,
                     )
@@ -122,41 +118,57 @@ class Miner(BaseMinerNeuron):
 
             elif scoring_method.casefold() == ScoringMethod.LLM_API:
                 synapse.scoring_method = ScoringMethod.LLM_API
-                synapse.model_config = ModelConfig(
-                    provider=Provider(self.config.llm_provider),
-                    model_name=self.config.model_name,
+                scores_response = await RewardModel.llm_api_score_text(
+                    provider=get_config().llm_provider,
+                    model_name=get_config().model_name,
+                    prompt=synapse.prompt,
+                    completions=synapse.completions,
                 )
-                # TODO directly provide scores down here
-                # # TODO remove this code and handover to miner.py side
-                # if synapse.scoring_method == ScoringMethod.LLM_API:
-                #     llm_provider = synapse.model_config.provider
-                #     model_name = synapse.model_config.model_name
-                #     scores_response = await ModelUtils.llm_api_score_text(
-                #         provider=llm_provider,
-                #         model_name=model_name,
-                #         prompt=synapse.prompt,
-                #         completions=synapse.completions,
-                #     )
-                #     for completion in synapse.completions:
-                #         matching_score_item = next(
-                #             (
-                #                 item
-                #                 for item in scores_response.scores
-                #                 if item.completion_id == completion.cid
-                #             ),
-                #             None,
-                #         )
-                #         if not matching_score_item:
-                #             continue
 
-                #         synapse.ranks.append(
-                #             Rank(
-                #                 cid=completion.cid,
-                #                 score=matching_score_item.score,
-                #             )
-                #         )
-                # else:
-                #     bt.logging.error("Unrecognized scoring method!")
+                for i in range(len(synapse.completions)):
+                    matching_score_item = next(
+                        (
+                            item
+                            for item in scores_response.scores
+                            if item.model_id == synapse.completions[i].model_id
+                        ),
+                        None,
+                    )
+                    if not matching_score_item:
+                        continue
+                    synapse.completions[i].rank_id = matching_score_item.rank_id
+
+                    for criteria in synapse.criteria_types:
+                        sorted_model_score_pairs = sorted(
+                            [
+                                (item.model_id, item.score)
+                                for item in scores_response.scores
+                            ],
+                            key=lambda x: x[1],
+                            reverse=True,
+                        )
+                        if criteria == CriteriaType.PREFERENCE_RANKING:
+                            sorted_model_rank_pairs = [
+                                (model_with_score[0], i)
+                                for i, model_with_score in enumerate(
+                                    sorted_model_score_pairs, start=1
+                                )
+                            ]
+                            for model_rank_pair in sorted_model_rank_pairs:
+                                for completion in synapse.completions:
+                                    if completion.model_id == model_rank_pair[0]:
+                                        completion.model_rank_pair_id = model_rank_pair[
+                                            1
+                                        ]
+
+                        elif criteria == CriteriaType.SCORE:
+                            for score_item in scores_response.scores:
+                                for i in range(len(synapse.completions)):
+                                    if (
+                                        score_item.model_id
+                                        == synapse.completions[i].model_id
+                                    ):
+                                        synapse.completions[i].score = score_item.score
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
                 # send off to MTurk workers in a non-blocking way
@@ -165,7 +177,7 @@ class Miner(BaseMinerNeuron):
                     MTurkUtils.create_mturk_task,
                     prompt=synapse.prompt,
                     completions=synapse.completions,
-                    reward_in_dollars=0.01,
+                    reward_in_dollars=0.10,
                 )
                 synapse.scoring_method = ScoringMethod.AWS_MTURK
                 success, hit_id = await loop.run_in_executor(None, task)
@@ -173,7 +185,9 @@ class Miner(BaseMinerNeuron):
                     synapse.mturk_hit_id = hit_id
 
                 credentials = STSUtils.assume_role()
-                credentials.environment = Factory.get_config().aws_mturk_environment
+                credentials.environment = (
+                    ObjectManager.get_config().aws_mturk_environment
+                )
                 synapse.aws_credentials = credentials
             else:
                 bt.logging.error("Unrecognized scoring method!")
@@ -182,47 +196,7 @@ class Miner(BaseMinerNeuron):
 
         return synapse
 
-    # async def send_mturk_response(self, synapse: MTurkResponse):
-    #     """After receiving a response from MTurk, send the response back to the calling validator"""
-    #     # 1. figure out which validator hotkey sent the original request
-    #     hotkey = self._find_hotkey_by_completions(synapse.completion_id_to_score)
-    #     if not hotkey and not self.hotkey_to_request:
-    #         bt.logging.error(
-    #             f"No hotkey found for completion ids: {synapse.completion_id_to_score.keys()}"
-    #         )
-    #         return
-    #     # generate temporary credentials to send to the validator
-    #     if not synapse.aws_credentials:
-    #         credentials = STSUtils.assume_role()
-    #         credentials.environment = Factory.get_config().aws_mturk_environment
-    #         synapse.aws_credentials = credentials
-
-    #     uid = self.metagraph.hotkeys.index(hotkey)
-    #     axon = self.metagraph.axons[uid]
-    #     await self.dendrite.forward(
-    #         axons=[axon],
-    #         synapse=synapse,
-    #         deserialize=False,
-    #         timeout=60,
-    #     )
-    #     return
-
-    # def _find_hotkey_by_completions(self, completion_id_to_scores: Dict[str, float]):
-    #     if not self.hotkey_to_request:
-    #         bt.logging.warning(
-    #             "No requests received yet... therefore no validator hotkeys to find"
-    #         )
-    #         return None
-    #     mturk_completion_ids = set(completion_id_to_scores.keys())
-    #     for k, v in self.hotkey_to_request.items():
-    #         completion_ids = set([completion.cid for completion in v.completions])
-    #         if (
-    #             common_cids := completion_ids.intersection(mturk_completion_ids)
-    #         ) and len(common_cids):
-    #             return k
-    #     return None
-
-    async def blacklist_ranking_request(
+    async def blacklist_feedback_request(
         self, synapse: FeedbackRequest
     ) -> Tuple[bool, str]:
         bt.logging.info("checking blacklist function")

@@ -10,7 +10,7 @@ import boto3
 import botocore.exceptions
 import markdown
 from dotenv import load_dotenv
-from commons.factory import Factory
+from commons.objects import ObjectManager
 
 from commons.llm.prompts import ScoreRange
 from template.protocol import AWSCredentials, Completion
@@ -115,7 +115,7 @@ class MTurkUtils:
         access_key_id: str = AWS_ACCESS_KEY_ID,
         secret_access_key: str = AWS_SECRET_KEY,
         session_token: str = None,
-        environment: str = Factory.get_config().aws_mturk_environment,
+        environment: str = ObjectManager.get_config().aws_mturk_environment,
     ):
         if cls._mturk_client is None:
             env_config = get_environment_config(environment)
@@ -185,7 +185,7 @@ class MTurkUtils:
             )
             success = True
             env_config = get_environment_config(
-                Factory.get_config().aws_mturk_environment
+                ObjectManager.get_config().aws_mturk_environment
             )
             hit_url = (
                 f"{env_config['preview_url']}?groupId={new_hit['HIT']['HITGroupId']}"

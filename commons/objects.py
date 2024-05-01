@@ -1,7 +1,7 @@
 from template.utils.config import get_config
 
 
-class Factory:
+class ObjectManager:
     _miner = None
     _validator = None
     _seed_dataset_iter = None

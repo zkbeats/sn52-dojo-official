@@ -62,6 +62,14 @@ class ModelConfig(BaseModel):
     model_name: str
 
 
+class AWSCredentials(BaseModel):
+    access_key_id: str
+    secret_access_key: str
+    session_token: str
+    access_expiration: datetime
+    environment: str
+
+
 class FeedbackRequest(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
@@ -91,6 +99,9 @@ class FeedbackRequest(bt.Synapse):
     )
     mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
     dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
+    aws_credentials: Optional[AWSCredentials] = Field(
+        "Temporary AWS credentials from the miner that validator can use to verify task completions"
+    )
 
 
 class ScoringResult(bt.Synapse):
@@ -101,14 +112,6 @@ class ScoringResult(bt.Synapse):
     hotkey_to_scores: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
-
-
-class AWSCredentials(BaseModel):
-    access_key_id: str
-    secret_access_key: str
-    session_token: str
-    access_expiration: datetime
-    environment: str
 
 
 class MTurkResponse(bt.Synapse):
@@ -126,7 +129,7 @@ class DendriteQueryResponse(BaseModel):
 
 
 class ScoreItem(BaseModel):
-    completion_id: str
+    model_id: str
     score: float
 
 

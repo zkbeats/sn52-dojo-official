@@ -17,14 +17,12 @@ os.environ["HF_HUB_DISABLE_EXPERIMENTAL_WARNING"] = "1"
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 # NOTE this will be where our dataset gets collected over time
-# TODO @dev change to actual name of dataset to store all our collected data
 HF_REPO_ID = "prooompt/test_dataset"
 hf_api = huggingface_hub.HfApi(token=HF_TOKEN)
 repo_kwargs = {"repo_id": HF_REPO_ID, "repo_type": "dataset"}
 
 
 class HuggingFaceUtils:
-    # TODO @dev change once finalised
     _dataset_dir = "./hf_datasets"
     _dataset_filename = "dataset_sn18.jsonl"
     _full_path = f"{_dataset_dir}/{_dataset_filename}"
@@ -70,7 +68,6 @@ class HuggingFaceUtils:
 
         new_data = {
             "prompt": prompt,
-            # each response: {'response': '<response text>', 'metadata': {'model_name': ...}}
             "completions": jsonable_encoder(completions),
             "num_completions": len(completions),
             "best_completion": str(best_completion.text),
@@ -86,7 +83,6 @@ class HuggingFaceUtils:
         operation = CommitOperationAdd(
             path_in_repo=cls._dataset_filename, path_or_fileobj=cls._full_path
         )
-        # TODO @dev need some way of verifying dataset follows format, since git lfs previews not available
         hf_api.create_commits_on_pr(
             addition_commits=[[operation]],
             deletion_commits=[],

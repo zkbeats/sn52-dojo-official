@@ -68,7 +68,7 @@ def get_cached_tokenizer(
     return tokenizer
 
 
-class ModelUtils:
+class RewardModel:
     @staticmethod
     def score_images(prompt, images: List[Image.Image]):
         prompt = "a painting of an ocean with clouds and birds, day time, low depth field effect"
