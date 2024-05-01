@@ -29,7 +29,7 @@ from template.protocol import (
     MTurkResponse,
     # Rank,
     FeedbackRequest,
-    RankingResult,
+    ScoringResult,
     ScoringMethod,
     TaskType,
 )
@@ -323,7 +323,7 @@ class Validator(BaseNeuron):
         await DataManager.save(path, data)
         return
 
-    async def send_consensus(self, synapse: RankingResult, hotkeys: List[str]):
+    async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
         if not axons:
@@ -337,61 +337,12 @@ class Validator(BaseNeuron):
             axons=axons, synapse=synapse, deserialize=False, timeout=12
         )
 
-    # async def calculate_miner_classification_accuracy(self):
-    #     if not hasattr(self, "hotkey_to_accuracy"):
-    #         self.hotkey_to_accuracy = defaultdict(float)
-
-    #     data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
-    #     if not data:
-    #         bt.logging.debug(
-    #             "Skipping classification accuracy as no ranking data found."
-    #         )
-    #         return
-
-    #     bt.logging.info(
-    #         f"Looping through {len(data)} requests to calculate miner classification accuracy"
-    #     )
-    #     for d in data:
-    #         for r in d.responses:
-    #             participant = r.axon.hotkey
-    #             if (
-    #                 participant in self.hotkey_to_accuracy
-    #                 and self.hotkey_to_accuracy[participant] > 0
-    #             ):
-    #                 bt.logging.debug(
-    #                     f"Participant {participant} already has an accuracy score of {self.hotkey_to_accuracy[participant]} skipping"
-    #                 )
-    #                 continue
-
-    #             if r.scoring_method not in [method for method in ScoringMethod]:
-    #                 bt.logging.error(
-    #                     f"Unrecognized scoring method: {r.scoring_method} for participant {participant}"
-    #                 )
-    #                 continue
-
-    #             # TODO @dev ensure that different miners get the same data
-    #             accuracy = await EvalUtils.classification_accuracy(
-    #                 scoring_method=r.scoring_method, model_config=r.model_config
-    #             )
-
-    #             self.hotkey_to_accuracy[participant] = accuracy
-
-    #     return
-
-    # async def reset_accuracy(self):
-    #     if not self.hotkey_to_accuracy:
-    #         bt.logging.warning(
-    #             "Reset miner hotkey accuracy triggered, but no accuracy data found. Skipping..."
-    #         )
-    #         self.hotkey_to_accuracy.clear()
-    #     return
-
     def validate_response(self, synapse: FeedbackRequest) -> bool:
         """Process request from miners, specifically filling out the ranks fields"""
         bt.logging.debug(
             f"Processing miner's request for scoring method: {synapse.scoring_method}"
         )
-        if CriteriaType in [synapse.criteria_types]:
+        if CriteriaType.PREFERENCE_RANKING in [synapse.criteria_types]:
             is_missing_ranks = any(
                 completion.rank_id is None for completion in synapse.completions
             )
@@ -399,39 +350,6 @@ class Validator(BaseNeuron):
                 bt.logging.warning("One or more completions are missing rank IDs.")
                 return False
         return True
-
-        # # TODO remove this code and handover to miner.py side
-        # if synapse.scoring_method == ScoringMethod.LLM_API:
-        #     llm_provider = synapse.model_config.provider
-        #     model_name = synapse.model_config.model_name
-        #     scores_response = await ModelUtils.llm_api_score_text(
-        #         provider=llm_provider,
-        #         model_name=model_name,
-        #         prompt=synapse.prompt,
-        #         completions=synapse.completions,
-        #     )
-        #     for completion in synapse.completions:
-        #         matching_score_item = next(
-        #             (
-        #                 item
-        #                 for item in scores_response.scores
-        #                 if item.completion_id == completion.cid
-        #             ),
-        #             None,
-        #         )
-        #         if not matching_score_item:
-        #             continue
-
-        #         synapse.ranks.append(
-        #             Rank(
-        #                 cid=completion.cid,
-        #                 score=matching_score_item.score,
-        #             )
-        #         )
-        # else:
-        #     bt.logging.error("Unrecognized scoring method!")
-
-        return synapse
 
     async def update_score_and_send_feedback(self):
         """While this function is triggered every X time period in AsyncIOScheduler,
@@ -465,11 +383,7 @@ class Validator(BaseNeuron):
             bt.logging.info(
                 f"Got {len(filtered_data)} requests past deadline and ready to score"
             )
-            consumed_responses = []
             for d in filtered_data:
-                # for i in range(len(d.responses)):
-                #     is_valid_response = self.validate_response(d.responses[i])
-
                 criteria_to_miner_scores = Scoring.calculate_score(
                     criteria_types=d.request.criteria_types,
                     request=d.request,
@@ -499,50 +413,31 @@ class Validator(BaseNeuron):
                 }
                 # update the scores based on the rewards
                 self.update_scores(hotkey_to_scores=hotkey_to_scores)
-                await self.send_consensus(
-                    synapse=criteria_to_miner_scores,
-                    hotkeys=list(criteria_to_miner_scores.hotkey_to_score.keys()),
+                await self.send_scores(
+                    synapse=ScoringResult(
+                        request_id=d.request.request_id,
+                        hotkey_to_scores=hotkey_to_scores,
+                    ),
+                    hotkeys=list(hotkey_to_scores.keys()),
                 )
-                await asyncio.sleep(1)
-                consumed_responses.append(d)
 
-                completions = d.request.completions
-                consensus_scores = [None] * len(completions)
-                best_completion = None
-                max_consensus_score = float("-inf")
-                for i in range(len(completions)):
-                    cid = completions[i].cid
-                    consensus_score = criteria_to_miner_scores.cid_to_consensus.get(
-                        cid, None
-                    )
-                    if not consensus_score:
-                        bt.logging.warning(
-                            f"Missing consensus score for request id ({d.request.request_id}) completion id ({cid})"
-                        )
-                        continue
-                    if consensus_score > max_consensus_score:
-                        max_consensus_score = consensus_score
-                        best_completion = completions[i].text
-
-                    consensus_scores[i] = consensus_score
                 wandb_data = jsonable_encoder(
                     {
-                        "modality": "text",
+                        "task": d.request.task_type,
+                        "criteria": d.request.criteria_types,
                         "prompt": d.request.prompt,
-                        "completions": d.request.completions,
+                        "completions": jsonable_encoder(d.request.completions),
                         "num_completions": len(d.request.completions),
-                        "consensus_scores": consensus_scores,
-                        "best_completion": best_completion,
-                        "responses": d.responses,
+                        "scores": hotkey_to_scores,
                         "num_responses": len(d.responses),
-                        # "hotkey_to_accuracy": self.hotkey_to_accuracy,
-                        "hotkey_to_score": criteria_to_miner_scores.hotkey_to_score,
+                        "avg_miner_scores": hotkey_to_scores,
+                        "miner_scores_by_criteria": criteria_to_miner_scores,
                     }
                 )
                 asyncio.create_task(wandb_log(wandb_data))
 
-            # once we have scored certain responses, just remove them
-            await DataManager.remove_responses(consumed_responses)
+                # once we have scored a response, just remove it
+                await DataManager.remove_responses(d)
 
             await asyncio.sleep(3600)
 
@@ -741,13 +636,6 @@ class Validator(BaseNeuron):
                 )
                 continue
 
-            # # multiply by the classification accuracy
-            # TODO cleanup all self.hotkey to accuracy
-            # accuracy = self.hotkey_to_accuracy[key]
-            # if accuracy == 0:
-            #     raise ValueError(
-            #         f"Accuracy for hotkey {key} is 0, waiting for accuracy to be calculated first."
-            #     )
             bt.logging.trace(f"Score for hotkey {key} is {value}")
             rewards[uid] = value
 
@@ -773,7 +661,6 @@ class Validator(BaseNeuron):
         )
         if success:
             self.scores = scores
-            # self.hotkey_to_accuracy = hotkey_to_accuracy
 
 
 async def log_validator_status():

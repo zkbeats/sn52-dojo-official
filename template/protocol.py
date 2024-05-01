@@ -93,15 +93,12 @@ class FeedbackRequest(bt.Synapse):
     dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
 
 
-class RankingResult(bt.Synapse):
+class ScoringResult(bt.Synapse):
     request_id: str = Field(
         description="Unique identifier for the request",
         allow_mutation=False,
     )
-    cid_to_consensus: Dict[str, float] = Field(
-        description="Consensus score for each completion", allow_mutation=False
-    )
-    hotkey_to_score: Dict[str, float] = Field(
+    hotkey_to_scores: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
 

@@ -21,7 +21,7 @@ from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     ModelConfig,
     FeedbackRequest,
-    RankingResult,
+    ScoringResult,
     ScoringMethod,
 )
 from template.utils.config import get_config
@@ -51,9 +51,19 @@ class Miner(BaseMinerNeuron):
         self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
         # self.executor = ThreadPoolExecutor(max_workers=4)
 
-    async def forward_result(self, synapse: RankingResult) -> RankingResult:
-        bt.logging.info("Received consensus from validators")
-        return synapse
+    async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
+        bt.logging.info("Received scoring result from validators")
+
+        found_miner_score = synapse.hotkey_to_scores.get(
+            self.wallet.hotkey.ss58_address, None
+        )
+        if found_miner_score is None:
+            bt.logging.error(
+                f"Miner hotkey {self.wallet.hotkey.ss58_address} not found in scoring result but yet was send the result"
+            )
+            return
+        bt.logging.info(f"Miner received score: {found_miner_score}")
+        return
 
     async def forward_ranking_request(
         self, synapse: FeedbackRequest
@@ -117,6 +127,36 @@ class Miner(BaseMinerNeuron):
                     model_name=self.config.model_name,
                 )
                 # TODO directly provide scores down here
+                # # TODO remove this code and handover to miner.py side
+                # if synapse.scoring_method == ScoringMethod.LLM_API:
+                #     llm_provider = synapse.model_config.provider
+                #     model_name = synapse.model_config.model_name
+                #     scores_response = await ModelUtils.llm_api_score_text(
+                #         provider=llm_provider,
+                #         model_name=model_name,
+                #         prompt=synapse.prompt,
+                #         completions=synapse.completions,
+                #     )
+                #     for completion in synapse.completions:
+                #         matching_score_item = next(
+                #             (
+                #                 item
+                #                 for item in scores_response.scores
+                #                 if item.completion_id == completion.cid
+                #             ),
+                #             None,
+                #         )
+                #         if not matching_score_item:
+                #             continue
+
+                #         synapse.ranks.append(
+                #             Rank(
+                #                 cid=completion.cid,
+                #                 score=matching_score_item.score,
+                #             )
+                #         )
+                # else:
+                #     bt.logging.error("Unrecognized scoring method!")
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
                 # send off to MTurk workers in a non-blocking way

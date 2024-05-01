@@ -16,7 +16,7 @@ from commons.dataset.leaderboard import diff_gt, get_gt_ranks, get_leaderboard_s
 from template.protocol import (
     CriteriaType,
     FeedbackRequest,
-    RankingResult,
+    ScoringResult,
     ScoringMethod,
 )
 
@@ -91,10 +91,10 @@ class Scoring:
         scores = F.softmax(scores, dim=0)
         hotkey_to_adjusted_score = dict(zip(hotkey_to_score.keys(), scores))
         # store in synapse to be forwarded to miners
-        ranking_result = RankingResult(
+        ranking_result = ScoringResult(
             request_id=responses[0].request_id,
             cid_to_consensus=cid_to_average,
-            hotkey_to_score=hotkey_to_adjusted_score,
+            hotkey_to_scores=hotkey_to_adjusted_score,
         )
         return ranking_result
 
