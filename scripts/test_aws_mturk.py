@@ -1,5 +1,5 @@
 import os
-from commons.factory import Factory
+from commons.objects import ObjectManager
 
 from commons.human_feedback.aws_mturk import MTurkUtils
 from template.protocol import Completion
@@ -9,7 +9,7 @@ load_dotenv()
 
 
 if __name__ == "__main__":
-    factory = Factory()
+    factory = ObjectManager()
     config = factory.get_config()
     MTurkUtils.create_mturk_task(
         prompt="This is a test prompt",

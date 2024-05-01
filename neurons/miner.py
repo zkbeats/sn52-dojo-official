@@ -9,7 +9,7 @@ from typing import Dict, Tuple
 
 import bittensor as bt
 
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
 from commons.reward_model.models import RewardModel
@@ -185,7 +185,9 @@ class Miner(BaseMinerNeuron):
                     synapse.mturk_hit_id = hit_id
 
                 credentials = STSUtils.assume_role()
-                credentials.environment = Factory.get_config().aws_mturk_environment
+                credentials.environment = (
+                    ObjectManager.get_config().aws_mturk_environment
+                )
                 synapse.aws_credentials = credentials
             else:
                 bt.logging.error("Unrecognized scoring method!")

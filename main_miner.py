@@ -5,14 +5,14 @@ import bittensor as bt
 from dotenv import load_dotenv
 
 import wandb
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from commons.logging.patch_logging import apply_patch
 from neurons.miner import log_miner_status
 
 load_dotenv()
 apply_patch()
 
-miner = Factory.get_miner()
+miner = ObjectManager.get_miner()
 
 
 async def shutdown(signal, loop):

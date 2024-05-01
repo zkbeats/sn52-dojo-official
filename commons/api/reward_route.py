@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, responses
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field
-from commons.factory import Factory
+from commons.objects import ObjectManager
 
 from commons.utils import get_new_uuid
 from template.protocol import Completion, FeedbackRequest, ScoringMethod
@@ -42,7 +42,7 @@ async def reward_request_handler(request: ExternalRequest):
     )
 
     try:
-        validator = Factory.get_validator()
+        validator = ObjectManager.get_validator()
         response = await validator.send_request(synapse)
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)

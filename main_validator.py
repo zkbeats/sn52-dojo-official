@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from commons.logging.patch_logging import apply_patch
 from neurons.validator import DojoTaskTracker, log_validator_status
 
@@ -20,7 +20,7 @@ load_dotenv()
 apply_patch()
 
 
-validator = Factory.get_validator()
+validator = ObjectManager.get_validator()
 
 
 @asynccontextmanager
@@ -50,7 +50,7 @@ async def main():
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
-        port=Factory.get_config().api.port,
+        port=ObjectManager.get_config().api.port,
         workers=1,
         log_level="info",
         reload=False,

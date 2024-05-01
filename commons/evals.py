@@ -1,4 +1,5 @@
 import asyncio
+from typing_extensions import deprecated
 
 import bittensor as bt
 import torch
@@ -10,7 +11,7 @@ from tenacity import (
 )
 
 from commons.dataset.dataset import EvalDatasetManager
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from commons.reward_model.models import (
     RewardModel,
     get_cached_text_model,
@@ -29,7 +30,7 @@ class EvalUtils:
     ) -> float:
         """Non-blocking method to calculate classification accuracy using the specified scoring method."""
         total_accuracy = 0
-        num_batches = Factory.get_config().evaluation.num_batches
+        num_batches = ObjectManager.get_config().evaluation.num_batches
 
         # get or create event loop
         loop = None

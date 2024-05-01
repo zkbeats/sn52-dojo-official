@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 import bittensor as bt
 import torch
 
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
@@ -22,7 +22,7 @@ class DataManager:
 
     @staticmethod
     def get_ranking_data_filepath() -> Path:
-        config = Factory.get_config()
+        config = ObjectManager.get_config()
         base_path = config.data_manager.base_path
         return base_path / "data" / "ranking" / "data.pkl"
 
@@ -143,7 +143,7 @@ class DataManager:
     async def validator_save(cls, scores):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
-        config = Factory.get_config()
+        config = ObjectManager.get_config()
         # Save the state of the validator to file.
         async with cls._validator_lock:
             # nonzero_hotkey_to_accuracy = {
@@ -161,7 +161,7 @@ class DataManager:
     async def validator_load(cls):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
-        config = Factory.get_config()
+        config = ObjectManager.get_config()
         async with cls._validator_lock:
             try:
                 # Load the state of the validator from file.
