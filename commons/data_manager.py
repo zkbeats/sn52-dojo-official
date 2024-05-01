@@ -7,7 +7,7 @@ import bittensor as bt
 import torch
 
 from commons.factory import Factory
-from template.protocol import DendriteQueryResponse, RankingRequest
+from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
 class DataManager:
@@ -91,7 +91,7 @@ class DataManager:
         return
 
     @classmethod
-    async def append_responses(cls, request_id: str, responses: List[RankingRequest]):
+    async def append_responses(cls, request_id: str, responses: List[FeedbackRequest]):
         async with cls._lock:
             _path = DataManager.get_ranking_data_filepath()
             data = await cls._load_without_lock(path=_path)
@@ -140,19 +140,19 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, hotkey_to_accuracy):
+    async def validator_save(cls, scores):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
         config = Factory.get_config()
         # Save the state of the validator to file.
         async with cls._validator_lock:
-            nonzero_hotkey_to_accuracy = {
-                k: v for k, v in hotkey_to_accuracy.items() if v != 0
-            }
+            # nonzero_hotkey_to_accuracy = {
+            #     k: v for k, v in hotkey_to_accuracy.items() if v != 0
+            # }
             torch.save(
                 {
                     "scores": scores,
-                    "hotkey_to_accuracy": nonzero_hotkey_to_accuracy,
+                    # "hotkey_to_accuracy": nonzero_hotkey_to_accuracy,
                 },
                 config.neuron.full_path + "/validator_state.pt",
             )

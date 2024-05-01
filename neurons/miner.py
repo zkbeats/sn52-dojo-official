@@ -12,16 +12,19 @@ import bittensor as bt
 
 from commons.factory import Factory
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
+from commons.human_feedback.dojo import DojoAPI
 from commons.llm.openai_proxy import Provider
+from commons.reward_model.models import ModelUtils
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     ModelConfig,
-    RankingRequest,
-    RankingResult,
+    FeedbackRequest,
+    ScoringResult,
     ScoringMethod,
 )
+from template.utils.config import get_config
 from template.utils.uids import is_miner
 
 
@@ -45,14 +48,26 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         # log all incoming requests
-        self.hotkey_to_request: Dict[str, RankingRequest] = {}
+        self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
         # self.executor = ThreadPoolExecutor(max_workers=4)
 
-    async def forward_result(self, synapse: RankingResult) -> RankingResult:
-        bt.logging.info("Received consensus from validators")
-        return synapse
+    async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
+        bt.logging.info("Received scoring result from validators")
 
-    async def forward_ranking_request(self, synapse: RankingRequest) -> RankingRequest:
+        found_miner_score = synapse.hotkey_to_scores.get(
+            self.wallet.hotkey.ss58_address, None
+        )
+        if found_miner_score is None:
+            bt.logging.error(
+                f"Miner hotkey {self.wallet.hotkey.ss58_address} not found in scoring result but yet was send the result"
+            )
+            return
+        bt.logging.info(f"Miner received score: {found_miner_score}")
+        return
+
+    async def forward_ranking_request(
+        self, synapse: FeedbackRequest
+    ) -> FeedbackRequest:
         bt.logging.info(f"Miner received request id: {synapse.request_id}")
         try:
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
@@ -60,13 +75,50 @@ class Miner(BaseMinerNeuron):
             scoring_method = self.config.scoring_method
             if scoring_method.casefold() == ScoringMethod.DOJO:
                 synapse.scoring_method = ScoringMethod.DOJO
-                # TODO call dojo api
-                synapse.dojo_task_id = "12345"
+                task_ids = await DojoAPI.create_task(synapse)
+                assert len(task_ids) == 1
+                synapse.dojo_task_id = task_ids[0]
 
             elif scoring_method.casefold() == ScoringMethod.HF_MODEL:
                 synapse.scoring_method = ScoringMethod.HF_MODEL
-                synapse.model_config = ModelConfig(model_name=self.config.model_name)
-                # TODO directly provide scores down here
+                model_name = get_config().model_name
+                loop = asyncio.get_event_loop()
+                tasks = [
+                    loop.run_in_executor(
+                        None,
+                        ModelUtils.hf_score_text,
+                        model_name,
+                        synapse.prompt,
+                        completion.text,
+                    )
+                    for completion in synapse.completions
+                ]
+                scores = await asyncio.gather(*tasks)
+                sorted_model_scores = sorted(
+                    (
+                        (completion.model_id, score)
+                        for completion, score in zip(synapse.completions, scores)
+                    ),
+                    key=lambda x: x[1],
+                    reverse=True,
+                )
+
+                for i in range(len(synapse.completions)):
+                    key = synapse.completions[i].model_id
+                    index = next(
+                        (
+                            i
+                            for i, pair in enumerate(sorted_model_scores)
+                            if pair[0] == key
+                        ),
+                        None,
+                    )
+                    if index is None:
+                        bt.logging.error(
+                            "You fucked up and placed the wrong item in the list"
+                        )
+                        continue
+                    synapse.completions[i].rank_id = index
 
             elif scoring_method.casefold() == ScoringMethod.LLM_API:
                 synapse.scoring_method = ScoringMethod.LLM_API
@@ -75,6 +127,36 @@ class Miner(BaseMinerNeuron):
                     model_name=self.config.model_name,
                 )
                 # TODO directly provide scores down here
+                # # TODO remove this code and handover to miner.py side
+                # if synapse.scoring_method == ScoringMethod.LLM_API:
+                #     llm_provider = synapse.model_config.provider
+                #     model_name = synapse.model_config.model_name
+                #     scores_response = await ModelUtils.llm_api_score_text(
+                #         provider=llm_provider,
+                #         model_name=model_name,
+                #         prompt=synapse.prompt,
+                #         completions=synapse.completions,
+                #     )
+                #     for completion in synapse.completions:
+                #         matching_score_item = next(
+                #             (
+                #                 item
+                #                 for item in scores_response.scores
+                #                 if item.completion_id == completion.cid
+                #             ),
+                #             None,
+                #         )
+                #         if not matching_score_item:
+                #             continue
+
+                #         synapse.ranks.append(
+                #             Rank(
+                #                 cid=completion.cid,
+                #                 score=matching_score_item.score,
+                #             )
+                #         )
+                # else:
+                #     bt.logging.error("Unrecognized scoring method!")
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
                 # send off to MTurk workers in a non-blocking way
@@ -141,7 +223,7 @@ class Miner(BaseMinerNeuron):
     #     return None
 
     async def blacklist_ranking_request(
-        self, synapse: RankingRequest
+        self, synapse: FeedbackRequest
     ) -> Tuple[bool, str]:
         bt.logging.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
@@ -165,7 +247,7 @@ class Miner(BaseMinerNeuron):
 
         return False, "Valid request received from validator"
 
-    async def priority_ranking(self, synapse: RankingRequest) -> float:
+    async def priority_ranking(self, synapse: FeedbackRequest) -> float:
         """
         The priority function determines the order in which requests are handled. Higher-priority
         requests are processed before others. Miners may recieve messages from multiple entities at

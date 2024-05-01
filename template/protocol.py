@@ -11,9 +11,14 @@ from commons.utils import get_epoch_time, get_new_uuid
 
 
 class TaskType(StrEnum):
-    TEXT = "text"
-    IMAGE = "image"
+    DIALOGUE = "dialogue"
+    TEXT_TO_IMAGE = "image"
     CODE_GENERATION = "code_generation"
+
+
+class CriteriaType(StrEnum):
+    PREFERENCE_RANKING = "preference_ranking"
+    SCORING = "scoring"
 
 
 class ScoringMethod(StrEnum):
@@ -43,6 +48,7 @@ class Completion(CodeAnswer):
     model_id: str = Field(description="Model that generated the completion")
     text: str = Field(description="Text of the completion")
     rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
+    score: float = Field("Score of the completion")
 
 
 # class Rank(BaseModel):
@@ -56,8 +62,7 @@ class ModelConfig(BaseModel):
     model_name: str
 
 
-class RankingRequest(bt.Synapse):
-    # filled in by validator
+class FeedbackRequest(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
@@ -76,30 +81,24 @@ class RankingRequest(bt.Synapse):
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    # TODO refactor, this has been shifted to Completion obj directly
-    # ranks: List[Rank] = Field(
-    #     default=[], description="List of ranks for each completion"
-    # )
+    task_type: TaskType = Field(description="Type of task", allow_mutation=False)
+    criteria_types: List[CriteriaType] = Field(
+        description="Types of criteria for the task",
+        allow_mutation=False,
+    )
     scoring_method: Optional[str] = Field(
         decscription="Method to use for scoring completions"
     )
-    # model_config: Optional[ModelConfig] = Field(
-    #     description="Model configuration for Huggingface / LLM API scoring"
-    # )
     mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
     dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
-    task: TaskType = Field(description="Type of task")
 
 
-class RankingResult(bt.Synapse):
+class ScoringResult(bt.Synapse):
     request_id: str = Field(
         description="Unique identifier for the request",
         allow_mutation=False,
     )
-    cid_to_consensus: Dict[str, float] = Field(
-        description="Consensus score for each completion", allow_mutation=False
-    )
-    hotkey_to_score: Dict[str, float] = Field(
+    hotkey_to_scores: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
 
@@ -122,8 +121,8 @@ class DendriteQueryResponse(BaseModel):
     class Config:
         allow_mutation = True
 
-    request: RankingRequest
-    responses: List[RankingRequest]
+    request: FeedbackRequest
+    responses: List[FeedbackRequest]
 
 
 class ScoreItem(BaseModel):

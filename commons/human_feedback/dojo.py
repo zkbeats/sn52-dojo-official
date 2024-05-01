@@ -6,14 +6,10 @@ from fastapi.encoders import jsonable_encoder
 import httpx
 from strenum import StrEnum
 
-from template.protocol import RankingRequest, TaskType
+from template.protocol import FeedbackRequest, TaskType, CriteriaType
 from dotenv import load_dotenv
 
 load_dotenv()
-
-
-class CriteriaType(StrEnum):
-    RANKING = "ranking"
 
 
 # TODO @dev change to URL before launch
@@ -32,7 +28,7 @@ def get_dojo_api_key():
 def _extract_ranking_result_data(result_data: List[Dict]) -> Dict[str, str]:
     # sample data: [{'type': 'ranking', 'value': {'1': 'Code 2', '2': 'Code 1'}]
     ranking_results = list(
-        filter(lambda x: x["type"] == CriteriaType.RANKING, result_data)
+        filter(lambda x: x["type"] == CriteriaType.PREFERENCE_RANKING, result_data)
     )
     if len(ranking_results) == 1:
         return ranking_results[0].get("value", {})
@@ -96,39 +92,40 @@ class DojoAPI:
     @classmethod
     async def create_task(
         cls,
-        ranking_request: RankingRequest,
+        ranking_request: FeedbackRequest,
     ):
         path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-task"
         async with cls._http_client as client:
             taskData = {
                 "prompt": ranking_request.prompt,
                 "responses": [c.dict() for c in ranking_request.completions],
-                "task": str(TaskType.CODE_GENERATION).upper(),
-                "criteria": [
+                "task": str(ranking_request.task_type).upper(),
+                "criteria": [],
+            }
+            if CriteriaType.PREFERENCE_RANKING in ranking_request.criteria_types:
+                taskData["criteria"].append(
                     {
                         "type": "ranking",
                         "options": [
-                            f"Animation {i}"
-                            for i in range(len(ranking_request.completions))
+                            f"{completion.model_id}"
+                            for _, completion in enumerate(ranking_request.completions)
                         ],
                     }
-                ],
-            }
+                )
             body = {
-                "title": "Ranking Code Generation Task",
+                "title": "LLM Code Generation Task",
                 "body": ranking_request.prompt,
-                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=12))
+                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=8))
                 .replace(microsecond=0)
                 .isoformat(),
                 "taskData": taskData,
                 "maxResults": 10,
             }
             response = await client.post(path, json=jsonable_encoder(body))
-            response_data = response.json()
             if response.status_code == 200:
-                task_id = response_data.get("taskId", None)
+                task_ids = response.json()["body"]
             response.raise_for_status()
-            return task_id
+            return task_ids
 
 
 if __name__ == "__main__":
