@@ -12,7 +12,7 @@ from tenacity import (
 from commons.dataset.dataset import EvalDatasetManager
 from commons.factory import Factory
 from commons.reward_model.models import (
-    ModelUtils,
+    RewardModel,
     get_cached_text_model,
     get_cached_tokenizer,
 )
@@ -117,7 +117,7 @@ async def llm_classify_accuracy(
                 wait=wait_exponential(multiplier=1, min=4, max=12),
             ):
                 with attempt:
-                    is_chosen = await ModelUtils.llm_eval_human_preference(
+                    is_chosen = await RewardModel.llm_eval_human_preference(
                         model_config=model_config,
                         chosen=row["chosen"],
                         rejected=row["rejected"],

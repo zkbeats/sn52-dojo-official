@@ -12,7 +12,7 @@ import bittensor as bt
 from commons.factory import Factory
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
-from commons.reward_model.models import ModelUtils
+from commons.reward_model.models import RewardModel
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
@@ -82,7 +82,7 @@ class Miner(BaseMinerNeuron):
                 tasks = [
                     loop.run_in_executor(
                         None,
-                        ModelUtils.hf_score_text,
+                        RewardModel.hf_score_text,
                         get_config().model_name,
                         synapse.prompt,
                         completion.text,
@@ -118,7 +118,7 @@ class Miner(BaseMinerNeuron):
 
             elif scoring_method.casefold() == ScoringMethod.LLM_API:
                 synapse.scoring_method = ScoringMethod.LLM_API
-                scores_response = await ModelUtils.llm_api_score_text(
+                scores_response = await RewardModel.llm_api_score_text(
                     provider=get_config().llm_provider,
                     model_name=get_config().model_name,
                     prompt=synapse.prompt,

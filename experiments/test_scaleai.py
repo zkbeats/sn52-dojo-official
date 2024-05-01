@@ -10,7 +10,7 @@ from scaleapi.tasks import TaskType
 
 from commons.llm.openai_proxy import Provider
 from commons.llm.prompts import ScoreRange
-from commons.reward_model.models import ModelUtils
+from commons.reward_model.models import RewardModel
 from template.protocol import Completion, ScoreItem, ScoresResponse
 
 load_dotenv()
@@ -254,7 +254,7 @@ async def add_scores_to_dataset():
             completions = [
                 Completion(text=r["response"]) for r in row_data["responses"]
             ]
-            scores_response: ScoresResponse = await ModelUtils.llm_api_score_text(
+            scores_response: ScoresResponse = await RewardModel.llm_api_score_text(
                 model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
                 provider=Provider.TOGETHER_AI,
                 completions=completions,
@@ -273,7 +273,7 @@ async def add_scores_to_dataset():
                     (
                         sr
                         for sr in scores_response.scores
-                        if sr.completion_id == found_completion.cid
+                        if sr.model_id == found_completion.model_id
                     ),
                     None,
                 )
