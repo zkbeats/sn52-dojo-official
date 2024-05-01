@@ -177,7 +177,7 @@ class Validator(BaseNeuron):
         self.is_running: bool = False
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
-        self.hotkey_to_accuracy = defaultdict(float)
+        # self.hotkey_to_accuracy = defaultdict(float)
 
         self.axon.attach(
             forward_fn=self.forward_mturk_response,
@@ -354,51 +354,54 @@ class Validator(BaseNeuron):
             axons=axons, synapse=synapse, deserialize=False, timeout=12
         )
 
-    async def calculate_miner_classification_accuracy(self):
-        data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
-        if not data:
-            bt.logging.debug(
-                "Skipping classification accuracy as no ranking data found."
-            )
-            return
+    # async def calculate_miner_classification_accuracy(self):
+    #     if not hasattr(self, "hotkey_to_accuracy"):
+    #         self.hotkey_to_accuracy = defaultdict(float)
 
-        bt.logging.info(
-            f"Looping through {len(data)} requests to calculate miner classification accuracy"
-        )
-        for d in data:
-            for r in d.responses:
-                participant = r.axon.hotkey
-                if (
-                    participant in self.hotkey_to_accuracy
-                    and self.hotkey_to_accuracy[participant] > 0
-                ):
-                    bt.logging.debug(
-                        f"Participant {participant} already has an accuracy score of {self.hotkey_to_accuracy[participant]} skipping"
-                    )
-                    continue
+    #     data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
+    #     if not data:
+    #         bt.logging.debug(
+    #             "Skipping classification accuracy as no ranking data found."
+    #         )
+    #         return
 
-                if r.scoring_method not in [method for method in ScoringMethod]:
-                    bt.logging.error(
-                        f"Unrecognized scoring method: {r.scoring_method} for participant {participant}"
-                    )
-                    continue
+    #     bt.logging.info(
+    #         f"Looping through {len(data)} requests to calculate miner classification accuracy"
+    #     )
+    #     for d in data:
+    #         for r in d.responses:
+    #             participant = r.axon.hotkey
+    #             if (
+    #                 participant in self.hotkey_to_accuracy
+    #                 and self.hotkey_to_accuracy[participant] > 0
+    #             ):
+    #                 bt.logging.debug(
+    #                     f"Participant {participant} already has an accuracy score of {self.hotkey_to_accuracy[participant]} skipping"
+    #                 )
+    #                 continue
 
-                # TODO @dev ensure that different miners get the same data
-                accuracy = await EvalUtils.classification_accuracy(
-                    scoring_method=r.scoring_method, model_config=r.model_config
-                )
+    #             if r.scoring_method not in [method for method in ScoringMethod]:
+    #                 bt.logging.error(
+    #                     f"Unrecognized scoring method: {r.scoring_method} for participant {participant}"
+    #                 )
+    #                 continue
 
-                self.hotkey_to_accuracy[participant] = accuracy
+    #             # TODO @dev ensure that different miners get the same data
+    #             accuracy = await EvalUtils.classification_accuracy(
+    #                 scoring_method=r.scoring_method, model_config=r.model_config
+    #             )
 
-        return
+    #             self.hotkey_to_accuracy[participant] = accuracy
 
-    async def reset_accuracy(self):
-        if not self.hotkey_to_accuracy:
-            bt.logging.warning(
-                "Reset miner hotkey accuracy triggered, but no accuracy data found. Skipping..."
-            )
-            self.hotkey_to_accuracy.clear()
-        return
+    #     return
+
+    # async def reset_accuracy(self):
+    #     if not self.hotkey_to_accuracy:
+    #         bt.logging.warning(
+    #             "Reset miner hotkey accuracy triggered, but no accuracy data found. Skipping..."
+    #         )
+    #         self.hotkey_to_accuracy.clear()
+    #     return
 
     def validate_response(self, synapse: FeedbackRequest) -> bool:
         """Process request from miners, specifically filling out the ranks fields"""
@@ -544,7 +547,7 @@ class Validator(BaseNeuron):
                     "best_completion": best_completion,
                     "responses": d.responses,
                     "num_responses": len(d.responses),
-                    "hotkey_to_accuracy": self.hotkey_to_accuracy,
+                    # "hotkey_to_accuracy": self.hotkey_to_accuracy,
                     "hotkey_to_score": criteria_to_miner_scores.hotkey_to_score,
                 }
             )
@@ -789,9 +792,7 @@ class Validator(BaseNeuron):
     def save_state(self):
         """Saves the state of the validator to a file."""
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            DataManager.validator_save(self.scores, self.hotkey_to_accuracy)
-        )
+        loop.run_until_complete(DataManager.validator_save(self.scores))
 
     def load_state(self):
         """Loads the state of the validator from a file."""
@@ -801,7 +802,7 @@ class Validator(BaseNeuron):
         )
         if success:
             self.scores = scores
-            self.hotkey_to_accuracy = hotkey_to_accuracy
+            # self.hotkey_to_accuracy = hotkey_to_accuracy
 
 
 async def log_validator_status():

@@ -140,19 +140,19 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, hotkey_to_accuracy):
+    async def validator_save(cls, scores):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
         config = Factory.get_config()
         # Save the state of the validator to file.
         async with cls._validator_lock:
-            nonzero_hotkey_to_accuracy = {
-                k: v for k, v in hotkey_to_accuracy.items() if v != 0
-            }
+            # nonzero_hotkey_to_accuracy = {
+            #     k: v for k, v in hotkey_to_accuracy.items() if v != 0
+            # }
             torch.save(
                 {
                     "scores": scores,
-                    "hotkey_to_accuracy": nonzero_hotkey_to_accuracy,
+                    # "hotkey_to_accuracy": nonzero_hotkey_to_accuracy,
                 },
                 config.neuron.full_path + "/validator_state.pt",
             )
