@@ -5,6 +5,7 @@ from typing import Dict, List
 
 import bittensor as bt
 import numpy as np
+from pydantic import validate_arguments
 import scipy
 from attr import define, field
 import torch
@@ -127,6 +128,7 @@ class Scoring:
             raise ValueError("Responses cannot be empty")
 
         if criteria == CriteriaType.SCORING:
+            # TODO refactor to return tensor
             return Scoring._spearman_scoring(responses)
         elif criteria == CriteriaType.PREFERENCE_RANKING:
             avg_ranks, all_miner_ranks = Scoring._process_for_ranking(responses)
@@ -194,16 +196,19 @@ class Scoring:
             return diff_gt_sm
 
     @staticmethod
+    @validate_arguments
     def calculate_score(
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
         responses: List[FeedbackRequest],
-    ):
+    ) -> Dict[CriteriaType, torch.Tensor]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
-        criteria_to_miner_scores = {}
+        criteria_to_miner_scores = defaultdict(list)
         for criteria in criteria_types:
             gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
             consensus_score = Scoring.consensus_score(criteria, responses)
+            print(f"{gt_score}")
+            print(f"{consensus_score}")
             criteria_to_miner_scores[criteria] = torch.tensor(
                 0.65 * gt_score + 0.35 * consensus_score
             )
@@ -333,8 +338,16 @@ if __name__ == "__main__":
     )
 
     print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
-    print(
-        Scoring.calculate_score(
-            CriteriaType.PREFERENCE_RANKING, test_requests[0], test_requests
-        )
+    res = Scoring.calculate_score(
+        [CriteriaType.PREFERENCE_RANKING], test_requests[0], test_requests
     )
+    print(res.get(CriteriaType.PREFERENCE_RANKING).shape)
+    res["scoring"] = res.get(CriteriaType.PREFERENCE_RANKING).clone().detach()
+    # averages
+    total_sum = torch.stack([miner_scores for miner_scores in res.values()])
+    print(total_sum.shape)
+    print(total_sum)
+    print(total_sum.mean(dim=0).shape)
+    print(total_sum.mean(dim=0))
+    bt.logging.info(f"Total sum of scores across all criteria: {total_sum}")
+    print(res)

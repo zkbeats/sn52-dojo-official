@@ -488,18 +488,26 @@ class Validator(BaseNeuron):
                 request=d.request,
                 responses=d.responses,
             )
-            # map miner hotkey to scores
-            criteria_to_hotkey_to_scores = defaultdict(lambda: defaultdict(float))
-            for criteria in d.request.criteria_types:
-                for response in d.responses:
-                    miner_scores = criteria_to_miner_scores[criteria]
-                    criteria_to_hotkey_to_scores[criteria][response.axon.hotkey] = (
-                        miner_scores
-                    )
 
-            # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-            # TODO update scores for miners here
-            self.update_scores(criteria_to_hotkey_to_scores)
+            # calculate mean across all criteria
+            mean_miner_scores = (
+                torch.stack(
+                    [miner_scores for miner_scores in criteria_to_miner_scores.values()]
+                )
+                .mean(dim=0)
+                .tolist()
+            )
+            bt.logging.trace(
+                f"mean miner scores across differerent criteria: {mean_miner_scores.shape} {mean_miner_scores}"
+            )
+
+            # craft hotkey to score
+            assert len(d.responses) == len(mean_miner_scores)
+            hotkey_to_scores = {
+                r.axon.hotkey: mean_miner_scores[i] for i, r in enumerate(d.responses)
+            }
+            # update the scores based on the rewards
+            self.update_scores(hotkey_to_scores=hotkey_to_scores)
             await self.send_consensus(
                 synapse=criteria_to_miner_scores,
                 hotkeys=list(criteria_to_miner_scores.hotkey_to_score.keys()),
@@ -759,17 +767,17 @@ class Validator(BaseNeuron):
                 )
                 continue
 
-            # multiply by the classification accuracy
-            accuracy = self.hotkey_to_accuracy[key]
-            if accuracy == 0:
-                raise ValueError(
-                    f"Accuracy for hotkey {key} is 0, waiting for accuracy to be calculated first."
-                )
-            bt.logging.debug(f"Accuracy for hotkey {key} is {accuracy}")
-            bt.logging.debug(f"Pre-multiplier score for hotkey {key} is {value}")
-            rewards[uid] = value * accuracy
-        bt.logging.debug(f"Rewards: {rewards}")
+            # # multiply by the classification accuracy
+            # TODO cleanup all self.hotkey to accuracy
+            # accuracy = self.hotkey_to_accuracy[key]
+            # if accuracy == 0:
+            #     raise ValueError(
+            #         f"Accuracy for hotkey {key} is 0, waiting for accuracy to be calculated first."
+            #     )
+            bt.logging.trace(f"Score for hotkey {key} is {value}")
+            rewards[uid] = value
 
+        bt.logging.debug(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
