@@ -47,21 +47,6 @@ app.include_router(reward_router)
 
 
 async def main():
-    scheduler = AsyncIOScheduler(
-        job_defaults={"max_instances": 3, "misfire_grace_time": 3}
-    )
-
-    every_30_min_trigger = IntervalTrigger(minutes=30)
-    hourly_trigger = IntervalTrigger(minutes=0, hours=1)
-    daily_trigger = IntervalTrigger(hours=24)
-
-    scheduler.add_job(validator.update_score_and_send_feedback, trigger=hourly_trigger)
-    scheduler.add_job(
-        validator.calculate_miner_classification_accuracy, trigger=every_30_min_trigger
-    )
-    scheduler.add_job(validator.reset_accuracy, trigger=daily_trigger)
-    scheduler.start()
-
     config = uvicorn.Config(
         app=app,
         host="0.0.0.0",
@@ -71,17 +56,14 @@ async def main():
         reload=False,
     )
     server = uvicorn.Server(config)
-    log_task = asyncio.create_task(log_validator_status())
-    run_task = asyncio.create_task(validator.run())
-
-    await server.serve()
-
-    log_task.cancel()
-    run_task.cancel()
-    try:
-        await log_task
-    except asyncio.CancelledError:
-        pass
+    await asyncio.gather(
+        *[
+            log_validator_status(),
+            validator.run(),
+            server.serve(),
+            validator.update_score_and_send_feedback(),
+        ]
+    )
 
 
 if __name__ == "__main__":

@@ -81,16 +81,16 @@ class FeedbackRequest(bt.Synapse):
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    scoring_method: Optional[str] = Field(
-        decscription="Method to use for scoring completions"
-    )
-    mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
-    dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
     task_type: TaskType = Field(description="Type of task", allow_mutation=False)
     criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
         allow_mutation=False,
     )
+    scoring_method: Optional[str] = Field(
+        decscription="Method to use for scoring completions"
+    )
+    mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
+    dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
 
 
 class RankingResult(bt.Synapse):
