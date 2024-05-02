@@ -141,8 +141,7 @@ def detect_chars_until_first_word(text: str):
 
 
 def parse_code_response(strictjson_response: dict[str, Any]) -> dict:
-    """Ensure that content is properly escaped and necessary files appended for python"""
-    strictjson_response = json_dumps(strictjson_response)
+    """Ensure that necessary files appended for python"""
     strictjson_response = append_codesandbox_files(strictjson_response)
     return strictjson_response
 
@@ -174,16 +173,12 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
         devcontainer_file = {
             "filename": ".devcontainer/devcontainer.json",
             "content": json.dumps(
-                json.dumps(
-                    {
-                        "name": "Devcontainer",
-                        "image": "mcr.microsoft.com/devcontainers/python:3.8-bookworm",
-                        "customizations": {
-                            "vscode": {"extensions": ["ms-python.python"]}
-                        },
-                    },
-                    indent=2,
-                )
+                {
+                    "name": "Devcontainer",
+                    "image": "mcr.microsoft.com/devcontainers/python:3.8-bookworm",
+                    "customizations": {"vscode": {"extensions": ["ms-python.python"]}},
+                },
+                indent=2,
             ),
             "language": "json",
         }
@@ -230,14 +225,10 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
         )
 
         codesandbox_tasks_json = codesandbox_tasks.json(indent=2, exclude_none=True)
-        # Serialize again to escape the string for embedding
-        escaped_codesandbox_tasks_json = json.dumps(
-            codesandbox_tasks_json, ensure_ascii=False
-        )
 
         codesandbox_tasks_file = {
             "filename": ".codesandbox/tasks.json",
-            "content": escaped_codesandbox_tasks_json,
+            "content": codesandbox_tasks_json,
             "language": "json",
         }
 
@@ -567,6 +558,7 @@ async def build_prompt_responses_pair():
     client = get_openai_client(Provider.OPENROUTER)
     # use these models because we can specify seed
     prompt = await generate_question(client, random.choice(template.GENERATOR_MODELS))
+    prompt_json = json.dumps({"prompt": prompt})
 
     # NOTE @dev LLMs here were selected to be able to compare against the EvalPLus leaderboard
     # randomly sampled from pool of models
@@ -579,7 +571,7 @@ async def build_prompt_responses_pair():
         *[generate_answer(ans_model, prompt) for ans_model in sel_ans_models]
     )
     bt.logging.info(f"results: {results}")
-    res = {"prompt": prompt, "responses": []}
+    res = {"prompt": prompt_json, "responses": []}
     for model, result in results:
         if not result:
             continue
