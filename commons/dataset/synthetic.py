@@ -88,7 +88,7 @@ def build_code_generation_question_prompt(num_requirements: int) -> str:
     - The interactions must require the programmer to have a mental model of any objects being visualized.
     - The question generated must require the programmer to code using only Python, or Javascript with HTML and CSS.
     - You must not provide any example code snippets, because you must let the programmer solve the question by themselves.
-    - If the generated question is for Python, it must use built-in libraries. Strictly use dash==2.16.1 library functions for visualisation. Other python third-party libraries allowed are plotly, matplotlib and pandas==2.0.3.
+    - If the generated question is for Python, it must use built-in libraries. Strictly use mpld3 library functions for visualisation. Other python third-party libraries allowed are plotly, matplotlib and pandas==2.0.3.
     - If the generated question is for Javascript, it should strictly command the usage of only built-in libraries or use visualization libraries like three.js, D3.js.
 
     Coding Question:
@@ -99,7 +99,8 @@ def build_code_generation_question_prompt(num_requirements: int) -> str:
 def additional_notes_for_question_prompt(prompt: str) -> str:
     ADDITIONAL_NOTES = """
     Note:
-    - The visualization should be implemented in either Python using Dash (2.16.1) with Plotly, Matplotlib, and Pandas (2.0.3) or in JavaScript with HTML and CSS using Three.js or D3.js.
+    - The visualization should be implemented in either Python using mpld3 with Plotly, Matplotlib, and Pandas (2.0.3) or in JavaScript with HTML and CSS using Three.js or D3.js.
+    - If mpld3 is used, ensure that mpld3.show() is used to display the plot.
     """
     return prompt + textwrap.dedent(ADDITIONAL_NOTES)
 
@@ -139,37 +140,22 @@ def detect_chars_until_first_word(text: str):
     return match.group()
 
 
-def parse_code_response(strictjson_response: dict[str, Any], model: str) -> dict:
-    """ensures consistent format of 'code' key"""
-    if "code" not in strictjson_response:
-        # bt.logging.warning(f"{strictjson_response.keys()}")
-        raise ValueError(f"No code key found in strictjson response for model: {model}")
-
-    try:
-        # using re.match to check the first character, is a letter a-z (case insensitive)
-        code_text = strictjson_response["code"]
-        if re.match(r"^[a-zA-Z]", code_text):
-            detected_chars = detect_chars_until_first_word(code_text)
-            is_all_same_char = (
-                True if detected_chars and len(set(detected_chars)) == 1 else False
-            )
-            if (
-                detected_chars
-                and is_all_same_char
-                and code_text.startswith(detected_chars)
-                and code_text.endswith(detected_chars)
-            ):
-                code_text = code_text[len(detected_chars) : -len(detected_chars)]
-                if len(code_text):
-                    strictjson_response["code"] = code_text
-    except Exception as e:
-        pass
-
+def parse_code_response(strictjson_response: dict[str, Any]) -> dict:
+    """Ensure that content is properly escaped and necessary files appended for python"""
+    strictjson_response = json_dumps(strictjson_response)
+    strictjson_response = append_codesandbox_files(strictjson_response)
     return strictjson_response
 
 
-def augment_python_files(strictjson_response: dict[str, Any]) -> dict:
-    """Appends specific files if any file's language key is Python."""
+def json_dumps(strictjson_response: dict[str, Any]):
+    """JSON dump twice to ensure that the content is properly escaped for codesandbox API"""
+    for file in strictjson_response.get("files", []):
+        file["content"] = json.dumps(file["content"])
+    return strictjson_response
+
+
+def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
+    """Appends necessary codesandbox files if any file's language key is Python."""
     python_file_detected = False
     requirements_file_exists = False
     installation_commands = ""
@@ -188,12 +174,16 @@ def augment_python_files(strictjson_response: dict[str, Any]) -> dict:
         devcontainer_file = {
             "filename": ".devcontainer/devcontainer.json",
             "content": json.dumps(
-                {
-                    "name": "Devcontainer",
-                    "image": "mcr.microsoft.com/devcontainers/python:3.8-bookworm",
-                    "customizations": {"vscode": {"extensions": ["ms-python.python"]}},
-                },
-                indent=2,
+                json.dumps(
+                    {
+                        "name": "Devcontainer",
+                        "image": "mcr.microsoft.com/devcontainers/python:3.8-bookworm",
+                        "customizations": {
+                            "vscode": {"extensions": ["ms-python.python"]}
+                        },
+                    },
+                    indent=2,
+                )
             ),
             "language": "json",
         }
@@ -239,9 +229,11 @@ def augment_python_files(strictjson_response: dict[str, Any]) -> dict:
             },
         )
 
-        codesandbox_tasks_json = codesandbox_tasks.json(indent=2)
+        codesandbox_tasks_json = codesandbox_tasks.json(indent=2, exclude_none=True)
         # Serialize again to escape the string for embedding
-        escaped_codesandbox_tasks_json = json.dumps(codesandbox_tasks_json)
+        escaped_codesandbox_tasks_json = json.dumps(
+            codesandbox_tasks_json, ensure_ascii=False
+        )
 
         codesandbox_tasks_file = {
             "filename": ".codesandbox/tasks.json",
@@ -298,28 +290,20 @@ def few_shot_example_outputs():
     }
     },
 
-    "question": Interactive Data Visualization with Dash and Plotly
-    You are tasked with creating an interactive web application using Dash and Plotly to visualize a dataset. The dataset consists of points categorized by a type of fruit, each with an x and y coordinate and an associated custom data value.
-    Your application should display a scatter plot of the dataset, with points colored according to their fruit category. It should also provide interactive features to display data related to user interactions with the plot, such as hovering over points, clicking on points, selecting multiple points using lasso or rectangle tools, and zooming or panning the plot.
-    Requirements:
-    1. Come up with a dataset to create a scatter plot. The dataset should the following columns: x, y, customdata, and fruit.
-    2. Color the points in the scatter plot based on the fruit column.
-    3. Implement interactive features that display:
-    - The data of the point(s) hovered over.
-    - The data of the point(s) clicked on.
-    - The data of the point(s) selected using lasso or rectangle selection tools.
-    - Data related to zooming or panning actions on the plot.
-    Additional Information:
-    - You should use Dash for the web application framework and Plotly for creating the scatter plot.
-    - The application layout should be organized, with the plot and interactive data sections arranged for easy viewing.
-    - Ensure that your application is responsive to different types of user interactions with the plot, such as hovering, clicking, selecting, and zooming/panning.
+    "question": Interactive Sine Wave Visualization
+    Write a Python program that generates an interactive visualization of a sine wave. The program should use matplotlib for plotting and mpld3 to convert the plot into an interactive HTML plot. The sine wave should span from 0 to 10 on the x-axis, with 100 points evenly distributed along this interval. The y-axis values should be the sine of the x-axis values. Your plot should have the title "Simple Plot" and appropriately labeled x and y-axes.
+    Ensure your solution:
+    - Imports necessary libraries
+    - Generates the data for the sine wave
+    - Creates the plot with titles and labels
+    - Converts the plot to an interactive HTML plot using mpld3
 
     Sample Answer Format:
     {
     "files": [
         {
         "filename": "main.py",
-        "content": "from dash import Dash, dcc, html, Input, Output, callback\n\nimport plotly.express as px\n\nimport json\nimport pandas as pd\n\nexternal_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']\n\napp = Dash(__name__, external_stylesheets=external_stylesheets)\n\nstyles = {\n    'pre': {\n        'border': 'thin lightgrey solid',\n        'overflowX': 'scroll'\n    }\n}\n\ndf = pd.DataFrame({\n    \"x\": [1,2,1,2],\n    \"y\": [1,2,3,4],\n    \"customdata\": [1,2,3,4],\n    \"fruit\": [\"apple\", \"apple\", \"orange\", \"orange\"]\n})\n\nfig = px.scatter(df, x=\"x\", y=\"y\", color=\"fruit\", custom_data=[\"customdata\"])\n\nfig.update_layout(clickmode='event+select')\n\nfig.update_traces(marker_size=20)\n\napp.layout = html.Div([\n    dcc.Graph(\n        id='basic-interactions',\n        figure=fig\n    ),\n\n    html.Div(className='row', children=[\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Hover Data**\n\n                Mouse over values in the graph.\n            \"\"\"),\n            html.Pre(id='hover-data', style=styles['pre'])\n        ], className='three columns'),\n\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Click Data**\n\n                Click on points in the graph.\n            \"\"\"),\n            html.Pre(id='click-data', style=styles['pre']),\n        ], className='three columns'),\n\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Selection Data**\n\n                Choose the lasso or rectangle tool in the graph's menu\n                bar and then select points in the graph.\n\n                Note that if `layout.clickmode = 'event+select'`, selection data also\n                accumulates (or un-accumulates) selected data if you hold down the shift\n                button while clicking.\n            \"\"\"),\n            html.Pre(id='selected-data', style=styles['pre']),\n        ], className='three columns'),\n\n        html.Div([\n            dcc.Markdown(\"\"\"\n                **Zoom and Relayout Data**\n\n                Click and drag on the graph to zoom or click on the zoom\n                buttons in the graph's menu bar.\n                Clicking on legend items will also fire\n                this event.\n            \"\"\"),\n            html.Pre(id='relayout-data', style=styles['pre']),\n        ], className='three columns')\n    ])\n])\n\n\n@callback(\n    Output('hover-data', 'children'),\n    Input('basic-interactions', 'hoverData'))\ndef display_hover_data(hoverData):\n    return json.dumps(hoverData, indent=2)\n\n\n@callback(\n    Output('click-data', 'children'),\n    Input('basic-interactions', 'clickData'))\ndef display_click_data(clickData):\n    return json.dumps(clickData, indent=2)\n\n\n@callback(\n    Output('selected-data', 'children'),\n    Input('basic-interactions', 'selectedData'))\ndef display_selected_data(selectedData):\n    return json.dumps(selectedData, indent=2)\n\n\n@callback(\n    Output('relayout-data', 'children'),\n    Input('basic-interactions', 'relayoutData'))\ndef display_relayout_data(relayoutData):\n    return json.dumps(relayoutData, indent=2)\n\n\nif __name__ == '__main__':\n    app.run(debug=True)\n",
+        "content": "import mpld3\r\nimport matplotlib.pyplot as plt\r\nimport numpy as np\r\n\r\n# Generate some data\r\nx = np.linspace(0, 10, 100)\r\ny = np.sin(x)\r\n\r\n# Create a plot\r\nplt.figure()\r\nplt.plot(x, y)\r\nplt.title('Simple Plot')\r\nplt.xlabel('x')\r\nplt.ylabel('y')\r\n\r\n# Convert the plot to an interactive HTML plot\r\n# html_plot = mpld3.fig_to_html(plt.gcf())\r\nmpld3.display()",
         "language": "python"
         },
         {
@@ -334,7 +318,7 @@ def few_shot_example_outputs():
         },
         {
             "filename": "requirements.txt",
-            "content": "dash==2.16.1\npandas==2.0.3",
+            "content": "mpld3==0.5.10\npandas==2.0.3",
             "language": "text"
         }
     ],
@@ -359,7 +343,9 @@ def build_code_answer_prompt(question) -> str:
     - Your solution must not involve the useage of a terminal. If you require any inputs from the user, you must provide the functionality of the user input in your code.
     - You are able to write to multiple output file foramts depending on your specific use case
     - If your solution is in Python, ensure that the main file is named 'main.py'.
+    - If mpld3 is used, ensure that mpld3.show() is used to display the plot.
     - Remember to include installation commands for any dependencies required for the code to run
+    - Ensure that the a requirememts.txt file is included if any third-party packages are required for the code to run.
     - Ensure all output code is properly formatted with consistent quotation marks and special characters are correctly escaped to prevent syntax errors.
     - The provided code solution should be directly executable without requiring modifications to run successfully.
 
@@ -550,7 +536,7 @@ async def generate_answer(model: str, question: str):
                     user="Remember to provide the code solution according your previous instructions.",
                     callable_llm=callable_llm,
                 )
-                completion = augment_python_files(completion)
+                completion = parse_code_response(completion)
 
                 # TODO parse the response because of weird triple backticks or quotes
                 # try:
@@ -592,6 +578,7 @@ async def build_prompt_responses_pair():
     results = await asyncio.gather(
         *[generate_answer(ans_model, prompt) for ans_model in sel_ans_models]
     )
+    bt.logging.info(f"results: {results}")
     res = {"prompt": prompt, "responses": []}
     for model, result in results:
         if not result:
@@ -601,7 +588,6 @@ async def build_prompt_responses_pair():
                 "model": model,
                 "completion": {
                     "files": result["files"],
-                    "language": result["language"],
                     "installation_commands": result["installation_commands"],
                     "additional_notes": result["additional_notes"],
                 },
