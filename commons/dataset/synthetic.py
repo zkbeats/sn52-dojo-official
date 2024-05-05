@@ -140,16 +140,22 @@ def detect_chars_until_first_word(text: str):
     return match.group()
 
 
-def parse_code_response(strictjson_response: dict[str, Any]) -> dict:
+def parse_code_response(result_object: dict) -> dict:
     """Ensure that necessary files appended for python"""
-    strictjson_response = append_codesandbox_files(strictjson_response)
-    return strictjson_response
+    result_object = append_codesandbox_files(result_object)
+    result_object = escape_double_quotes_in_files(result_object)
+    return result_object
 
 
-def json_dumps(strictjson_response: dict[str, Any]):
-    """JSON dump twice to ensure that the content is properly escaped for codesandbox API"""
+def escape_double_quotes_in_files(strictjson_response: dict[str, Any]):
+    """Escapes double quotes in the content of each file in the CodeAnswer object."""
     for file in strictjson_response.get("files", []):
-        file["content"] = json.dumps(file["content"])
+        if "content" in file:
+            file["content"] = file["content"].replace(r"\"", r'"')
+            file["content"] = file["content"].replace(r'"', r"\"")
+            file["content"] = file["content"].replace(r"\'", r"'")
+        else:
+            bt.logging.error("No 'content' key found in file dictionary.")
     return strictjson_response
 
 
@@ -160,12 +166,19 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
     installation_commands = ""
     python_file_name = "main.py"
 
-    for file in strictjson_response.get("files", []):
-        if file.get("language") == "python":
-            python_file_detected = True
-            python_file_name = file.get("filename", python_file_name)
-        if file.get("filename") == "requirements.txt":
-            requirements_file_exists = True
+    files = strictjson_response.get("files", [])
+    for file in files:
+        if isinstance(file, dict):
+            if file.get("language") == "python":
+                python_file_detected = True
+                python_file_name = file.get("filename", python_file_name)
+            if file.get("filename") == "requirements.txt":
+                requirements_file_exists = True
+        else:
+            bt.logging.error(
+                f"Expected a dictionary, but found: {type(file)}. Skipping this item."
+            )
+
         if "installation_commands" in strictjson_response:
             installation_commands = strictjson_response["installation_commands"]
 
@@ -213,7 +226,7 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
                     name="start",
                     command=f"python {python_file_name}",
                     runAtStart=True,
-                    preview={"port": 8050},
+                    preview={"port": 8888},
                     restartOn=RestartOn(files=[python_file_name]),
                 ),
                 "install-dependencies": TaskDetail(
@@ -242,23 +255,22 @@ def few_shot_example_outputs():
     "question":"Write me a program that visualized our solar system, you may use python, javascript or pure HTML.",
 
     Sample Answer Format:
-        {
-            "files": [
-                {
-                "filename": "index.js",
-                "content": "const canvas = document.getElementById(\"solarSystemCanvas\");\nconst ctx = canvas.getContext(\"2d\");\nconst infoPanel = document.getElementById(\"infoPanel\");\nconst speedSlider = document.getElementById(\"speedSlider\");\n\nconst planets = [\n  { name: \"Mercury\", orbitRadius: 50, orbitSpeed: 0.39, distanceFromSun: 39 },\n  { name: \"Venus\", orbitRadius: 100, orbitSpeed: 0.72, distanceFromSun: 72 },\n  { name: \"Earth\", orbitRadius: 150, orbitSpeed: 1, distanceFromSun: 100 },\n  { name: \"Mars\", orbitRadius: 200, orbitSpeed: 1.52, distanceFromSun: 152 },\n  {\n    name: \"Jupiter\",\n    orbitRadius: 300,\n    orbitSpeed: 11.86,\n    distanceFromSun: 520,\n  },\n  { name: \"Saturn\", orbitRadius: 400, orbitSpeed: 29.46, distanceFromSun: 958 },\n];\n\nlet currentTime = 0;\nlet simulationSpeed = 1;\n\nfunction drawPlanet(planet, angle) {\n  ctx.beginPath();\n  ctx.arc(\n    canvas.width / 2 + planet.orbitRadius * Math.cos(angle),\n    canvas.height / 2 + planet.orbitRadius * Math.sin(angle),\n    5,\n    0,\n    2 * Math.PI\n  );\n  ctx.fillStyle = \"blue\";\n  ctx.fill();\n  ctx.closePath();\n}\n\nfunction drawOrbit(planet) {\n  ctx.beginPath();\n  ctx.arc(\n    canvas.width / 2,\n    canvas.height / 2,\n    planet.orbitRadius,\n    0,\n    2 * Math.PI\n  );\n  ctx.strokeStyle = \"gray\";\n  ctx.stroke();\n  ctx.closePath();\n}\n\nfunction drawSun() {\n  ctx.beginPath();\n  ctx.arc(canvas.width / 2, canvas.height / 2, 10, 0, 2 * Math.PI);\n  ctx.fillStyle = \"yellow\";\n  ctx.fill();\n  ctx.closePath();\n}\n\nfunction updateInfoPanel(planet) {\n  infoPanel.innerHTML = `\n    <h2>${planet.name}</h2>\n    <p>Average Orbital Speed: ${planet.orbitSpeed} AU/year</p>\n    <p>Distance from Sun: ${planet.distanceFromSun} million km</p>\n  `;\n}\n\nfunction draw() {\n  ctx.clearRect(0, 0, canvas.width, canvas.height);\n  drawSun();\n\n  planets.forEach((planet, index) => {\n    const angle =\n      (currentTime * planet.orbitSpeed * simulationSpeed) % (2 * Math.PI);\n    drawOrbit(planet);\n    drawPlanet(planet, angle);\n\n    if (\n      ctx.isPointInPath(\n        canvas.width / 2,\n        canvas.height / 2 - planet.orbitRadius\n      )\n    ) {\n      updateInfoPanel(planet);\n    }\n  });\n\n  currentTime += 1 / 60;\n  requestAnimationFrame(draw);\n}\n\nspeedSlider.addEventListener(\"input\", (event) => {\n  simulationSpeed = event.target.value / 50;\n});\n\ndraw();\n",
-                "language": "javascript"
-                },
-                {
-                "filename": "index.html",
-                "content": "<!DOCTYPE html>\n<html>\n<head>\n<title>Page Title</title>\n</head>\n<body>\n<h1>Welcome</h1>\n<p>Hello world</p>\n<script src='index.js'></script>\n</body>\n</html>",
-                "language": "html"
-                }
-            ],
-            "installation_commands": "null",
-            "additional_notes": "The code uses built-in libraries so no additional commands are required."
+    {
+        "files": [
+            {
+            "filename": "index.js",
+            "content": "const canvas = document.getElementById(\"solarSystemCanvas\");\nconst ctx = canvas.getContext(\"2d\");\nconst infoPanel = document.getElementById(\"infoPanel\");\nconst speedSlider = document.getElementById(\"speedSlider\");\n\nconst planets = [\n  { name: \"Mercury\", orbitRadius: 50, orbitSpeed: 0.39, distanceFromSun: 39 },\n  { name: \"Venus\", orbitRadius: 100, orbitSpeed: 0.72, distanceFromSun: 72 },\n  { name: \"Earth\", orbitRadius: 150, orbitSpeed: 1, distanceFromSun: 100 },\n  { name: \"Mars\", orbitRadius: 200, orbitSpeed: 1.52, distanceFromSun: 152 },\n  {\n    name: \"Jupiter\",\n    orbitRadius: 300,\n    orbitSpeed: 11.86,\n    distanceFromSun: 520,\n  },\n  { name: \"Saturn\", orbitRadius: 400, orbitSpeed: 29.46, distanceFromSun: 958 },\n];\n\nlet currentTime = 0;\nlet simulationSpeed = 1;\n\nfunction drawPlanet(planet, angle) {\n  ctx.beginPath();\n  ctx.arc(\n    canvas.width / 2 + planet.orbitRadius * Math.cos(angle),\n    canvas.height / 2 + planet.orbitRadius * Math.sin(angle),\n    5,\n    0,\n    2 * Math.PI\n  );\n  ctx.fillStyle = \"blue\";\n  ctx.fill();\n  ctx.closePath();\n}\n\nfunction drawOrbit(planet) {\n  ctx.beginPath();\n  ctx.arc(\n    canvas.width / 2,\n    canvas.height / 2,\n    planet.orbitRadius,\n    0,\n    2 * Math.PI\n  );\n  ctx.strokeStyle = \"gray\";\n  ctx.stroke();\n  ctx.closePath();\n}\n\nfunction drawSun() {\n  ctx.beginPath();\n  ctx.arc(canvas.width / 2, canvas.height / 2, 10, 0, 2 * Math.PI);\n  ctx.fillStyle = \"yellow\";\n  ctx.fill();\n  ctx.closePath();\n}\n\nfunction updateInfoPanel(planet) {\n  infoPanel.innerHTML = `\n    <h2>${planet.name}</h2>\n    <p>Average Orbital Speed: ${planet.orbitSpeed} AU/year</p>\n    <p>Distance from Sun: ${planet.distanceFromSun} million km</p>\n  `;\n}\n\nfunction draw() {\n  ctx.clearRect(0, 0, canvas.width, canvas.height);\n  drawSun();\n\n  planets.forEach((planet, index) => {\n    const angle =\n      (currentTime * planet.orbitSpeed * simulationSpeed) % (2 * Math.PI);\n    drawOrbit(planet);\n    drawPlanet(planet, angle);\n\n    if (\n      ctx.isPointInPath(\n        canvas.width / 2,\n        canvas.height / 2 - planet.orbitRadius\n      )\n    ) {\n      updateInfoPanel(planet);\n    }\n  });\n\n  currentTime += 1 / 60;\n  requestAnimationFrame(draw);\n}\n\nspeedSlider.addEventListener(\"input\", (event) => {\n  simulationSpeed = event.target.value / 50;\n});\n\ndraw();\n",
+            "language": "javascript"
+            },
+            {
+            "filename": "index.html",
+            "content": "<!DOCTYPE html>\n<html>\n<head>\n<title>Page Title</title>\n</head>\n<body>\n<h1>Welcome</h1>\n<p>Hello world</p>\n<script src='index.js'></script>\n</body>\n</html>",
+            "language": "html"
             }
-        },
+        ],
+        "installation_commands": "null",
+        "additional_notes": "The code uses built-in libraries so no additional commands are required."
+    }
 
     "question": Create an interactive visualization of a cube in 3D space using Javascript with HTML and CSS. The visualization should meet the following requirements:
     1. The cube should be rotatable in 3D space by clicking and dragging the mouse pointer.
@@ -269,17 +281,16 @@ def few_shot_example_outputs():
 
     Sample Answer Format:
     {
-    "files": [
-        {
-        "filename": "index.html",
-        "content": "<!DOCTYPE html>\\n<html lang=\"en\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n    <meta name=\"viewport\" content=\"width=device-width,\\n        initial-scale=1.0\">\\n    <title>3D Cube Visualization</title>\\n    <style>\\n        body { margin: 0; }\\n        canvas { display: block; }\\n    </style>\\n</head>\\n<body>\\n    <script src=\"https: //threejs.org/build/three.js\"></script>\\n    <script>\\n        // Setup scene, camera, and renderer\\n        const scene = new THREE.Scene();\\n        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\\n        const renderer = new THREE.WebGLRenderer();\\n        renderer.setSize(window.innerWidth, window.innerHeight);\\n        document.body.appendChild(renderer.domElement);\\n         // Create a cube\\n        const geometry = new THREE.BoxGeometry();\\n        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });\\n        const cube = new THREE.Mesh(geometry, material);\\n        scene.add(cube);\\n         // Position the camera\\n        camera.position.z = 5;\\n         // Function to animate the scene\\n        function animate() {\\n            requestAnimationFrame(animate);\\n            renderer.render(scene, camera);\\n        }\\n         // Mouse drag controls\\n        let isDragging = false;\\n        let previousMousePosition = { x: 0, y: 0 };\\n         renderer.domElement.addEventListener('mousedown', (event) => {\\n            isDragging = true;\\n            previousMousePosition = { x: event.clientX, y: event.clientY };\\n        });\\n         renderer.domElement.addEventListener('mouseup', () => {\\n            isDragging = false;\\n        });\\n         renderer.domElement.addEventListener('mousemove', (event) => {\\n            if (isDragging) {\\n                const deltaX = event.clientX - previousMousePosition.x;\\n                const deltaY = event.clientY - previousMousePosition.y;\\n                cube.rotation.y += deltaX * 0.01;\\n                cube.rotation.x += deltaY * 0.01;\\n                previousMousePosition = { x: event.clientX, y: event.clientY };\\n            }\\n        });\\n         // Hover effect\\n        renderer.domElement.addEventListener('mouseover', () => {\\n            cube.material.color.set(0xff0000);\\n        });\\n         renderer.domElement.addEventListener('mouseout', () => {\\n            cube.material.color.set(0x00ff00);\\n        });\\n         // Arrow key controls\\n        document.addEventListener('keydown', (event) => {\\n            switch (event.key) {\\n                case 'ArrowUp':\\n                    cube.rotation.x += Math.PI / 2;\\n                    break;\\n                case 'ArrowDown':\\n                    cube.rotation.x -= Math.PI / 2;\\n                    break;\\n                case 'ArrowLeft':\\n                    cube.rotation.y += Math.PI / 2;\\n                    break;\\n                case 'ArrowRight':\\n                    cube.rotation.y -= Math.PI / 2;\\n                    break;\\n            }\\n        });\\n         // Start animation\\n        animate();\\n    </script>\\n<script src=\"https: //threejs.org/build/three.js\"></script>\\n</body>\\n</html>>",
-        "language": "html"
-        }
-    ],
-    "installation_commands": "null",
-    "additional_notes": "include Three.js directly from a CDN by adding the following script tag to your HTML file:<script src="https: //threejs.org/build/three.js"></script>"
+        "files": [
+            {
+            "filename": "index.html",
+            "content": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width,\n        initial-scale=1.0\">\n    <title>3D Cube Visualization</title>\n    <style>\n        body { margin: 0; }\n        canvas { display: block; }\n    </style>\n</head>\n<body>\n    <script src=\"https: //threejs.org/build/three.js\"></script>\n    <script>\n        // Setup scene, camera, and renderer\n        const scene = new THREE.Scene();\n        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n        const renderer = new THREE.WebGLRenderer();\n        renderer.setSize(window.innerWidth, window.innerHeight);\n        document.body.appendChild(renderer.domElement);\n         // Create a cube\n        const geometry = new THREE.BoxGeometry();\n        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });\n        const cube = new THREE.Mesh(geometry, material);\n        scene.add(cube);\n         // Position the camera\n        camera.position.z = 5;\n         // Function to animate the scene\n        function animate() {\n            requestAnimationFrame(animate);\n            renderer.render(scene, camera);\n        }\n         // Mouse drag controls\n        let isDragging = false;\n        let previousMousePosition = { x: 0, y: 0 };\n         renderer.domElement.addEventListener('mousedown', (event) => {\n            isDragging = true;\n            previousMousePosition = { x: event.clientX, y: event.clientY };\n        });\n         renderer.domElement.addEventListener('mouseup', () => {\n            isDragging = false;\n        });\n         renderer.domElement.addEventListener('mousemove', (event) => {\n            if (isDragging) {\n                const deltaX = event.clientX - previousMousePosition.x;\n                const deltaY = event.clientY - previousMousePosition.y;\n                cube.rotation.y += deltaX * 0.01;\n                cube.rotation.x += deltaY * 0.01;\n                previousMousePosition = { x: event.clientX, y: event.clientY };\n            }\n        });\n         // Hover effect\n        renderer.domElement.addEventListener('mouseover', () => {\n            cube.material.color.set(0xff0000);\n        });\n         renderer.domElement.addEventListener('mouseout', () => {\n            cube.material.color.set(0x00ff00);\n        });\n         // Arrow key controls\n        document.addEventListener('keydown', (event) => {\n            switch (event.key) {\n                case 'ArrowUp':\n                    cube.rotation.x += Math.PI / 2;\n                    break;\n                case 'ArrowDown':\n                    cube.rotation.x -= Math.PI / 2;\n                    break;\n                case 'ArrowLeft':\n                    cube.rotation.y += Math.PI / 2;\n                    break;\n                case 'ArrowRight':\n                    cube.rotation.y -= Math.PI / 2;\n                    break;\n            }\n        });\n         // Start animation\n        animate();\n    </script>\n<script src=\"https: //threejs.org/build/three.js\"></script>\n</body>\n</html>>",
+            "language": "html"
+            }
+        ],
+        "installation_commands": "null",
+        "additional_notes": "include Three.js directly from a CDN by adding the following script tag to your HTML file: <script src=\"https://threejs.org/build/three.js\"></script>"
     }
-    },
 
     "question": Interactive Sine Wave Visualization
     Write a Python program that generates an interactive visualization of a sine wave. The program should use matplotlib for plotting and mpld3 to convert the plot into an interactive HTML plot. The sine wave should span from 0 to 10 on the x-axis, with 100 points evenly distributed along this interval. The y-axis values should be the sine of the x-axis values. Your plot should have the title "Simple Plot" and appropriately labeled x and y-axes.
@@ -291,33 +302,31 @@ def few_shot_example_outputs():
 
     Sample Answer Format:
     {
-    "files": [
-        {
-        "filename": "main.py",
-        "content": "import mpld3\r\nimport matplotlib.pyplot as plt\r\nimport numpy as np\r\n\r\n# Generate some data\r\nx = np.linspace(0, 10, 100)\r\ny = np.sin(x)\r\n\r\n# Create a plot\r\nplt.figure()\r\nplt.plot(x, y)\r\nplt.title('Simple Plot')\r\nplt.xlabel('x')\r\nplt.ylabel('y')\r\n\r\n# Convert the plot to an interactive HTML plot\r\n# html_plot = mpld3.fig_to_html(plt.gcf())\r\nmpld3.display()",
-        "language": "python"
-        },
-        {
-            "filename": ".devcontainer/devcontainer.json",
-            "content": "{\n  \"name\": \"Devcontainer\",\n  \"image\": \"mcr.microsoft.com/devcontainers/python:3.8-bookworm\",\n  \"customizations\": {\n    \"vscode\": {\n      \"extensions\": [\"ms-python.python\"]\n    }\n  }\n}",
-            "language": "json"
-        },
-        {
-            "filename": ".codesandbox/tasks.json",
-            "content": "{\n  \/\/ These tasks will run in order when initializing your CodeSandbox project.\n  \"setupTasks\": [\n    {\n      \"name\": \"pip install -r requirements.txt\",\n      \"command\": \"pip install -r requirements.txt\"\n    }\n  ],\n\n  \/\/ These tasks can be run from CodeSandbox. Running one will open a log in the app.\n  \"tasks\": {\n    \"start\": {\n      \"name\": \"start\",\n      \"command\": \"python main.py\",\n      \"runAtStart\": true,\n      \"preview\": {\n        \"port\": 8050\n      },\n      \"restartOn\": {\n        \"files\": [\n          \"main.py\"\n        ],\n        \"branch\": false,\n        \"clone\": false,\n        \"resume\": false\n      }\n    },\n    \"install-dependencies\": {\n      \"name\": \"Installing Dependencies\",\n      \"command\": \"pip install -r requirements.txt\",\n      \"restartOn\": {\n        \"files\": [\n          \"requirements.txt\"\n        ],\n        \"branch\": false,\n        \"clone\": false,\n        \"resume\": false\n      }\n    }\n  }\n}",
-            "language": "json"
-        },
-        {
-            "filename": "requirements.txt",
-            "content": "mpld3==0.5.10\npandas==2.0.3",
-            "language": "text"
-        }
-    ],
-    "installation_commands": "pip install -r requirements.txt",
-    "additional_notes": "The code uses the dash library to visualise the data. The application is run using the main.py file. The CodeSandbox configuration is provided to run the application in a web-based environment. The requirements.txt file lists the dependencies required for the application."
+        "files": [
+            {
+            "filename": "main.py",
+            "content": "import mpld3\r\nimport matplotlib.pyplot as plt\r\nimport numpy as np\r\n\r\n# Generate some data\r\nx = np.linspace(0, 10, 100)\r\ny = np.sin(x)\r\n\r\n# Create a plot\r\nplt.figure()\r\nplt.plot(x, y)\r\nplt.title('Simple Plot')\r\nplt.xlabel('x')\r\nplt.ylabel('y')\r\n\r\n# Convert the plot to an interactive HTML plot\r\n# html_plot = mpld3.fig_to_html(plt.gcf())\r\nmpld3.display()",
+            "language": "python"
+            },
+            {
+                "filename": ".devcontainer/devcontainer.json",
+                "content": "{\n  \"name\": \"Devcontainer\",\n  \"image\": \"mcr.microsoft.com/devcontainers/python:3.8-bookworm\",\n  \"customizations\": {\n    \"vscode\": {\n      \"extensions\": [\"ms-python.python\"]\n    }\n  }\n}",
+                "language": "json"
+            },
+            {
+                "filename": ".codesandbox/tasks.json",
+                "content": "{\n  \/\/ These tasks will run in order when initializing your CodeSandbox project.\n  \"setupTasks\": [\n    {\n      \"name\": \"pip install -r requirements.txt\",\n      \"command\": \"pip install -r requirements.txt\"\n    }\n  ],\n\n  \/\/ These tasks can be run from CodeSandbox. Running one will open a log in the app.\n  \"tasks\": {\n    \"start\": {\n      \"name\": \"start\",\n      \"command\": \"python main.py\",\n      \"runAtStart\": true,\n      \"preview\": {\n        \"port\": 8050\n      },\n      \"restartOn\": {\n        \"files\": [\n          \"main.py\"\n        ],\n        \"branch\": false,\n        \"clone\": false,\n        \"resume\": false\n      }\n    },\n    \"install-dependencies\": {\n      \"name\": \"Installing Dependencies\",\n      \"command\": \"pip install -r requirements.txt\",\n      \"restartOn\": {\n        \"files\": [\n          \"requirements.txt\"\n        ],\n        \"branch\": false,\n        \"clone\": false,\n        \"resume\": false\n      }\n    }\n  }\n}",
+                "language": "json"
+            },
+            {
+                "filename": "requirements.txt",
+                "content": "mpld3==0.5.10\npandas==2.0.3",
+                "language": "text"
+            }
+        ],
+        "installation_commands": "pip install -r requirements.txt",
+        "additional_notes": "The code uses the dash library to visualise the data. The application is run using the main.py file. The CodeSandbox configuration is provided to run the application in a web-based environment. The requirements.txt file lists the dependencies required for the application."
     }
-    },
-
     """
     return EXAMPLE_OUTPUTS
 
@@ -527,7 +536,6 @@ async def generate_answer(model: str, question: str):
                     user="Remember to provide the code solution according your previous instructions.",
                     callable_llm=callable_llm,
                 )
-                completion = parse_code_response(completion)
 
                 # TODO parse the response because of weird triple backticks or quotes
                 # try:
@@ -558,7 +566,6 @@ async def build_prompt_responses_pair():
     client = get_openai_client(Provider.OPENROUTER)
     # use these models because we can specify seed
     prompt = await generate_question(client, random.choice(template.GENERATOR_MODELS))
-    prompt_json = json.dumps({"prompt": prompt})
 
     # NOTE @dev LLMs here were selected to be able to compare against the EvalPLus leaderboard
     # randomly sampled from pool of models
@@ -570,11 +577,12 @@ async def build_prompt_responses_pair():
     results = await asyncio.gather(
         *[generate_answer(ans_model, prompt) for ans_model in sel_ans_models]
     )
-    bt.logging.info(f"results: {results}")
-    res = {"prompt": prompt_json, "responses": []}
+
+    res = {"prompt": prompt, "responses": []}
     for model, result in results:
         if not result:
             continue
+        result = parse_code_response(result)
         res["responses"].append(
             {
                 "model": model,
@@ -590,7 +598,7 @@ async def build_prompt_responses_pair():
 
 async def main():
     res = await build_prompt_responses_pair()
-    print(f"{res=}")
+    bt.logging.info(f"{res=}")
 
 
 if __name__ == "__main__":
