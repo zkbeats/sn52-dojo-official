@@ -27,7 +27,6 @@ from template.protocol import (
     CriteriaType,
     DendriteQueryResponse,
     MTurkResponse,
-    # Rank,
     FeedbackRequest,
     ScoringResult,
     ScoringMethod,

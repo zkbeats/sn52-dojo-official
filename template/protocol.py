@@ -51,12 +51,6 @@ class Completion(CodeAnswer):
     score: float = Field("Score of the completion")
 
 
-# class Rank(BaseModel):
-#     cid: str = Field(description="Unique identifier for the completion")
-#     score: Optional[float] = Field(default=0.0, description="Score of the completion")
-#     rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
-
-
 class ModelConfig(BaseModel):
     provider: Optional[Provider]
     model_name: str
