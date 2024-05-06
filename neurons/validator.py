@@ -52,6 +52,7 @@ class DojoTaskTracker:
     )
     _lock = asyncio.Lock()
     _background_tasks = set()
+    _should_exit: bool = False
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -108,7 +109,7 @@ class DojoTaskTracker:
     @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 10
-        while True:
+        while not cls._should_exit:
             bt.logging.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
             async with cls._lock:
                 if not cls._rid_to_mhotkey_to_task_id:
@@ -159,12 +160,13 @@ class DojoTaskTracker:
 
 
 class Validator(BaseNeuron):
+    _should_exit: bool = False
+    _is_running: bool = False
+    _thread: threading.Thread = None
+    _lock = asyncio.Lock()
+
     def __init__(self):
         super(Validator, self).__init__()
-        self.should_exit: bool = False
-        self.is_running: bool = False
-        self.thread: threading.Thread = None
-        self.lock = asyncio.Lock()
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
@@ -503,7 +505,7 @@ class Validator(BaseNeuron):
                 await self.send_request()
 
                 # # Check if we should exit.
-                if self.should_exit:
+                if self._should_exit:
                     bt.logging.info("Validator should stop...")
                     break
 
@@ -655,17 +657,15 @@ class Validator(BaseNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         loop = asyncio.get_event_loop()
-        success, scores, hotkey_to_accuracy = loop.run_until_complete(
-            DataManager.validator_load()
-        )
+        success, scores = loop.run_until_complete(DataManager.validator_load())
         if success:
             self.scores = scores
 
-
-async def log_validator_status():
-    while True:
-        bt.logging.info(f"Validator running... {time.time()}")
-        await asyncio.sleep(20)
+    @classmethod
+    async def log_validator_status(cls):
+        while not cls._should_exit:
+            bt.logging.info(f"Validator running... {time.time()}")
+            await asyncio.sleep(20)
 
 
 if __name__ == "__main__":
@@ -674,8 +674,8 @@ if __name__ == "__main__":
         validator = Validator()
         await asyncio.gather(
             validator.run(),
+            validator.log_validator_status(),
             DojoTaskTracker().monitor_task_completions(),
-            log_validator_status(),
         )
 
     asyncio.run(main())
