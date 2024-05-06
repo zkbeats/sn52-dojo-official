@@ -576,7 +576,7 @@ async def build_prompt_responses_pair():
     # randomly sampled from pool of models
     answer_models = template.ANSWER_MODELS
     IS_TEST = os.getenv("IS_TEST", False)
-    num_samples = len(template.answer_models) if IS_TEST else 4
+    num_samples = len(template.ANSWER_MODELS) if IS_TEST else 4
     sel_ans_models = random.sample(answer_models, num_samples)
 
     results = await asyncio.gather(
