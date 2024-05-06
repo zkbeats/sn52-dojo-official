@@ -144,18 +144,23 @@ def parse_code_response(result_object: dict) -> dict:
     """Ensure that necessary files appended for python"""
     result_object = append_codesandbox_files(result_object)
     result_object = escape_double_quotes_in_files(result_object)
+    # bt.logging.info(f"Escaped double quotes in files: {result_object}")
     return result_object
 
 
 def escape_double_quotes_in_files(strictjson_response: dict[str, Any]):
     """Escapes double quotes in the content of each file in the CodeAnswer object."""
+    # bt.logging.info(f"strictjson_response files: {strictjson_response['files']}")
     for file in strictjson_response.get("files", []):
         if "content" in file:
             file["content"] = file["content"].replace(r"\"", r'"')
             file["content"] = file["content"].replace(r'"', r"\"")
             file["content"] = file["content"].replace(r"\'", r"'")
-        else:
-            bt.logging.error("No 'content' key found in file dictionary.")
+            # bt.logging.info(f"Escaped double quotes in file: {file}")
+        # else:
+        #     bt.logging.info(f"file type: {type(file)}")
+        #     bt.logging.info(f"file: {file}")
+        #     bt.logging.error("No 'content' key found in file dictionary.")
     return strictjson_response
 
 
@@ -174,10 +179,10 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
                 python_file_name = file.get("filename", python_file_name)
             if file.get("filename") == "requirements.txt":
                 requirements_file_exists = True
-        else:
-            bt.logging.error(
-                f"Expected a dictionary, but found: {type(file)}. Skipping this item."
-            )
+        # else:
+        #     bt.logging.error(
+        #         f"Expected a dictionary, but found: {type(file)}. Skipping this item."
+        #     )
 
         if "installation_commands" in strictjson_response:
             installation_commands = strictjson_response["installation_commands"]
@@ -583,6 +588,7 @@ async def build_prompt_responses_pair():
         if not result:
             continue
         result = parse_code_response(result)
+        # bt.logging.info(f"{model=}, {result=}")
         res["responses"].append(
             {
                 "model": model,
