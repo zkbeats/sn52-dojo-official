@@ -3,7 +3,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
-from typing import Tuple, Type
+from typing import Tuple, Type, get_origin
 
 import bittensor as bt
 import jsonref
@@ -215,13 +215,28 @@ class PydanticUtils:
 
     @classmethod
     def build_minimal_json(cls, model: Type[BaseModel]):
-        return {
-            field_name: model.__fields__[field_name].field_info.description
-            for field_name in model.__fields__
-            if model.__fields__[field_name].field_info.description
-        }
+        result = {}
+        for field_name, field in model.__fields__.items():
+            if get_origin(field.outer_type_) == list:
+                item_type = field.type_
+                if hasattr(item_type, "__fields__"):
+                    result[field_name] = [cls.build_minimal_json(item_type)]
+                else:
+                    result[field_name] = [field.field_info.description]
+            elif hasattr(field.type_, "__fields__"):
+                result[field_name] = cls.build_minimal_json(field.type_)
+            else:
+                result[field_name] = field.field_info.description
+        return result
 
-        # {'code': {'description': 'Code solution to the question', 'type': 'string'}, 'language': {'description': 'Programming language of the code', 'type': 'string'}, 'installation_commands': {'description': 'Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run', 'type': 'string'}, 'additional_notes': {'description': 'Any additional notes or comments about the code solution', 'type': 'string'}}, 'required': ['code', 'language', 'installation_commands']}
+    # @classmethod
+    # def build_minimal_json(cls, model: Type[BaseModel]):
+    #     result = {
+    #         "files": "filename(Name of the file), content(Content of the file), language(Programming language of the file) as separate keys, type: List[Dict['filename', 'content', 'language']]",
+    #         "installation_commands": "Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run",
+    #         "additional_notes": "Any additional notes or comments about the code solution",
+    #     }
+    #     return result
 
 
 # The MIT License (MIT)
@@ -333,3 +348,13 @@ def ttl_get_block(subtensor) -> int:
     Note: self here is the miner or validator instance
     """
     return subtensor.get_current_block()
+
+
+def main():
+    pydantic_utils = PydanticUtils()
+    minimal_json = pydantic_utils.build_minimal_json()
+    print(minimal_json)
+
+
+if __name__ == "__main__":
+    main()
