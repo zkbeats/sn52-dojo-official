@@ -51,7 +51,8 @@ def custom_format(cls, prefix: object, sufix: object = None):
     return log_msg
 
 
-original_format = logging._format
+# TODO fix after upgrading to bittensor 6.12.0
+# original_format = logging._format
 
 
 def apply_patch():

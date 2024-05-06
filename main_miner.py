@@ -10,7 +10,7 @@ from commons.logging.patch_logging import apply_patch
 from neurons.miner import log_miner_status
 
 load_dotenv()
-apply_patch()
+# apply_patch()
 
 miner = ObjectManager.get_miner()
 

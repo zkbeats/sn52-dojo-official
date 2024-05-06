@@ -17,7 +17,6 @@ from commons.logging.patch_logging import apply_patch
 from neurons.validator import DojoTaskTracker, log_validator_status
 
 load_dotenv()
-apply_patch()
 
 
 validator = ObjectManager.get_validator()
