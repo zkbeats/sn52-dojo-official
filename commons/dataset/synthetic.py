@@ -24,24 +24,15 @@ from commons.utils import PydanticUtils, log_retry_info
 load_dotenv()
 
 
-class CodingQuestion(BaseModel):
-    question: str = Field(
-        description="Coding question to be solved by a software engineer"
-    )
-    languages: List[str] = Field(
-        description="Allowed programming languages for the programmer to use"
-    )
-
-
 # Schema for the generated coding answer from LLM
 class FileObject(BaseModel):
     filename: str = Field(description="Name of the file")
-    content: str = Field(description="Content of the file")
+    content: str = Field(description="Content of the file which can be code or json")
     language: str = Field(description="Programming language of the file")
 
 
 class CodeAnswer(BaseModel):
-    files: List[FileObject] = Field(description="Code solution to the question")
+    files: List[FileObject] = Field(description="List of FileObjects")
     installation_commands: str = Field(
         description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
     )
@@ -140,38 +131,30 @@ def detect_chars_until_first_word(text: str):
     return match.group()
 
 
-def parse_code_response(result_object: dict) -> dict:
+def parse_code_response(result_object: CodeAnswer) -> CodeAnswer:
     """Ensure that necessary files appended for python"""
     result_object = append_codesandbox_files(result_object)
     result_object = escape_double_quotes_in_files(result_object)
-    # bt.logging.info(f"Escaped double quotes in files: {result_object}")
     return result_object
 
 
-def escape_double_quotes_in_files(strictjson_response: dict[str, Any]):
+def escape_double_quotes_in_files(codeanswer_object: dict) -> CodeAnswer:
     """Escapes double quotes in the content of each file in the CodeAnswer object."""
-    # bt.logging.info(f"strictjson_response files: {strictjson_response['files']}")
-    for file in strictjson_response.get("files", []):
+    for file in codeanswer_object["files"]:
         if "content" in file:
-            file["content"] = file["content"].replace(r"\"", r'"')
-            file["content"] = file["content"].replace(r'"', r"\"")
+            file["content"] = re.sub(r'(?<!\\)"', r"\"", file["content"])
             file["content"] = file["content"].replace(r"\'", r"'")
-            # bt.logging.info(f"Escaped double quotes in file: {file}")
-        # else:
-        #     bt.logging.info(f"file type: {type(file)}")
-        #     bt.logging.info(f"file: {file}")
-        #     bt.logging.error("No 'content' key found in file dictionary.")
-    return strictjson_response
+    return codeanswer_object
 
 
-def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
+def append_codesandbox_files(codeanswer_object: CodeAnswer) -> CodeAnswer:
     """Appends necessary codesandbox files if any file's language key is Python."""
     python_file_detected = False
     requirements_file_exists = False
     installation_commands = ""
     python_file_name = "main.py"
 
-    files = strictjson_response.get("files", [])
+    files = codeanswer_object.get("files", [])
     for file in files:
         if isinstance(file, dict):
             if file.get("language") == "python":
@@ -179,21 +162,18 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
                 python_file_name = file.get("filename", python_file_name)
             if file.get("filename") == "requirements.txt":
                 requirements_file_exists = True
-        # else:
-        #     bt.logging.error(
-        #         f"Expected a dictionary, but found: {type(file)}. Skipping this item."
-        #     )
 
-        if "installation_commands" in strictjson_response:
-            installation_commands = strictjson_response["installation_commands"]
+        if "installation_commands" in codeanswer_object:
+            installation_commands = codeanswer_object["installation_commands"]
 
+    bt.logging.info(f"requirements_file_exists: {requirements_file_exists}")
     if python_file_detected:
         devcontainer_file = {
             "filename": ".devcontainer/devcontainer.json",
             "content": json.dumps(
                 {
                     "name": "Devcontainer",
-                    "image": "mcr.microsoft.com/devcontainers/python:3.8-bookworm",
+                    "image": "mcr.microsoft.com/devcontainers/python:3.10",
                     "customizations": {"vscode": {"extensions": ["ms-python.python"]}},
                 },
                 indent=2,
@@ -250,9 +230,18 @@ def append_codesandbox_files(strictjson_response: dict[str, Any]) -> dict:
             "language": "json",
         }
 
-        strictjson_response["files"].extend([devcontainer_file, codesandbox_tasks_file])
+        if not requirements_file_exists:
+            requirements_file = {
+                "filename": "requirements.txt",
+                "content": "mpld3==0.5.10\npandas==2.0.3",
+                "language": "text",
+            }
 
-    return strictjson_response
+        codeanswer_object["files"].extend(
+            [devcontainer_file, codesandbox_tasks_file, requirements_file]
+        )
+
+    return codeanswer_object
 
 
 def few_shot_example_outputs():
@@ -350,7 +339,7 @@ def build_code_answer_prompt(question) -> str:
     - If your solution is in Python, ensure that the main file is named 'main.py'.
     - If mpld3 is used, ensure that mpld3.show() is used to display the plot.
     - Remember to include installation commands for any dependencies required for the code to run
-    - Ensure that the a requirememts.txt file is included if any third-party packages are required for the code to run.
+    - Ensure that a requirements.txt file is included if any third-party packages are required for the code to run.
     - Ensure all output code is properly formatted with consistent quotation marks and special characters are correctly escaped to prevent syntax errors.
     - The provided code solution should be directly executable without requiring modifications to run successfully.
 
@@ -588,7 +577,6 @@ async def build_prompt_responses_pair():
         if not result:
             continue
         result = parse_code_response(result)
-        # bt.logging.info(f"{model=}, {result=}")
         res["responses"].append(
             {
                 "model": model,
