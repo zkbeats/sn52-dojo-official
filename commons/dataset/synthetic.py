@@ -589,45 +589,46 @@ SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
 class SyntheticAPI:
     _queue = asyncio.Queue()
     _lock = asyncio.Lock()
-    _queue_size = 10
+    _queue_size = 3
 
     @classmethod
     async def populate_queue(cls):
         while True:
-            print(f"Checking queue size...{cls._queue.qsize()}")
-            if cls._queue.qsize() >= cls._queue_size:
-                continue
-            num_items = cls._queue_size - cls._queue.qsize()
-            tasks = [cls._generate_synthetic_qa() for _ in range(num_items)]
-            # Access task results and handle them appropriately
-            completed_tasks = await asyncio.gather(*tasks)
-            for task_result in completed_tasks:
-                if not task_result:
-                    continue
-                async with cls._lock:
-                    await cls._queue.put(task_result)
+            if cls._queue.qsize() < cls._queue_size:
+                num_items = cls._queue_size - cls._queue.qsize()
+                tasks = [cls._generate_synthetic_qa() for _ in range(num_items)]
+                # Access task results and handle them appropriately
+                completed_tasks = await asyncio.gather(*tasks)
+                for task_result in completed_tasks:
+                    if task_result:
+                        # Use a lock when putting items in the queue to prevent race conditions
+                        async with cls._lock:
+                            await cls._queue.put(task_result)
+            # Sleep outside of the lock to allow other coroutines to proceed
             await asyncio.sleep(1)
 
     @classmethod
     async def _generate_synthetic_qa(cls):
         # TODO @dev improve this speed
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
-        async with httpx.AsyncClient(timeout=httpx.Timeout(120)) as client:
-            response = await client.get(path)
-            response_json = response.json()
-            try:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(120)) as client:
+                response = await client.get(path)
+                response.raise_for_status()
+                response_json = response.json()
                 synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
                 return synthetic_qa
-            except Exception as exc:
-                traceback.print_exc()
+        except Exception as exc:
+            traceback.print_exc()
+            return None
 
     @classmethod
     async def get_qa(cls):
-        if cls._queue.qsize() == 0:
-            return await cls._generate_synthetic_qa()
-
         async with cls._lock:
-            return await cls._queue.get()
+            if cls._queue.qsize() == 0:
+                return await cls._generate_synthetic_qa()
+            else:
+                return await cls._queue.get()
 
 
 if __name__ == "__main__":
@@ -638,7 +639,6 @@ if __name__ == "__main__":
             synthetic_qa = await SyntheticAPI.get_qa()
             elapsed_time = time.perf_counter() - start_time
             print(f"Time taken to get QA: {elapsed_time:.2f} seconds")
-            print(synthetic_qa)
 
     async def main():
         await asyncio.gather(*[simulate_vali(), SyntheticAPI.populate_queue()])
