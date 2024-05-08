@@ -99,7 +99,10 @@ class DojoAPI:
         async with cls._http_client as client:
             taskData = {
                 "prompt": ranking_request.prompt,
-                "responses": [c.dict() for c in ranking_request.responses],
+                "responses": [
+                    {"model": c.model, "completion": c.completion.dict()}
+                    for c in ranking_request.responses
+                ],
                 "task": str(ranking_request.task_type).upper(),
                 "criteria": [],
             }
@@ -108,7 +111,7 @@ class DojoAPI:
                     {
                         "type": "ranking",
                         "options": [
-                            f"{completion.model}"
+                            f"Model {completion.model}"
                             for _, completion in enumerate(ranking_request.responses)
                         ],
                     }
@@ -116,7 +119,7 @@ class DojoAPI:
             body = {
                 "title": "LLM Code Generation Task",
                 "body": ranking_request.prompt,
-                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=8))
+                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
                 .replace(microsecond=0)
                 .isoformat(),
                 "taskData": taskData,
