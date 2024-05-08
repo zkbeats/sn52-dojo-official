@@ -13,7 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from torch.nn import functional as F
 
 from commons.data_manager import DataManager
-from commons.dataset.synthetic import build_prompt_responses_pair
+from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
 from commons.logging.wandb_logging import wandb_log
@@ -244,85 +244,85 @@ class Validator(BaseNeuron):
 
         return True, "All checks passed"
 
-    async def forward_mturk_response(self, synapse: MTurkResponse):
-        """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
-        # 1. check request from RankingRequest
-        # 2. append completion scores to request
-        # 3. persist on disk via DataManager
+    # async def forward_mturk_response(self, synapse: MTurkResponse):
+    #     """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
+    #     # 1. check request from RankingRequest
+    #     # 2. append completion scores to request
+    #     # 3. persist on disk via DataManager
 
-        path = DataManager.get_ranking_data_filepath()
-        data = await DataManager.load(path=path)
-        miner_hotkey = synapse.dendrite.hotkey
-        if not data:
-            bt.logging.error(
-                f"Received MTurk response from miner {miner_hotkey} but no requests persisted on disk."
-            )
-            return
+    #     path = DataManager.get_ranking_data_filepath()
+    #     data = await DataManager.load(path=path)
+    #     miner_hotkey = synapse.dendrite.hotkey
+    #     if not data:
+    #         bt.logging.error(
+    #             f"Received MTurk response from miner {miner_hotkey} but no requests persisted on disk."
+    #         )
+    #         return
 
-        mturk_cids = set(synapse.completion_id_to_score.keys())
+    #     mturk_cids = set(synapse.completion_id_to_score.keys())
 
-        for d in data:
-            request_cids = set([completion.cid for completion in d.request.completions])
+    #     for d in data:
+    #         request_cids = set([completion.cid for completion in d.request.completions])
 
-            if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
-                bt.logging.warning(
-                    f"Received mturk response with {mturk_cids=}, but no found requests with those matching CIDs."
-                )
-                continue
+    #         if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
+    #             bt.logging.warning(
+    #                 f"Received mturk response with {mturk_cids=}, but no found requests with those matching CIDs."
+    #             )
+    #             continue
 
-            bt.logging.info(
-                f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
-            )
+    #         bt.logging.info(
+    #             f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
+    #         )
 
-            existing_responses = {r.axon.hotkey: r for r in d.responses}
-            if miner_hotkey in existing_responses:
-                existing_method = ScoringMethod(
-                    existing_responses[miner_hotkey].scoring_method
-                )
-                new_method = ScoringMethod.AWS_MTURK
-                if (
-                    SCORING_METHOD_PRIORITY[new_method]
-                    > SCORING_METHOD_PRIORITY[existing_method]
-                ):
-                    bt.logging.info(
-                        f"Replacing {existing_method} with higher priority {new_method} for request id: {d.request.request_id}"
-                    )
-                    d.responses.remove(existing_responses[miner_hotkey])
-                else:
-                    bt.logging.warning(
-                        f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
-                    )
-                    continue
+    #         existing_responses = {r.axon.hotkey: r for r in d.responses}
+    #         if miner_hotkey in existing_responses:
+    #             existing_method = ScoringMethod(
+    #                 existing_responses[miner_hotkey].scoring_method
+    #             )
+    #             new_method = ScoringMethod.AWS_MTURK
+    #             if (
+    #                 SCORING_METHOD_PRIORITY[new_method]
+    #                 > SCORING_METHOD_PRIORITY[existing_method]
+    #             ):
+    #                 bt.logging.info(
+    #                     f"Replacing {existing_method} with higher priority {new_method} for request id: {d.request.request_id}"
+    #                 )
+    #                 d.responses.remove(existing_responses[miner_hotkey])
+    #             else:
+    #                 bt.logging.warning(
+    #                     f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
+    #                 )
+    #                 continue
 
-            is_verified, reason = self.verify_mturk_task(
-                synapse.aws_credentials,
-                synapse.mturk_hit_id,
-                synapse.completion_id_to_score,
-            )
-            if not is_verified:
-                bt.logging.error(
-                    f"MTurk task verification failed due to reason:{reason}"
-                )
-                return
+    #         is_verified, reason = self.verify_mturk_task(
+    #             synapse.aws_credentials,
+    #             synapse.mturk_hit_id,
+    #             synapse.completion_id_to_score,
+    #         )
+    #         if not is_verified:
+    #             bt.logging.error(
+    #                 f"MTurk task verification failed due to reason:{reason}"
+    #             )
+    #             return
 
-            request_copy = copy.deepcopy(d.request)
-            for cid in found_cids:
-                # similar to scoring method in Miner.forward(...)
-                request_copy.ranks.append(
-                    Rank(
-                        cid=cid,
-                        score=synapse.completion_id_to_score[cid],
-                        scoring_method=ScoringMethod.AWS_MTURK,
-                    )
-                )
-                # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
-                # function expects axon.hotkey to be the miner's hotkey
-                request_copy.axon.hotkey = miner_hotkey
-                d.responses.append(request_copy)
+    #         request_copy = copy.deepcopy(d.request)
+    #         for cid in found_cids:
+    #             # similar to scoring method in Miner.forward(...)
+    #             request_copy.ranks.append(
+    #                 Rank(
+    #                     cid=cid,
+    #                     score=synapse.completion_id_to_score[cid],
+    #                     scoring_method=ScoringMethod.AWS_MTURK,
+    #                 )
+    #             )
+    #             # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
+    #             # function expects axon.hotkey to be the miner's hotkey
+    #             request_copy.axon.hotkey = miner_hotkey
+    #             d.responses.append(request_copy)
 
-            d.responses = _filter_valid_responses(d.responses)
-        await DataManager.save(path, data)
-        return
+    #         d.responses = _filter_valid_responses(d.responses)
+    #     await DataManager.save(path, data)
+    #     return
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
@@ -446,10 +446,11 @@ class Validator(BaseNeuron):
         self,
         synapse: FeedbackRequest = None,
     ):
+        start = get_epoch_time()
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
         if synapse is None:
-            data = await build_prompt_responses_pair()
+            data = await SyntheticAPI.get_qa()
             synapse = FeedbackRequest(
                 task_type=TaskType.CODE_GENERATION,
                 criteria_types=[CriteriaType.PREFERENCE_RANKING],
@@ -485,6 +486,9 @@ class Validator(BaseNeuron):
             responses=non_dojo_responses,
         )
         await DataManager.save_response(response=response_data)
+        bt.logging.info(
+            "Sending request to miners & processing took ", get_epoch_time() - start
+        )
         return
 
     async def run(self):
@@ -676,6 +680,7 @@ if __name__ == "__main__":
             validator.run(),
             validator.log_validator_status(),
             DojoTaskTracker().monitor_task_completions(),
+            SyntheticAPI.populate_queue(),
         )
 
     asyncio.run(main())

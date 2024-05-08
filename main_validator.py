@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
+from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
 from neurons.validator import DojoTaskTracker
 
@@ -57,6 +58,7 @@ async def main():
         asyncio.create_task(validator.log_validator_status()),
         asyncio.create_task(validator.run()),
         asyncio.create_task(validator.update_score_and_send_feedback()),
+        asyncio.create_task(SyntheticAPI.populate_queue()),
     ]
 
     await server.serve()
