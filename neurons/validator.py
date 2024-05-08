@@ -88,6 +88,10 @@ class DojoTaskTracker:
     @classmethod
     async def update_task_map(cls, responses: List[FeedbackRequest]):
         dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
+        if not dojo_responses:
+            bt.logging.warning("No Dojo responses found")
+            return
+
         async with cls._lock:
             valid_responses = list(
                 filter(
