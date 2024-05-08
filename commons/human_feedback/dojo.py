@@ -13,7 +13,7 @@ load_dotenv()
 
 
 # TODO @dev change to URL before launch
-DOJO_API_BASE_URL = "http://localhost:8080"
+DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if not DOJO_API_BASE_URL:
     raise ValueError("DOJO_API_BASE_URL is not set")
 
@@ -52,8 +52,9 @@ def check_task_completion_status(response_json: Dict):
 
 
 class DojoAPI:
-    _api_key = get_dojo_api_key()
-    _http_client = httpx.AsyncClient(headers={"Authorization": f"Bearer {_api_key}"})
+    # _api_key = get_dojo_api_key()
+    # _http_client = httpx.AsyncClient(headers={"Authorization": f"Bearer {_api_key}"})
+    _http_client = httpx.AsyncClient()
 
     @classmethod
     async def get_task_by_id(cls, task_id: str):
