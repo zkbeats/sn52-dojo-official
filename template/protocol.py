@@ -79,7 +79,7 @@ class Response(BaseModel):
     rank_id: Optional[int] = Field(
         description="Rank of the completion", examples=[1, 2, 3, 4]
     )
-    score: Optional[float] = Field("Score of the completion")
+    score: Optional[float] = Field(description="Score of the completion")
 
 
 class SyntheticQA(BaseModel):
@@ -130,7 +130,7 @@ class FeedbackRequest(bt.Synapse):
     mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
     dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
     aws_credentials: Optional[AWSCredentials] = Field(
-        "Temporary AWS credentials from the miner that validator can use to verify task completions"
+        description="Temporary AWS credentials from the miner that validator can use to verify task completions"
     )
 
 
