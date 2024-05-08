@@ -3,20 +3,36 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
-from typing import Tuple
+from typing import Tuple, Type, get_origin
 
 import bittensor as bt
 import jsonref
 import requests
 import torch
+from Crypto.Hash import keccak
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
-import template
 import wandb
 
 
+def get_new_uuid():
+    return str(uuid.uuid4())
+
+
+def get_epoch_time():
+    return time.time()
+
+
+def keccak256_hash(data):
+    k = keccak.new(digest_bits=256)
+    k.update(data.encode("utf-8"))
+    return k.hexdigest()
+
+
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
+    import template
+
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
@@ -124,14 +140,6 @@ def get_external_ip() -> str:
     return response.text.strip()
 
 
-def get_new_uuid():
-    return str(uuid.uuid4())
-
-
-def get_epoch_time():
-    return time.time()
-
-
 def get_device() -> str:
     if torch.cuda.is_available():
         return "cuda"
@@ -202,7 +210,33 @@ class PydanticUtils:
         required = resolved_schema.get("required", [])
         resolved_schema = remove_key(resolved_schema, "required")
         resolved_schema["required"] = required
-        return {"type": "json_object", "schema": resolved_schema}
+        # return {"type": "json_object", "schema": resolved_schema}
+        return resolved_schema
+
+    @classmethod
+    def build_minimal_json(cls, model: Type[BaseModel]):
+        result = {}
+        for field_name, field in model.__fields__.items():
+            if get_origin(field.outer_type_) == list:
+                item_type = field.type_
+                if hasattr(item_type, "__fields__"):
+                    result[field_name] = [cls.build_minimal_json(item_type)]
+                else:
+                    result[field_name] = [field.field_info.description]
+            elif hasattr(field.type_, "__fields__"):
+                result[field_name] = cls.build_minimal_json(field.type_)
+            else:
+                result[field_name] = field.field_info.description
+        return result
+
+    # @classmethod
+    # def build_minimal_json(cls, model: Type[BaseModel]):
+    #     result = {
+    #         "files": "filename(Name of the file), content(Content of the file), language(Programming language of the file) as separate keys, type: List[Dict['filename', 'content', 'language']]",
+    #         "installation_commands": "Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run",
+    #         "additional_notes": "Any additional notes or comments about the code solution",
+    #     }
+    #     return result
 
 
 # The MIT License (MIT)
@@ -314,3 +348,13 @@ def ttl_get_block(subtensor) -> int:
     Note: self here is the miner or validator instance
     """
     return subtensor.get_current_block()
+
+
+def main():
+    pydantic_utils = PydanticUtils()
+    minimal_json = pydantic_utils.build_minimal_json()
+    print(minimal_json)
+
+
+if __name__ == "__main__":
+    main()

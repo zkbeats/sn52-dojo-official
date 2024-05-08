@@ -1,3 +1,4 @@
+from typing_extensions import deprecated
 from strenum import StrEnum
 from typing import Dict, Iterable, List, Tuple
 import random
@@ -5,7 +6,7 @@ import bittensor as bt
 
 from datasets import load_dataset
 from commons.dataset.hf_utils import HF_REPO_ID
-from commons.factory import Factory
+from commons.objects import ObjectManager
 
 
 seed = 42
@@ -117,7 +118,7 @@ class EvalDatasetManager:
         dataset_names = list(cls._eval_datasets.keys())
         key = random.choice(dataset_names)
         bt.logging.info(f"Using dataset: {key}, for evaluation")
-        batch_size = Factory.get_config().evaluation.batch_size
+        batch_size = ObjectManager.get_config().evaluation.batch_size
         return [next_circular(cls._eval_datasets, key) for _ in range(batch_size)]
 
 
@@ -157,7 +158,6 @@ class EvalDatasetManager:
 #     )
 # }
 
-# TODO @dev change name to actual datset name
 seed_dataset_name = HF_REPO_ID
 
 
@@ -172,13 +172,17 @@ def get_seed_dataset():
 class SeedDataManager:
     @staticmethod
     def get_prompt_and_completions():
-        from commons.factory import Factory
+        from commons.objects import ObjectManager
 
         try:
-            return SeedDataManager._map_seed_data(next(Factory.get_seed_dataset_iter()))
+            return SeedDataManager._map_seed_data(
+                next(ObjectManager.get_seed_dataset_iter())
+            )
         except StopIteration:
-            Factory.new_seed_dataset_iter()
-            return SeedDataManager._map_seed_data(next(Factory.get_seed_dataset_iter()))
+            ObjectManager.new_seed_dataset_iter()
+            return SeedDataManager._map_seed_data(
+                next(ObjectManager.get_seed_dataset_iter())
+            )
 
     @staticmethod
     def _map_seed_data(row: Dict) -> Tuple[str, List[str]]:

@@ -19,7 +19,7 @@ from abc import ABC, abstractmethod
 
 import bittensor as bt
 
-from commons.factory import Factory
+from commons.objects import ObjectManager
 from commons.utils import initialise, ttl_get_block
 from template import __spec_version__ as spec_version
 
@@ -41,7 +41,7 @@ class BaseNeuron(ABC):
         return ttl_get_block(self.subtensor)
 
     def __init__(self):
-        self.config = Factory.get_config()
+        self.config = ObjectManager.get_config()
 
         # Set up logging with the provided configuration and directory.
         bt.logging(config=self.config, logging_dir=self.config.full_path)

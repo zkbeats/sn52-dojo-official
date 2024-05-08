@@ -6,7 +6,7 @@ import bittensor as bt
 
 
 system_score_completion_prompt = """
-You are a helpful assistant that provides responses in JSON. Your task is to score the quality of each of the completions with respect to a prompt, where your score must be in the range {range_lower} to {range_upper}, where {range_lower} is the lowest score and {range_upper} is the highest score, and a higher score represents a higher quality response. You must provide your answer in JSON format.
+You are a helpful assistant that provides responses in JSON. Your task is to score the quality of each of the completions from a model with respect to a prompt, where your score must be in the range {range_lower} to {range_upper}, where {range_lower} is the lowest score and {range_upper} is the highest score, and a higher score represents a higher quality response. You must provide your answer in JSON format.
 """
 
 user_score_completion_prompt = """
@@ -19,7 +19,7 @@ Assistant:
 """
 
 completion_item_prompt = """
-Completion #{idx}
+Model #{idx}
 {text}
 """
 

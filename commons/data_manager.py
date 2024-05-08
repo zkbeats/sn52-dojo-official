@@ -6,17 +6,23 @@ from typing import Any, List, Optional
 import bittensor as bt
 import torch
 
-from commons.factory import Factory
-from template.protocol import DendriteQueryResponse
+from commons.objects import ObjectManager
+from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
 class DataManager:
     _lock = asyncio.Lock()
     _validator_lock = asyncio.Lock()
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(DataManager, cls).__new__(cls)
+        return cls._instance
 
     @staticmethod
     def get_ranking_data_filepath() -> Path:
-        config = Factory.get_config()
+        config = ObjectManager.get_config()
         base_path = config.data_manager.base_path
         return base_path / "data" / "ranking" / "data.pkl"
 
@@ -65,7 +71,7 @@ class DataManager:
             return False
 
     @classmethod
-    async def append_responses(cls, response: DendriteQueryResponse):
+    async def save_response(cls, response: DendriteQueryResponse):
         path = DataManager.get_ranking_data_filepath()
         async with cls._lock:
             # ensure parent path exists
@@ -82,8 +88,35 @@ class DataManager:
             assert isinstance(data, list)
             data.append(response)
             await DataManager._save_without_lock(path, data)
-
         return
+
+    @classmethod
+    async def append_responses(cls, request_id: str, responses: List[FeedbackRequest]):
+        async with cls._lock:
+            _path = DataManager.get_ranking_data_filepath()
+            data = await cls._load_without_lock(path=_path)
+            found_response_index = next(
+                (i for i, x in enumerate(data) if x.request.request_id == request_id),
+                None,
+            )
+            if not found_response_index:
+                return
+
+            data[found_response_index].responses.extend(responses)
+            # overwrite the data
+            await cls._save_without_lock(_path, data)
+        return
+
+    @classmethod
+    async def get_by_request_id(cls, request_id):
+        async with cls._lock:
+            _path = DataManager.get_ranking_data_filepath()
+            data = await cls._load_without_lock(path=_path)
+            found_response = next(
+                (x for x in data if x.request.request_id == request_id),
+                None,
+            )
+            return found_response
 
     @classmethod
     async def remove_responses(
@@ -107,19 +140,18 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, hotkey_to_accuracy):
+    async def validator_save(cls, scores):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
-        config = Factory.get_config()
+        config = ObjectManager.get_config()
         # Save the state of the validator to file.
         async with cls._validator_lock:
-            nonzero_hotkey_to_accuracy = {
-                k: v for k, v in hotkey_to_accuracy.items() if v != 0
-            }
+            # nonzero_hotkey_to_accuracy = {
+            #     k: v for k, v in hotkey_to_accuracy.items() if v != 0
+            # }
             torch.save(
                 {
                     "scores": scores,
-                    "hotkey_to_accuracy": nonzero_hotkey_to_accuracy,
                 },
                 config.neuron.full_path + "/validator_state.pt",
             )
@@ -128,12 +160,12 @@ class DataManager:
     async def validator_load(cls):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
-        config = Factory.get_config()
+        config = ObjectManager.get_config()
         async with cls._validator_lock:
             try:
                 # Load the state of the validator from file.
                 state = torch.load(config.neuron.full_path + "/validator_state.pt")
-                return True, state["scores"], state["hotkey_to_accuracy"]
+                return True, state["scores"]
             except FileNotFoundError:
                 bt.logging.error("Validator state file not found.")
                 return False, None, None
