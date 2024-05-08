@@ -25,6 +25,8 @@ import os
 import httpx
 import asyncio
 
+from template.protocol import SyntheticQA
+
 load_dotenv()
 
 
@@ -579,32 +581,6 @@ load_dotenv()
 
 # if __name__ == "__main__":
 #     asyncio.run(main())
-
-
-class FileObject(BaseModel):
-    filename: str = Field(description="Name of the file")
-    content: str = Field(description="Content of the file which can be code or json")
-    language: str = Field(description="Programming language of the file")
-
-
-class CodeAnswer(BaseModel):
-    files: List[FileObject] = Field(description="List of FileObjects")
-    installation_commands: str = Field(
-        description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
-    )
-    additional_notes: Optional[str] = Field(
-        description="Any additional notes or comments about the code solution"
-    )
-
-
-class Response(BaseModel):
-    model: str
-    completion: CodeAnswer
-
-
-class SyntheticQA(BaseModel):
-    prompt: str
-    responses: List[Response]
 
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")

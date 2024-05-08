@@ -8,7 +8,7 @@ import huggingface_hub
 from dotenv import load_dotenv
 from huggingface_hub import CommitOperationAdd
 
-from template.protocol import Completion
+from template.protocol import Response
 
 load_dotenv()
 
@@ -38,60 +38,60 @@ class HuggingFaceUtils:
             **repo_kwargs,
         )
 
-    @classmethod
-    def append_data(
-        cls,
-        prompt: str,
-        completions: List[Completion],
-        scores: List[Union[float, None]],
-        wallet: bt.wallet,
-    ):
-        if not os.path.exists(cls._full_path):
-            cls._download_dataset()
+    # @classmethod
+    # def append_data(
+    #     cls,
+    #     prompt: str,
+    #     completions: List[Response],
+    #     scores: List[Union[float, None]],
+    #     wallet: bt.wallet,
+    # ):
+    #     if not os.path.exists(cls._full_path):
+    #         cls._download_dataset()
 
-        with open(cls._full_path, "r") as file:
-            modified_data = [json.loads(line) for line in file]
+    #     with open(cls._full_path, "r") as file:
+    #         modified_data = [json.loads(line) for line in file]
 
-        assert isinstance(modified_data, list)
+    #     assert isinstance(modified_data, list)
 
-        best_completion = None
-        best_score = float("-inf")
-        for i in range(len(completions)):
-            completion = completions[i]
-            score = scores[i]
-            if score is not None and score > best_score:
-                best_score = score
-                best_completion = completion
+    #     best_completion = None
+    #     best_score = float("-inf")
+    #     for i in range(len(completions)):
+    #         completion = completions[i]
+    #         score = scores[i]
+    #         if score is not None and score > best_score:
+    #             best_score = score
+    #             best_completion = completion
 
-        if best_completion is None:
-            raise ValueError("No best completion found")
+    #     if best_completion is None:
+    #         raise ValueError("No best completion found")
 
-        new_data = {
-            "prompt": prompt,
-            "completions": jsonable_encoder(completions),
-            "num_completions": len(completions),
-            "best_completion": str(best_completion.text),
-        }
+    #     new_data = {
+    #         "prompt": prompt,
+    #         "completions": jsonable_encoder(completions),
+    #         "num_completions": len(completions),
+    #         "best_completion": str(best_completion.text),
+    #     }
 
-        # Append new_data to the existing_data list and write it back to the file
-        modified_data.append(new_data)
-        with open(cls._full_path, "w") as file:
-            for entry in modified_data:
-                file.write(json.dumps(entry) + "\n")
+    #     # Append new_data to the existing_data list and write it back to the file
+    #     modified_data.append(new_data)
+    #     with open(cls._full_path, "w") as file:
+    #         for entry in modified_data:
+    #             file.write(json.dumps(entry) + "\n")
 
-        hotkey = wallet.hotkey.ss58_address
-        operation = CommitOperationAdd(
-            path_in_repo=cls._dataset_filename, path_or_fileobj=cls._full_path
-        )
-        hf_api.create_commits_on_pr(
-            addition_commits=[[operation]],
-            deletion_commits=[],
-            commit_message=f"Validator hotkey: {hotkey} adding data to dataset",
-            merge_pr=False,
-            **repo_kwargs,
-        )
+    #     hotkey = wallet.hotkey.ss58_address
+    #     operation = CommitOperationAdd(
+    #         path_in_repo=cls._dataset_filename, path_or_fileobj=cls._full_path
+    #     )
+    #     hf_api.create_commits_on_pr(
+    #         addition_commits=[[operation]],
+    #         deletion_commits=[],
+    #         commit_message=f"Validator hotkey: {hotkey} adding data to dataset",
+    #         merge_pr=False,
+    #         **repo_kwargs,
+    #     )
 
-        return modified_data
+    #     return modified_data
 
 
 def verify_dataset():

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from commons.objects import ObjectManager
 
 from commons.llm.prompts import ScoreRange
-from template.protocol import AWSCredentials, Completion
+from template.protocol import AWSCredentials, Response
 
 load_dotenv()
 
@@ -151,7 +151,7 @@ class MTurkUtils:
     @staticmethod
     def create_mturk_task(
         prompt: str,
-        completions: List[Completion],
+        completions: List[Response],
         score_range: ScoreRange = ScoreRange(lower=1, upper=10),
         title: str = "Prompt & Completion Evaluation Task",
         max_num_workers: int = 3,
@@ -300,7 +300,7 @@ class MTurkUtils:
 
     @staticmethod
     def build_task_xhtml_content(
-        prompt: str, completions: List[Completion], score_range: ScoreRange
+        prompt: str, completions: List[Response], score_range: ScoreRange
     ):
         xhtml_content = f"""
     <HTMLQuestion xmlns="http://mechanicalturk.amazonaws.com/AWSMechanicalTurkDataSchemas/2011-11-11/HTMLQuestion.xsd">
@@ -315,7 +315,7 @@ class MTurkUtils:
 
                     <p><strong>Prompt: </strong>{prompt}</p>
 
-                    {MTurkUtils._build_completions_html([completion.text for completion in completions])}
+                    {MTurkUtils._build_completions_html([completion.json() for completion in completions])}
 
                     <p><strong>Score each response here!</strong>
                         {MTurkUtils._build_sliders_html([completion.cid for completion in completions], score_range)}

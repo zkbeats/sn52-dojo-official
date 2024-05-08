@@ -168,4 +168,4 @@ class DataManager:
                 return True, state["scores"]
             except FileNotFoundError:
                 bt.logging.error("Validator state file not found.")
-                return False, None, None
+                return False, None

@@ -11,7 +11,7 @@ from scaleapi.tasks import TaskType
 from commons.llm.openai_proxy import Provider
 from commons.llm.prompts import ScoreRange
 from commons.reward_model.models import RewardModel
-from template.protocol import Completion, ScoreItem, ScoresResponse
+from template.protocol import Response, ScoreItem, ScoresResponse
 
 load_dotenv()
 
@@ -251,9 +251,7 @@ async def add_scores_to_dataset():
     with open("./seed_datasets/dataset_sn18_deduplicated_scored.jsonl", "r") as f:
         all_data = [json.loads(line) for line in f]
         for row_data in all_data:
-            completions = [
-                Completion(text=r["response"]) for r in row_data["responses"]
-            ]
+            completions = [Response(text=r["response"]) for r in row_data["responses"]]
             scores_response: ScoresResponse = await RewardModel.llm_api_score_text(
                 model_name="mistralai/Mixtral-8x7B-Instruct-v0.1",
                 provider=Provider.TOGETHER_AI,
@@ -263,7 +261,7 @@ async def add_scores_to_dataset():
 
             for r in row_data["responses"]:
                 response = r["response"]
-                found_completion: Completion = next(
+                found_completion = next(
                     (c for c in completions if c.text == response), None
                 )
                 if found_completion is None:
@@ -273,7 +271,7 @@ async def add_scores_to_dataset():
                     (
                         sr
                         for sr in scores_response.scores
-                        if sr.model_id == found_completion.model_id
+                        if sr.model_id == found_completion.model
                     ),
                     None,
                 )

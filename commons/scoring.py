@@ -12,7 +12,6 @@ import torch
 from torch.nn import functional as F
 from sklearn.metrics import cohen_kappa_score
 from commons.dataset.leaderboard import diff_gt, get_gt_ranks, get_leaderboard_scores
-from commons.dataset.mock import MockData
 
 from template.protocol import (
     CriteriaType,
@@ -40,7 +39,7 @@ class Scoring:
         )
         for response in responses:
             hotkey = response.axon.hotkey
-            for completion in response.completions:
+            for completion in response.responses:
                 nested_dict[completion.cid][hotkey] = completion.score
 
         data = json.loads(json.dumps(nested_dict))
@@ -108,7 +107,7 @@ class Scoring:
             [
                 x.rank_id
                 for x in sorted(
-                    response.completions, key=lambda x: model_id_to_avg_rank[x.model_id]
+                    response.responses, key=lambda x: model_id_to_avg_rank[x.model]
                 )
             ]
             for response in responses
@@ -165,7 +164,7 @@ class Scoring:
         elif criteria == CriteriaType.PREFERENCE_RANKING:
             # already sorting according to score
             model_score_tuples = get_leaderboard_scores(
-                [completion.model_id for completion in request.completions]
+                [completion.model for completion in request.responses]
             )
             # ensure we have the same ordering by model id
             model_ids_sorted = [model[0] for model in model_score_tuples]
@@ -173,8 +172,8 @@ class Scoring:
                 [
                     completion.rank_id
                     for completion in sorted(
-                        response.completions,
-                        key=lambda x: model_ids_sorted.index(x.model_id),
+                        response.responses,
+                        key=lambda x: model_ids_sorted.index(x.model),
                     )
                 ]
                 for response in responses
@@ -221,10 +220,10 @@ def _calculate_average_rank_by_model(
 ) -> Dict[str, float]:
     model_id_to_average_rank = defaultdict(list)
     for request in responses:
-        for completion in request.completions:
+        for completion in request.responses:
             # if completion.model_id not in model_id_to_average_rank:
             #     model_id_to_average_rank[completion.model_id] = []
-            model_id_to_average_rank[completion.model_id].append(completion.rank_id)
+            model_id_to_average_rank[completion.model].append(completion.rank_id)
 
     for model_id, ranks in model_id_to_average_rank.items():
         model_id_to_average_rank[model_id] = sum(ranks) / len(ranks)
@@ -236,7 +235,8 @@ def _calculate_average_rank_by_model(
 
 
 if __name__ == "__main__":
-    test_requests = MockData.generate_test_data()[:5]
+    # test_requests = MockData.generate_test_data()[:5]
+    test_requests = []
     for tr in test_requests:
         for completion in tr.completions:
             print((completion.model_id, completion.rank_id), end=" ")

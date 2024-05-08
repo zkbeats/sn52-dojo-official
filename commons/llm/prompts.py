@@ -1,7 +1,8 @@
+import json
 from typing import List, Optional
 from pydantic import BaseModel, validator
 
-from template.protocol import Completion
+from template.protocol import Response
 import bittensor as bt
 
 
@@ -50,12 +51,12 @@ class ScoreRange(BaseModel):
 
 class PromptBuilder:
     @staticmethod
-    def build_user_score_completion_prompt(prompt: str, completions: List[Completion]):
+    def build_user_score_completion_prompt(prompt: str, completions: List[Response]):
         if not len(completions):
             raise ValueError("Cannot build prompt without any completions")
 
         completion_prompts = [
-            completion_item_prompt.format(idx=c.cid, text=c.text) for c in completions
+            completion_item_prompt.format(idx=c.cid, text=c.json()) for c in completions
         ]
         formatted_prompt = user_score_completion_prompt.format(
             prompt=prompt,

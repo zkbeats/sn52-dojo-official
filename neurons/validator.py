@@ -23,7 +23,6 @@ from template.base.neuron import BaseNeuron
 from template.protocol import (
     SCORING_METHOD_PRIORITY,
     AWSCredentials,
-    Completion,
     CriteriaType,
     DendriteQueryResponse,
     MTurkResponse,
@@ -145,15 +144,13 @@ class DojoTaskTracker:
                         model_id_to_rank = DojoTaskTracker._parse_dojo_task_results(
                             task_results
                         )
-                        for completion in data.request.completions:
-                            if completion.model_id in model_id_to_rank:
-                                completion.rank_id = model_id_to_rank[
-                                    completion.model_id
-                                ]
+                        for completion in data.request.responses:
+                            if completion.model in model_id_to_rank:
+                                completion.rank_id = model_id_to_rank[completion.model]
 
                         parsed_request = FeedbackRequest(
                             request_id=request_id,
-                            completions=data.request.completions,
+                            responses=data.request.responses,
                         )
                         await DataManager.append_responses(request_id, [parsed_request])
             await asyncio.sleep(SLEEP_SECONDS)
@@ -345,7 +342,7 @@ class Validator(BaseNeuron):
         )
         if CriteriaType.PREFERENCE_RANKING in [synapse.criteria_types]:
             is_missing_ranks = any(
-                completion.rank_id is None for completion in synapse.completions
+                completion.rank_id is None for completion in synapse.responses
             )
             if is_missing_ranks:
                 bt.logging.warning("One or more completions are missing rank IDs.")
@@ -427,8 +424,8 @@ class Validator(BaseNeuron):
                         "task": d.request.task_type,
                         "criteria": d.request.criteria_types,
                         "prompt": d.request.prompt,
-                        "completions": jsonable_encoder(d.request.completions),
-                        "num_completions": len(d.request.completions),
+                        "completions": jsonable_encoder(d.request.responses),
+                        "num_completions": len(d.request.responses),
                         "scores": hotkey_to_scores,
                         "num_responses": len(d.responses),
                         "avg_miner_scores": hotkey_to_scores,
@@ -454,8 +451,8 @@ class Validator(BaseNeuron):
             synapse = FeedbackRequest(
                 task_type=TaskType.CODE_GENERATION,
                 criteria_types=[CriteriaType.PREFERENCE_RANKING],
-                prompt=data["prompt"],
-                completions=[Completion.parse_obj(d) for d in data["responses"]],
+                prompt=data.prompt,
+                responses=data.responses,
             )
             bt.logging.info(f"Sending synapse: {synapse.dict()} off to miners")
 

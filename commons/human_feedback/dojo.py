@@ -98,7 +98,7 @@ class DojoAPI:
         async with cls._http_client as client:
             taskData = {
                 "prompt": ranking_request.prompt,
-                "responses": [c.dict() for c in ranking_request.completions],
+                "responses": [c.dict() for c in ranking_request.responses],
                 "task": str(ranking_request.task_type).upper(),
                 "criteria": [],
             }
@@ -107,8 +107,8 @@ class DojoAPI:
                     {
                         "type": "ranking",
                         "options": [
-                            f"{completion.model_id}"
-                            for _, completion in enumerate(ranking_request.completions)
+                            f"{completion.model}"
+                            for _, completion in enumerate(ranking_request.responses)
                         ],
                     }
                 )
