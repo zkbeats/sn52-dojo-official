@@ -4,20 +4,17 @@ from contextlib import asynccontextmanager
 import bittensor as bt
 import uvicorn
 import wandb
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
+from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
-from commons.logging.patch_logging import apply_patch
-from neurons.validator import DojoTaskTracker, log_validator_status
+from neurons.validator import DojoTaskTracker
 
 load_dotenv()
-apply_patch()
 
 
 validator = ObjectManager.get_validator()
@@ -30,7 +27,8 @@ async def lifespan(app: FastAPI):
     yield
     # AFTER YIELD == ON SHUTDOWN
     bt.logging.info("Performing shutdown tasks...")
-    validator.should_exit = True
+    validator._should_exit = True
+    DojoTaskTracker()._should_exit = True
     validator.save_state()
     wandb.finish()
 
@@ -56,14 +54,22 @@ async def main():
         reload=False,
     )
     server = uvicorn.Server(config)
-    await asyncio.gather(
-        *[
-            log_validator_status(),
-            validator.run(),
-            server.serve(),
-            validator.update_score_and_send_feedback(),
-        ]
-    )
+    running_tasks = [
+        asyncio.create_task(validator.log_validator_status()),
+        asyncio.create_task(validator.run()),
+        asyncio.create_task(validator.update_score_and_send_feedback()),
+        asyncio.create_task(SyntheticAPI.populate_queue()),
+    ]
+
+    await server.serve()
+
+    for task in running_tasks:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            bt.logging.info(f"Cancelled task {task.get_name()}")
+    bt.logging.info("Exiting main function.")
 
 
 if __name__ == "__main__":

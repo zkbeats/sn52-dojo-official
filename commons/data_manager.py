@@ -152,7 +152,6 @@ class DataManager:
             torch.save(
                 {
                     "scores": scores,
-                    # "hotkey_to_accuracy": nonzero_hotkey_to_accuracy,
                 },
                 config.neuron.full_path + "/validator_state.pt",
             )
@@ -166,7 +165,7 @@ class DataManager:
             try:
                 # Load the state of the validator from file.
                 state = torch.load(config.neuron.full_path + "/validator_state.pt")
-                return True, state["scores"], state["hotkey_to_accuracy"]
+                return True, state["scores"]
             except FileNotFoundError:
                 bt.logging.error("Validator state file not found.")
                 return False, None, None
