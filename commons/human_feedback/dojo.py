@@ -8,6 +8,7 @@ from strenum import StrEnum
 
 from template.protocol import FeedbackRequest, TaskType, CriteriaType
 from dotenv import load_dotenv
+from loguru import logger
 
 load_dotenv()
 
@@ -103,7 +104,7 @@ class DojoAPI:
                     {"model": c.model, "completion": c.completion.dict()}
                     for c in ranking_request.responses
                 ],
-                "task": str(ranking_request.task_type).upper(),
+                "task": str(ranking_request.task_type).lower(),
                 "criteria": [],
             }
             if CriteriaType.PREFERENCE_RANKING in ranking_request.criteria_types:
@@ -125,7 +126,15 @@ class DojoAPI:
                 "taskData": taskData,
                 "maxResults": 10,
             }
-            response = await client.post(path, json=jsonable_encoder(body))
+
+            DOJO_API_KEY = os.getenv("DOJO_API_KEY")
+            if not DOJO_API_KEY:
+                logger.error("DOJO_API_KEY is not set")
+            response = await client.post(
+                path,
+                json=jsonable_encoder(body),
+                headers={"x-api-key": DOJO_API_KEY},
+            )
             if response.status_code == 200:
                 task_ids = response.json()["body"]
             response.raise_for_status()

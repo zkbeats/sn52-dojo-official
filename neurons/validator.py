@@ -449,7 +449,7 @@ class Validator(BaseNeuron):
         if synapse is None:
             data = await SyntheticAPI.get_qa()
             synapse = FeedbackRequest(
-                task_type=TaskType.CODE_GENERATION,
+                task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[CriteriaType.PREFERENCE_RANKING],
                 prompt=data.prompt,
                 responses=data.responses,

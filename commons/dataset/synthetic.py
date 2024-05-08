@@ -9,6 +9,7 @@ import textwrap
 import time
 import traceback
 from typing import Any, Callable, List, Optional
+import aiohttp
 
 import bittensor as bt
 from regex import R
@@ -586,6 +587,11 @@ load_dotenv()
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
 
 
+@functools.lru_cache
+def get_client_session():
+    return aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120))
+
+
 class SyntheticAPI:
     _queue = asyncio.Queue()
     _lock = asyncio.Lock()
@@ -597,6 +603,7 @@ class SyntheticAPI:
             if cls._queue.qsize() < cls._queue_size:
                 num_items = cls._queue_size - cls._queue.qsize()
                 tasks = [cls._generate_synthetic_qa() for _ in range(num_items)]
+                bt.logging.info(f"Populating queue with {num_items} new tasks.")
                 # Access task results and handle them appropriately
                 completed_tasks = await asyncio.gather(*tasks)
                 for task_result in completed_tasks:
@@ -604,30 +611,47 @@ class SyntheticAPI:
                         # Use a lock when putting items in the queue to prevent race conditions
                         async with cls._lock:
                             await cls._queue.put(task_result)
+                            bt.logging.info("Task result added to the queue.")
+                    else:
+                        bt.logging.warning(
+                            "Received an empty task result, not adding to the queue."
+                        )
             # Sleep outside of the lock to allow other coroutines to proceed
+            bt.logging.debug(
+                "Sleeping for 1 second before checking the queue size again."
+            )
             await asyncio.sleep(1)
 
     @classmethod
-    async def _generate_synthetic_qa(cls):
-        # TODO @dev improve this speed
+    async def _generate_synthetic_qa(cls, retries=3, delay=0.1):
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(120)) as client:
-                response = await client.get(path)
-                response.raise_for_status()
-                response_json = response.json()
-                synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
-                return synthetic_qa
-        except Exception as exc:
-            traceback.print_exc()
-            return None
+        bt.logging.debug(f"Generating synthetic QA from {path}.")
+        # Instantiate the aiohttp ClientSession outside the loop
+        session = get_client_session()
+        for attempt in range(retries):
+            try:
+                async with session.get(path) as response:
+                    response.raise_for_status()
+                    response_json = await response.json()
+                    if "body" in response_json:
+                        synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
+                        bt.logging.info("Synthetic QA generated successfully.")
+                        return synthetic_qa
+            except Exception as exc:
+                bt.logging.warning(f"Attempt {attempt + 1} failed: {exc}")
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay)
+        bt.logging.error("Failed to generate synthetic QA after retries.")
+        return None
 
     @classmethod
     async def get_qa(cls):
         async with cls._lock:
             if cls._queue.qsize() == 0:
+                bt.logging.warning("Queue is empty, generating synthetic QA directly.")
                 return await cls._generate_synthetic_qa()
             else:
+                bt.logging.debug("Retrieving QA from the queue.")
                 return await cls._queue.get()
 
 

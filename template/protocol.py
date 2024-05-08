@@ -25,7 +25,7 @@ class ScoringMethod(StrEnum):
     HF_MODEL = "hf_model"
     LLM_API = "llm_api"
     AWS_MTURK = "aws_mturk"
-    DOJO = "dojo_worker"
+    DOJO = "dojo"
 
 
 # higher value in this map are priortised and allowed to override data on the miner side
@@ -119,7 +119,7 @@ class FeedbackRequest(bt.Synapse):
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    task_type: TaskType = Field(description="Type of task", allow_mutation=False)
+    task_type: str = Field(description="Type of task", allow_mutation=False)
     criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
         allow_mutation=False,
