@@ -488,7 +488,7 @@ class Validator(BaseNeuron):
         )
         await DataManager.save_response(response=response_data)
         bt.logging.info(
-            "Sending request to miners & processing took ", get_epoch_time() - start
+            f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
         return
 
