@@ -4,16 +4,14 @@ import os
 from typing import Dict, List
 from fastapi.encoders import jsonable_encoder
 import httpx
-from strenum import StrEnum
 
-from template.protocol import FeedbackRequest, TaskType, CriteriaType
+from template.protocol import FeedbackRequest, CriteriaType
 from dotenv import load_dotenv
 from loguru import logger
 
 load_dotenv()
 
 
-# TODO @dev change to URL before launch
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if not DOJO_API_BASE_URL:
     raise ValueError("DOJO_API_BASE_URL is not set")
@@ -96,15 +94,15 @@ class DojoAPI:
         cls,
         ranking_request: FeedbackRequest,
     ):
-        path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-task"
-        async with cls._http_client as client:
+        path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
+        async with httpx.AsyncClient() as client:
             taskData = {
                 "prompt": ranking_request.prompt,
                 "responses": [
                     {"model": c.model, "completion": c.completion.dict()}
                     for c in ranking_request.responses
                 ],
-                "task": str(ranking_request.task_type).lower(),
+                "task": str(ranking_request.task_type).upper(),
                 "criteria": [],
             }
             if CriteriaType.PREFERENCE_RANKING in ranking_request.criteria_types:
@@ -121,9 +119,10 @@ class DojoAPI:
                 "title": "LLM Code Generation Task",
                 "body": ranking_request.prompt,
                 "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
-                .replace(microsecond=0)
-                .isoformat(),
-                "taskData": taskData,
+                .replace(microsecond=0, tzinfo=datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "taskData": [taskData],
                 "maxResults": 10,
             }
 
@@ -137,6 +136,11 @@ class DojoAPI:
             )
             if response.status_code == 200:
                 task_ids = response.json()["body"]
+                logger.success(f"Successfully created task with\ntask ids:{task_ids}")
+            else:
+                logger.error(
+                    f"Error occurred when trying to create task\nErr:{response.json()['error']}"
+                )
             response.raise_for_status()
             return task_ids
 
