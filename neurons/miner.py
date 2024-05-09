@@ -209,6 +209,8 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
+        bt.logging.warning(f"Got request from {caller_hotkey}")
+
         # TODO @dev remember to remove these when going live
         if caller_hotkey.lower() in [
             "5CAmJ1Pt6HAG21Q3cJaYS3nS7yCRACDSNaxHcGj2fHmtqRDH".lower(),
