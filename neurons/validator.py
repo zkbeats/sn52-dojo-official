@@ -37,6 +37,7 @@ from template.utils.uids import (
     extract_miner_uids,
     is_miner,
 )
+from loguru import logger
 
 
 def _filter_valid_responses(responses: List[FeedbackRequest]) -> List[FeedbackRequest]:
@@ -452,6 +453,10 @@ class Validator(BaseNeuron):
         # initially will seed it with some data for miners to get started
         if synapse is None:
             data = await SyntheticAPI.get_qa()
+            if not data:
+                logger.error("Failed to generate data from synthetic gen API")
+                return
+
             synapse = FeedbackRequest(
                 task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[CriteriaType.PREFERENCE_RANKING],
