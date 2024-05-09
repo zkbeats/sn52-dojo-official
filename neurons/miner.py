@@ -209,6 +209,12 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
+        # TODO @dev remember to remove these when going live
+        if caller_hotkey.lower() in [
+            "5CAmJ1Pt6HAG21Q3cJaYS3nS7yCRACDSNaxHcGj2fHmtqRDH".lower(),
+            "5D2gFiQzwhCDN5sa8RQGuTTLay7HpRL2y4xh637rNQret8Ky".lower(),
+        ]:
+            return False, "Request received from validator on testnet"
 
         caller_uid = self.metagraph.hotkeys.index(caller_hotkey)
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
