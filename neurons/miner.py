@@ -27,6 +27,8 @@ from template.utils.uids import is_miner
 
 
 class Miner(BaseMinerNeuron):
+    _should_exit = False
+
     def __init__(self):
         super(Miner, self).__init__()
         # Dendrite lets us send messages to other nodes (axons) in the network.
@@ -251,8 +253,8 @@ class Miner(BaseMinerNeuron):
 
         bt.logging.info("Metagraph updated")
 
-
-async def log_miner_status():
-    while True:
-        bt.logging.info(f"Miner running... {time.time()}")
-        await asyncio.sleep(20)
+    @classmethod
+    async def log_miner_status(cls):
+        while not cls._should_exit:
+            bt.logging.info(f"Miner running... {time.time()}")
+            await asyncio.sleep(20)
