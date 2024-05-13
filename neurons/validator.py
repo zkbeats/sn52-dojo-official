@@ -11,12 +11,12 @@ import numpy as np
 import torch
 from fastapi.encoders import jsonable_encoder
 from torch.nn import functional as F
+import wandb
 
 from commons.data_manager import DataManager
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
-from commons.logging.wandb_logging import wandb_log
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, init_wandb
 from template.base.neuron import BaseNeuron
@@ -387,42 +387,92 @@ class Validator(BaseNeuron):
                 f"Got {len(filtered_data)} requests past deadline and ready to score"
             )
             for d in filtered_data:
-                criteria_to_miner_scores = Scoring.calculate_score(
+                criteria_to_miner_score = Scoring.calculate_score(
                     criteria_types=d.request.criteria_types,
                     request=d.request,
                     responses=d.responses,
                 )
 
-                # calculate mean across all criteria
-                mean_miner_scores = (
-                    torch.stack(
-                        [
-                            miner_scores
-                            for miner_scores in criteria_to_miner_scores.values()
-                        ]
-                    )
-                    .mean(dim=0)
-                    .tolist()
-                )
-                bt.logging.trace(
-                    f"mean miner scores across differerent criteria: {mean_miner_scores.shape} {mean_miner_scores}"
-                )
+                # TOOD wandb logging here
+                # calculate by hotkey as well, perform weighting here
+                GT_WEIGHT = 0.65
+                CONSENSUS_WEIGHT = 0.35
+                # TODO for now only single criteria
+                # log_data is score by each miner
+                score_data = {}
+                assert len(criteria_to_miner_score.keys()) == 1
+                for criteria in criteria_to_miner_score:
+                    miner_scores = criteria_to_miner_score[criteria]
+                    weighted_gt = GT_WEIGHT * miner_scores.ground_truth
+                    weighted_consensus = CONSENSUS_WEIGHT * miner_scores.consensus
+                    # update weighted scores
+                    criteria_to_miner_score[
+                        criteria
+                    ].weighted_consensus = weighted_consensus
+                    criteria_to_miner_score[
+                        criteria
+                    ].weighted_ground_truth = weighted_gt
 
-                # craft hotkey to score
-                assert len(d.responses) == len(mean_miner_scores)
-                hotkey_to_scores = {
-                    r.axon.hotkey: mean_miner_scores[i]
-                    for i, r in enumerate(d.responses)
-                }
-                # update the scores based on the rewards
-                self.update_scores(hotkey_to_scores=hotkey_to_scores)
-                await self.send_scores(
-                    synapse=ScoringResult(
-                        request_id=d.request.request_id,
-                        hotkey_to_scores=hotkey_to_scores,
-                    ),
-                    hotkeys=list(hotkey_to_scores.keys()),
-                )
+                    hotkey_to_score = {
+                        r.axon.hotkey: criteria_to_miner_score[criteria][i]
+                        for i, r in enumerate(d.responses)
+                    }
+
+                    self.update_scores(hotkey_to_scores=hotkey_to_score)
+                    await self.send_scores(
+                        synapse=ScoringResult(
+                            request_id=d.request.request_id,
+                            hotkey_to_scores=hotkey_to_score,
+                        ),
+                        hotkeys=list(hotkey_to_score.keys()),
+                    )
+
+                    # calculate mean across all criteria
+                    mean_weighted_consensus_scores = (
+                        torch.stack(
+                            [
+                                miner_scores.consensus
+                                for miner_scores in criteria_to_miner_score.values()
+                            ]
+                        )
+                        .mean(dim=0)
+                        .tolist()
+                    )
+                    mean_weighted_gt_scores = (
+                        torch.stack(
+                            [
+                                miner_scores.ground_truth
+                                for miner_scores in criteria_to_miner_score.values()
+                            ]
+                        )
+                        .mean(dim=0)
+                        .tolist()
+                    )
+
+                    bt.logging.info(
+                        f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
+                    )
+
+                    # craft hotkey to score
+                    assert len(d.responses) == len(mean_weighted_consensus_scores)
+                    assert len(d.responses) == len(mean_weighted_consensus_scores)
+                    # update the scores based on the rewards
+                    score_data["scores_by_hotkey"] = {
+                        hotkey: score.dict()
+                        for hotkey, score in hotkey_to_score.items()
+                    }
+                    score_data["mean"] = {
+                        "consensus": mean_weighted_consensus_scores,
+                        "ground_truth": mean_weighted_gt_scores,
+                    }
+                    self.update_scores(hotkey_to_scores=hotkey_to_score)
+                    await self.send_scores(
+                        synapse=ScoringResult(
+                            request_id=d.request.request_id,
+                            hotkey_to_scores=hotkey_to_score,
+                        ),
+                        hotkeys=list(hotkey_to_score.keys()),
+                    )
 
                 wandb_data = jsonable_encoder(
                     {
@@ -431,13 +481,20 @@ class Validator(BaseNeuron):
                         "prompt": d.request.prompt,
                         "completions": jsonable_encoder(d.request.responses),
                         "num_completions": len(d.request.responses),
-                        "scores": hotkey_to_scores,
+                        "scores": score_data,
                         "num_responses": len(d.responses),
-                        "avg_miner_scores": hotkey_to_scores,
-                        "miner_scores_by_criteria": criteria_to_miner_scores,
                     }
                 )
-                asyncio.create_task(wandb_log(wandb_data))
+
+                async def _log_wandb(wandb_data: Dict):
+                    loop = asyncio.get_running_loop()
+
+                    def log_wandb(data: dict):
+                        wandb.log(data, sync=False)
+
+                    await loop.run_in_executor(None, log_wandb, wandb_data)
+
+                asyncio.create_task(_log_wandb(wandb_data))
 
                 # once we have scored a response, just remove it
                 await DataManager.remove_responses(d)

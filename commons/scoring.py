@@ -1,11 +1,11 @@
 import asyncio
 import json
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import bittensor as bt
 import numpy as np
-from pydantic import validate_arguments
+from pydantic import validate_arguments, Field, BaseModel
 import scipy
 from attr import define, field
 import torch
@@ -26,6 +26,29 @@ class Result:
     # Each request id has multiple completions, where each miner scores each of these completions.
     request_id: str
     cid_to_hotkey_to_score: Dict[str, Dict[str, float]] = field(factory=dict)
+
+
+class GroundTruthScore(BaseModel):
+    weighted_scores_by_miner: torch.Tensor
+    raw_scores_by_miner: torch.Tensor
+
+
+class ConsensusScore(BaseModel):
+    weighted_score: torch.Tensor
+    spearman_by_miner: torch.Tensor
+    cohen_kappa_by_miner: torch.Tensor
+    dist_penalty_by_miner: torch.Tensor
+
+
+class Score(BaseModel):
+    ground_truth: GroundTruthScore = Field(description="Raw score from ground truth")
+    consensus: ConsensusScore = Field(description="Raw score from ground truth")
+    weighted_consensus: Optional[torch.Tensor] = Field(
+        description="Weighted score from consensus"
+    )
+    weighted_ground_truth = Optional[torch.Tensor] = Field(
+        description="Weighted score from ground truth"
+    )
 
 
 class Scoring:
@@ -151,7 +174,12 @@ class Scoring:
             bt.logging.trace(dnorm)
             combined_sm = F.softmax(snorm + cknorm + 1.5 * dnorm, dim=0)
             bt.logging.trace(f"{combined_sm}")
-            return combined_sm
+            return ConsensusScore(
+                weighted_score=combined_sm,
+                spearman_by_miner=snorm,
+                cohen_kappa_by_miner=cknorm,
+                dist_penalty_by_miner=dnorm,
+            )
 
     @staticmethod
     def cmp_ground_truth(
@@ -193,7 +221,10 @@ class Scoring:
             bt.logging.trace(f"{diff_gt=}")
             diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
             bt.logging.trace(f"{diff_gt_sm=}")
-            return diff_gt_sm
+            return GroundTruthScore(
+                weighted_scores_by_miner=diff_gt_sm,
+                raw_scores_by_miner=torch.tensor(diff_gt),
+            )
 
     @staticmethod
     @validate_arguments
@@ -201,16 +232,15 @@ class Scoring:
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
         responses: List[FeedbackRequest],
-    ) -> Dict[CriteriaType, torch.Tensor]:
+    ) -> Dict[CriteriaType, Score]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
-        criteria_to_miner_scores = defaultdict(list)
+        criteria_to_miner_scores = defaultdict(Score)
+        # TODO @dev support different criteria in the future
         for criteria in criteria_types:
             gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
             consensus_score = Scoring.consensus_score(criteria, responses)
-            print(f"{gt_score}")
-            print(f"{consensus_score}")
-            criteria_to_miner_scores[criteria] = torch.tensor(
-                0.65 * gt_score + 0.35 * consensus_score
+            criteria_to_miner_scores[criteria] = Score(
+                ground_truth=gt_score, consensus=consensus_score
             )
         return criteria_to_miner_scores
 
