@@ -743,7 +743,6 @@ if __name__ == "__main__":
             validator.run(),
             validator.log_validator_status(),
             DojoTaskTracker().monitor_task_completions(),
-            SyntheticAPI.populate_queue(),
         )
 
     asyncio.run(main())
