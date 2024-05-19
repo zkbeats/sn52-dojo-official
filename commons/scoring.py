@@ -29,11 +29,17 @@ class Result:
 
 
 class GroundTruthScore(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
     weighted_scores_by_miner: torch.Tensor
     raw_scores_by_miner: torch.Tensor
 
 
 class ConsensusScore(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
     weighted_score: torch.Tensor
     spearman_by_miner: torch.Tensor
     cohen_kappa_by_miner: torch.Tensor
@@ -41,12 +47,15 @@ class ConsensusScore(BaseModel):
 
 
 class Score(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
     ground_truth: GroundTruthScore = Field(description="Raw score from ground truth")
     consensus: ConsensusScore = Field(description="Raw score from ground truth")
     weighted_consensus: Optional[torch.Tensor] = Field(
         description="Weighted score from consensus"
     )
-    weighted_ground_truth = Optional[torch.Tensor] = Field(
+    weighted_ground_truth: Optional[torch.Tensor] = Field(
         description="Weighted score from ground truth"
     )
 
@@ -227,7 +236,6 @@ class Scoring:
             )
 
     @staticmethod
-    @validate_arguments
     def calculate_score(
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
