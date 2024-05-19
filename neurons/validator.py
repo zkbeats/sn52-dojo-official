@@ -29,6 +29,7 @@ from template.protocol import (
     FeedbackRequest,
     ScoringResult,
     ScoringMethod,
+    SyntheticQA,
     TaskType,
 )
 from template.utils.config import get_config
@@ -504,12 +505,12 @@ class Validator(BaseNeuron):
     async def send_request(
         self,
         synapse: FeedbackRequest = None,
+        data: SyntheticQA = None,
     ):
         start = get_epoch_time()
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
         if synapse is None:
-            data = await SyntheticAPI.get_qa()
             if not data:
                 logger.error("Failed to generate data from synthetic gen API")
                 return
@@ -569,7 +570,10 @@ class Validator(BaseNeuron):
             while True:
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                await self.send_request()
+                synthetic_data = await SyntheticAPI.get_qa()
+                for data in synthetic_data:
+                    # TODO current workaround for testing code fixing flow
+                    await self.send_request(data=data)
 
                 # # Check if we should exit.
                 if self._should_exit:

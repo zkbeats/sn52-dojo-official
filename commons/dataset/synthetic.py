@@ -2,6 +2,7 @@ import asyncio
 import functools
 import os
 import time
+from typing import List
 import aiohttp
 
 import bittensor as bt
@@ -24,7 +25,7 @@ def get_client_session():
 
 class SyntheticAPI:
     @classmethod
-    async def get_qa(cls):
+    async def get_qa(cls) -> List[SyntheticQA]:
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
         bt.logging.debug(f"Generating synthetic QA from {path}.")
         # Instantiate the aiohttp ClientSession outside the loop
@@ -41,9 +42,14 @@ class SyntheticAPI:
                         response_json = await response.json()
                         if "body" not in response_json:
                             raise ValueError("Invalid response from the server.")
-                        synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
-                        bt.logging.info("Synthetic QA generated successfully.")
-                        return synthetic_qa
+                        synthetic_QAs = [
+                            SyntheticQA.parse_obj(item)
+                            for item in response_json["body"]
+                        ]
+                        bt.logging.info(
+                            f"{len(synthetic_QAs)} Synthetic QA generated successfully."
+                        )
+                        return synthetic_QAs
         except RetryError:
             bt.logging.error("Failed to generate synthetic QA after retries.")
             return None
