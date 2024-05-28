@@ -79,6 +79,7 @@ pathspec==0.12.1
 pillow==10.2.0
 platformdirs==4.2.0
 pluggy==1.4.0
+prompt_toolkit==3.0.44
 protobuf==4.25.3
 psutil==5.9.8
 py==1.11.0
