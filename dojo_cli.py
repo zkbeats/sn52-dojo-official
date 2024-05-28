@@ -76,6 +76,55 @@ def api_key_delete(cookies):
     return
 
 
+def subscription_key_list(cookies):
+    response = requests.get(
+        f"{DOJO_API_BASE_URL}/api/v1/miner/subscription-key/list", cookies=cookies
+    )
+    response.raise_for_status()
+    keys = response.json().get("body", {}).get("subscriptionKeys")
+    if len(keys) == 0:
+        warning("No subscription keys found, please generate one.")
+    else:
+        success(f"All subscription keys: {keys}")
+    return keys
+
+
+def subscription_key_generate(cookies):
+    response = requests.post(
+        f"{DOJO_API_BASE_URL}/api/v1/miner/subscription-key/generate", cookies=cookies
+    )
+    response.raise_for_status()
+    keys = response.json().get("body", {}).get("subscriptionKeys")
+    success(f"All subscription keys: {keys}")
+    return keys
+
+
+def subscription_key_delete(cookies):
+    keys = subscription_key_list(cookies)
+    if not keys:
+        return
+
+    key_completer = FuzzyCompleter(WordCompleter(keys, ignore_case=True))
+    selected_key = prompt(
+        "Select a subscription key to delete: ",
+        completer=key_completer,
+        swap_light_and_dark_colors=True,
+    )
+    if selected_key not in keys:
+        error("Invalid selection.")
+        return
+
+    response = requests.put(
+        f"{DOJO_API_BASE_URL}/api/v1/miner/subscription-key/disable",
+        json={"subscriptionKey": selected_key},
+        cookies=cookies,
+    )
+    response.raise_for_status()
+    remaining_keys = response.json().get("body", {}).get("subscriptionKeys")
+    success(f"Remaining subscription keys: {remaining_keys}")
+    return
+
+
 def _get_session_cookies(hotkey: str, signature: str, message: str):
     url = f"{DOJO_API_BASE_URL}/api/v1/miner/session/auth"
     if not signature.startswith("0x"):
@@ -129,11 +178,10 @@ def placeholder():
     success("go implement it")
 
 
-# TODO
 subscription_key_actions = {
-    "list": placeholder,
-    "generate": placeholder,
-    "delete": placeholder,
+    "list": subscription_key_list,
+    "generate": subscription_key_generate,
+    "delete": subscription_key_delete,
 }
 
 api_key_actions = {
