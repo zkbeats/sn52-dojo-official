@@ -8,10 +8,6 @@ from strenum import StrEnum
 
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
-from typing import TypeVar
-
-T = TypeVar("T", bound="CriteriaType")
-CriteriaType = Union[T, "RankingCriteria", "MultiScoreCriteria"]
 
 
 class TaskType(StrEnum):
@@ -21,6 +17,9 @@ class TaskType(StrEnum):
 
 
 class RankingCriteria(BaseModel):
+    class Config:
+        allow_mutation = False
+
     type: str = "ranking"
     options: List[str] = Field(
         description="List of options human labeller will see", default=[]
@@ -28,12 +27,18 @@ class RankingCriteria(BaseModel):
 
 
 class MultiScoreCriteria(BaseModel):
+    class Config:
+        allow_mutation = False
+
     type: str = "multi-score"
     options: List[str] = Field(
-        description="List of options human labeller will see", default=[]
+        default=[], description="List of options human labeller will see"
     )
-    min: float = Field(description="Minimum score for the task", default=1.0)
-    max: float = Field(description="Maximum score for the task", default=10.0)
+    min: float = Field(description="Minimum score for the task")
+    max: float = Field(description="Maximum score for the task")
+
+
+CriteriaType = Union[MultiScoreCriteria, RankingCriteria]
 
 
 class ScoringMethod(StrEnum):
@@ -135,7 +140,7 @@ class FeedbackRequest(bt.Synapse):
         allow_mutation=False,
     )
     task_type: str = Field(description="Type of task", allow_mutation=False)
-    criteria_types: List[Union[RankingCriteria, MultiScoreCriteria]] = Field(
+    criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
         allow_mutation=False,
     )

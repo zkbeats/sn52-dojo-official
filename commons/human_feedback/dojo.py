@@ -114,27 +114,26 @@ class DojoAPI:
                 if isinstance(criteria_type, RankingCriteria):
                     taskData["criteria"].append(
                         {
-                            "type": RankingCriteria.type,
+                            **criteria_type.dict(),
                             "options": [
-                                f"Model {completion.model}"
-                                for _, completion in enumerate(
-                                    ranking_request.responses
-                                )
+                                f"Model {option}"
+                                for option in criteria_type.dict().get("options", [])
                             ],
                         }
                     )
                 elif isinstance(criteria_type, MultiScoreCriteria):
+                    logger.warning(f"Criteria dict: {criteria_type.dict()}")
                     taskData["criteria"].append(
                         {
-                            "type": MultiScoreCriteria.type,
+                            **criteria_type.dict(),
                             "options": [
-                                f"Model {completion.model}"
-                                for _, completion in enumerate(
-                                    ranking_request.responses
-                                )
+                                f"Model {option}"
+                                for option in criteria_type.dict().get("options", [])
                             ],
                         }
                     )
+                else:
+                    logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
 
             body = {
                 "title": "LLM Code Generation Task",
