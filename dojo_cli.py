@@ -226,21 +226,74 @@ def main():
     info(f"Using bittensor config:\n{config}")
 
     is_wallet_valid = False
+    is_wallet_path_decided = False
+    is_coldkey_valid = False
+    is_hotkey_valid = False
+    default_wallet_path = Path(config.wallet.path).expanduser()
     while not is_wallet_valid:
-        info("Please specify the wallet coldkey name and hotkey name.")
-        config.wallet.name = input("Enter the wallet coldkey name: ").strip()
-        config.wallet.hotkey = input("Enter the wallet hotkey name: ").strip()
+        while not is_wallet_path_decided:
+            use_default_path = (
+                input(
+                    f"Do you want to use the default wallet path {default_wallet_path}? (y/n): "
+                )
+                .strip()
+                .lower()
+            )
+            if use_default_path == "y":
+                config.wallet.path = default_wallet_path
+                is_wallet_path_decided = True
+            elif use_default_path == "n":
+                config.wallet.path = input("Enter the wallet path: ").strip()
+                if Path(config.wallet.path).expanduser().exists():
+                    is_wallet_path_decided = True
+                else:
+                    error(
+                        f"Invalid wallet path {config.wallet.path}, please try again."
+                    )
+                    continue
 
-        coldkey_path = Path(config.wallet.path).expanduser() / config.wallet.name
-        hotkey_path = coldkey_path / "hotkeys" / config.wallet.hotkey
+        info(
+            "Please specify the wallet coldkey name and hotkey name to perform key management."
+        )
+        if not is_coldkey_valid:
+            # config.wallet.name = input("Enter the wallet coldkey name: ").strip()
+            coldkeys = [
+                f.name
+                for f in Path(config.wallet.path).expanduser().iterdir()
+                if f.is_dir()
+            ]
+            coldkey_completer = WordCompleter(coldkeys, ignore_case=True)
+            config.wallet.name = prompt(
+                "Enter the wallet coldkey name: ",
+                completer=coldkey_completer,
+                swap_light_and_dark_colors=False,
+            ).strip()
+            coldkey_path = Path(config.wallet.path).expanduser() / config.wallet.name
+            if not coldkey_path.exists():
+                error(f"Coldkey path is invalid {coldkey_path}")
+                continue
+            else:
+                is_coldkey_valid = True
+
+        if not is_hotkey_valid:
+            hotkeys_path = coldkey_path / "hotkeys"
+            hotkeys = [f.name for f in hotkeys_path.iterdir() if f.is_file()]
+            hotkey_completer = WordCompleter(hotkeys, ignore_case=True)
+            config.wallet.hotkey = prompt(
+                "Enter the wallet hotkey name: ",
+                completer=hotkey_completer,
+                swap_light_and_dark_colors=False,
+            ).strip()
+            # config.wallet.hotkey = input("Enter the wallet hotkey name: ").strip()
+            hotkey_path = coldkey_path / "hotkeys" / config.wallet.hotkey
+            if not hotkey_path.exists():
+                error(f"Hotkey path is invalid {hotkey_path}")
+                continue
+            else:
+                is_hotkey_valid = True
+
         info(f"Coldkey path: {coldkey_path}")
         info(f"Hotkey path: {hotkey_path}")
-        if not coldkey_path.exists():
-            error(f"Coldkey path is invalid {coldkey_path}")
-            continue
-        if not hotkey_path.exists():
-            error(f"Hotkey path is invalid {hotkey_path}")
-            continue
 
         if coldkey_path.exists() and hotkey_path.exists():
             is_wallet_valid = True
