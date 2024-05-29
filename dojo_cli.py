@@ -5,6 +5,7 @@ import requests
 from rich.console import Console
 from prompt_toolkit import PromptSession, prompt
 from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
+from pathlib import Path
 
 console = Console()
 
@@ -224,14 +225,25 @@ def main():
     config = bittensor.config(parser)
     info(f"Using bittensor config:\n{config}")
 
-    is_wallet_set = False
-    while not is_wallet_set:
-        if config.wallet.name == "default" or config.wallet.hotkey == "default":
-            info("Please specify the wallet name and hotkey.")
-            config.wallet.name = input("Enter the wallet name: ").strip()
-            config.wallet.hotkey = input("Enter the wallet hotkey: ").strip()
-        else:
-            is_wallet_set = True
+    is_wallet_valid = False
+    while not is_wallet_valid:
+        info("Please specify the wallet name and hotkey.")
+        config.wallet.name = input("Enter the wallet name: ").strip()
+        config.wallet.hotkey = input("Enter the wallet hotkey: ").strip()
+
+        coldkey_path = Path(config.wallet.path).expanduser() / config.wallet.name
+        hotkey_path = coldkey_path / "hotkeys" / config.wallet.hotkey
+        info(f"Coldkey path: {coldkey_path}")
+        info(f"Hotkey path: {hotkey_path}")
+        if not coldkey_path.exists():
+            error(f"Coldkey path is invalid {coldkey_path}")
+            continue
+        if not hotkey_path.exists():
+            error(f"Hotkey path is invalid {hotkey_path}")
+            continue
+
+        if coldkey_path.exists() and hotkey_path.exists():
+            is_wallet_valid = True
 
     success("Wallet name and hotkey set successfully.")
 
