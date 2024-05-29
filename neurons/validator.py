@@ -571,9 +571,7 @@ class Validator(BaseNeuron):
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
                 synthetic_data = await SyntheticAPI.get_qa()
-                for data in synthetic_data:
-                    # TODO current workaround for testing code fixing flow
-                    await self.send_request(data=data)
+                await self.send_request(data=synthetic_data)
 
                 # # Check if we should exit.
                 if self._should_exit:
@@ -584,7 +582,7 @@ class Validator(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                await asyncio.sleep(12)
+                await asyncio.sleep(60)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
