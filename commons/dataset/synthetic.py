@@ -42,14 +42,11 @@ class SyntheticAPI:
                         response_json = await response.json()
                         if "body" not in response_json:
                             raise ValueError("Invalid response from the server.")
-                        synthetic_QAs = [
-                            SyntheticQA.parse_obj(item)
-                            for item in response_json["body"]
-                        ]
+                        synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
                         bt.logging.info(
-                            f"{len(synthetic_QAs)} Synthetic QA generated successfully."
+                            "Synthetic QA generated and parsed successfully."
                         )
-                        return synthetic_QAs
+                        return synthetic_qa
         except RetryError:
             bt.logging.error("Failed to generate synthetic QA after retries.")
             return None
