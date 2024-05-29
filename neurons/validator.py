@@ -351,7 +351,7 @@ class Validator(BaseNeuron):
             bt.logging.debug(
                 f"Scheduled update score and send feedback triggered at time: {time.time()}"
             )
-            data = await DataManager.load(path=DataManager.get_ranking_data_filepath())
+            data = await DataManager.load(path=DataManager.get_requests_data_path())
             if not data:
                 bt.logging.debug(
                     "Skipping scoring as no ranking data found, this means either all have been processed or you are running the validator for the first time."
@@ -507,15 +507,20 @@ class Validator(BaseNeuron):
                 task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[
                     MultiScoreCriteria(
-                        options=[completion["model"] for completion in data.responses],
+                        options=[completion.model for completion in data.responses],
                         min=1.0,
                         max=100.0,
-                    )
+                    ),
+                    RankingCriteria(
+                        options=[completion.model for completion in data.responses]
+                    ),
                 ],
                 prompt=data.prompt,
                 responses=data.responses,
             )
-            bt.logging.info(f"Sending synapse: {synapse.dict()} off to miners")
+            bt.logging.info(
+                f"Sending synapse request {synapse.request_id} off to miners"
+            )
 
         all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
         sel_miner_uids = MinerUidSelector(all_miner_uids).get_target_uids(
@@ -656,7 +661,6 @@ class Validator(BaseNeuron):
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
-            bt.logging.info("Metagraph unchanged")
             return
 
         bt.logging.info("Metagraph updated")

@@ -247,7 +247,6 @@ class Miner(BaseMinerNeuron):
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
-            bt.logging.info("Metagraph unchanged")
             return
 
         bt.logging.info("Metagraph updated")
