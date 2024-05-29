@@ -1,7 +1,9 @@
 import asyncio
 import datetime
+import json
 import os
 from typing import Dict, List
+from requests_toolbelt import MultipartEncoder
 from fastapi.encoders import jsonable_encoder
 import httpx
 
@@ -115,6 +117,7 @@ class DojoAPI:
                         ],
                     }
                 )
+
             body = {
                 "title": "LLM Code Generation Task",
                 "body": ranking_request.prompt,
@@ -122,18 +125,24 @@ class DojoAPI:
                 .replace(microsecond=0, tzinfo=datetime.timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
-                "taskData": [taskData],
-                "maxResults": 10,
+                "taskData": json.dumps([taskData]),
+                "maxResults": "10",
             }
 
             DOJO_API_KEY = os.getenv("DOJO_API_KEY")
             if not DOJO_API_KEY:
                 logger.error("DOJO_API_KEY is not set")
+
+            mp = MultipartEncoder(fields=body)
             response = await client.post(
                 path,
-                json=jsonable_encoder(body),
-                headers={"x-api-key": DOJO_API_KEY},
+                data=mp.to_string(),
+                headers={
+                    "x-api-key": DOJO_API_KEY,
+                    "content-type": mp.content_type,
+                },
             )
+
             if response.status_code == 200:
                 task_ids = response.json()["body"]
                 logger.success(f"Successfully created task with\ntask ids:{task_ids}")
