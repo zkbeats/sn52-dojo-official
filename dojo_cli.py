@@ -227,9 +227,9 @@ def main():
 
     is_wallet_valid = False
     while not is_wallet_valid:
-        info("Please specify the wallet name and hotkey.")
-        config.wallet.name = input("Enter the wallet name: ").strip()
-        config.wallet.hotkey = input("Enter the wallet hotkey: ").strip()
+        info("Please specify the wallet coldkey name and hotkey name.")
+        config.wallet.name = input("Enter the wallet coldkey name: ").strip()
+        config.wallet.hotkey = input("Enter the wallet hotkey name: ").strip()
 
         coldkey_path = Path(config.wallet.path).expanduser() / config.wallet.name
         hotkey_path = coldkey_path / "hotkeys" / config.wallet.hotkey
@@ -245,7 +245,7 @@ def main():
         if coldkey_path.exists() and hotkey_path.exists():
             is_wallet_valid = True
 
-    success("Wallet name and hotkey set successfully.")
+    success("Wallet coldkey name and hotkey name set successfully.")
 
     state = State(config)
     # method_completer = NestedCompleter.from_nested_dict(nested_dict_none(actions))
@@ -275,7 +275,8 @@ def main():
                 warning("Invalid action, please try again")
         except (KeyboardInterrupt, EOFError):
             break
-        except Exception:
+        except Exception as e:
+            error(f"Please try again, exception occurred: {e}")
             pass
 
 
