@@ -663,16 +663,26 @@ class Validator(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info("Metagraph updated")
-        # hotkey has been replaced, so we reset score
+        # check for preserved hotkeys based on prev metagraph...
         preserved_uids = [
             uid
             for uid, hotkey in enumerate(previous_metagraph.hotkeys)
             if hotkey == self.metagraph.hotkeys[uid]
         ]
 
+        new_uids = list(range(previous_metagraph.n.item(), self.metagraph.n.item()))
+        new_axons = [
+            axon
+            for axon in self.metagraph.axons
+            if axon not in previous_metagraph.axons
+        ]
+        bt.logging.info(
+            f"Metagraph updated, new uids: {new_uids}, new axons: {new_axons}"
+        )
+
         # create a new score tensor since metagraph size is different
-        updated_scores = torch.zeros(len(self.metagraph.axons)).to(self.device)
+        updated_scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
+
         for uid in preserved_uids:
             updated_scores[uid] = self.scores[uid]
 
