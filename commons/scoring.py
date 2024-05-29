@@ -1,21 +1,21 @@
-import asyncio
 import json
 from collections import defaultdict
 from typing import Dict, List, Optional
 
 import bittensor as bt
 import numpy as np
-from pydantic import validate_arguments, Field, BaseModel
+from pydantic import Field, BaseModel
 import scipy
 from attr import define, field
 import torch
 from torch.nn import functional as F
 from sklearn.metrics import cohen_kappa_score
-from commons.dataset.leaderboard import diff_gt, get_gt_ranks, get_leaderboard_scores
+from commons.dataset.leaderboard import get_gt_ranks, get_leaderboard_scores
 
 from template.protocol import (
     CriteriaType,
     FeedbackRequest,
+    RankingCriteria,
     ScoringResult,
     ScoringMethod,
 )
@@ -159,10 +159,7 @@ class Scoring:
         if not len(responses):
             raise ValueError("Responses cannot be empty")
 
-        if criteria == CriteriaType.SCORING:
-            # TODO refactor to return tensor
-            return Scoring._spearman_scoring(responses)
-        elif criteria == CriteriaType.PREFERENCE_RANKING:
+        if isinstance(criteria, RankingCriteria):
             avg_ranks, all_miner_ranks = Scoring._process_for_ranking(responses)
             spearman_corr = [
                 scipy.stats.spearmanr(miner_ranks, avg_ranks).statistic
@@ -196,9 +193,7 @@ class Scoring:
         request: FeedbackRequest,
         responses: List[FeedbackRequest],
     ):
-        if criteria == CriteriaType.SCORING:
-            raise NotImplementedError("Not implemented yet")
-        elif criteria == CriteriaType.PREFERENCE_RANKING:
+        if isinstance(criteria, RankingCriteria):
             # already sorting according to score
             model_score_tuples = get_leaderboard_scores(
                 [completion.model for completion in request.responses]
@@ -270,33 +265,3 @@ def _calculate_average_rank_by_model(
         sorted(model_id_to_average_rank.items(), key=lambda item: item[1])
     )
     return sorted_dict
-
-
-if __name__ == "__main__":
-    # test_requests = MockData.generate_test_data()[:5]
-    test_requests = []
-    for tr in test_requests:
-        for completion in tr.completions:
-            print((completion.model_id, completion.rank_id), end=" ")
-        print()
-
-    print(
-        Scoring.cmp_ground_truth(
-            CriteriaType.PREFERENCE_RANKING, test_requests[0], test_requests
-        )
-    )
-
-    print(Scoring.consensus_score(CriteriaType.PREFERENCE_RANKING, test_requests))
-    res = Scoring.calculate_score(
-        [CriteriaType.PREFERENCE_RANKING], test_requests[0], test_requests
-    )
-    print(res.get(CriteriaType.PREFERENCE_RANKING).shape)
-    res["scoring"] = res.get(CriteriaType.PREFERENCE_RANKING).clone().detach()
-    # averages
-    total_sum = torch.stack([miner_scores for miner_scores in res.values()])
-    print(total_sum.shape)
-    print(total_sum)
-    print(total_sum.mean(dim=0).shape)
-    print(total_sum.mean(dim=0))
-    bt.logging.info(f"Total sum of scores across all criteria: {total_sum}")
-    print(res)

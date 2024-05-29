@@ -4,10 +4,13 @@ import json
 import os
 from typing import Dict, List
 from requests_toolbelt import MultipartEncoder
-from fastapi.encoders import jsonable_encoder
 import httpx
 
-from template.protocol import FeedbackRequest, CriteriaType
+from template.protocol import (
+    FeedbackRequest,
+    MultiScoreCriteria,
+    RankingCriteria,
+)
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -29,7 +32,7 @@ def get_dojo_api_key():
 def _extract_ranking_result_data(result_data: List[Dict]) -> Dict[str, str]:
     # sample data: [{'type': 'ranking', 'value': {'1': 'Code 2', '2': 'Code 1'}]
     ranking_results = list(
-        filter(lambda x: x["type"] == CriteriaType.PREFERENCE_RANKING, result_data)
+        filter(lambda x: x["type"] == RankingCriteria.type, result_data)
     )
     if len(ranking_results) == 1:
         return ranking_results[0].get("value", {})
@@ -107,16 +110,31 @@ class DojoAPI:
                 "task": str(ranking_request.task_type).upper(),
                 "criteria": [],
             }
-            if CriteriaType.PREFERENCE_RANKING in ranking_request.criteria_types:
-                taskData["criteria"].append(
-                    {
-                        "type": "ranking",
-                        "options": [
-                            f"Model {completion.model}"
-                            for _, completion in enumerate(ranking_request.responses)
-                        ],
-                    }
-                )
+            for criteria_type in ranking_request.criteria_types:
+                if isinstance(criteria_type, RankingCriteria):
+                    taskData["criteria"].append(
+                        {
+                            "type": RankingCriteria.type,
+                            "options": [
+                                f"Model {completion.model}"
+                                for _, completion in enumerate(
+                                    ranking_request.responses
+                                )
+                            ],
+                        }
+                    )
+                elif isinstance(criteria_type, MultiScoreCriteria):
+                    taskData["criteria"].append(
+                        {
+                            "type": MultiScoreCriteria.type,
+                            "options": [
+                                f"Model {completion.model}"
+                                for _, completion in enumerate(
+                                    ranking_request.responses
+                                )
+                            ],
+                        }
+                    )
 
             body = {
                 "title": "LLM Code Generation Task",

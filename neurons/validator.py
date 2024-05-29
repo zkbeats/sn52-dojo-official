@@ -1,5 +1,6 @@
 import asyncio
 import copy
+from random import random
 import threading
 import time
 from collections import defaultdict
@@ -23,10 +24,11 @@ from template.base.neuron import BaseNeuron
 from template.protocol import (
     SCORING_METHOD_PRIORITY,
     AWSCredentials,
-    CriteriaType,
     DendriteQueryResponse,
     MTurkResponse,
     FeedbackRequest,
+    MultiScoreCriteria,
+    RankingCriteria,
     ScoringResult,
     ScoringMethod,
     SyntheticQA,
@@ -341,20 +343,6 @@ class Validator(BaseNeuron):
             axons=axons, synapse=synapse, deserialize=False, timeout=12
         )
 
-    def validate_response(self, synapse: FeedbackRequest) -> bool:
-        """Process request from miners, specifically filling out the ranks fields"""
-        bt.logging.debug(
-            f"Processing miner's request for scoring method: {synapse.scoring_method}"
-        )
-        if CriteriaType.PREFERENCE_RANKING in [synapse.criteria_types]:
-            is_missing_ranks = any(
-                completion.rank_id is None for completion in synapse.responses
-            )
-            if is_missing_ranks:
-                bt.logging.warning("One or more completions are missing rank IDs.")
-                return False
-        return True
-
     async def update_score_and_send_feedback(self):
         """While this function is triggered every X time period in AsyncIOScheduler,
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
@@ -517,7 +505,13 @@ class Validator(BaseNeuron):
 
             synapse = FeedbackRequest(
                 task_type=str(TaskType.CODE_GENERATION),
-                criteria_types=[CriteriaType.PREFERENCE_RANKING],
+                criteria_types=[
+                    MultiScoreCriteria(
+                        options=[completion["model"] for completion in data.responses],
+                        min=1.0,
+                        max=100.0,
+                    )
+                ],
                 prompt=data.prompt,
                 responses=data.responses,
             )

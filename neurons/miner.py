@@ -17,8 +17,8 @@ from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
-    CriteriaType,
     FeedbackRequest,
+    RankingCriteria,
     ScoringResult,
     ScoringMethod,
 )
@@ -149,7 +149,7 @@ class Miner(BaseMinerNeuron):
                             key=lambda x: x[1],
                             reverse=True,
                         )
-                        if criteria == CriteriaType.PREFERENCE_RANKING:
+                        if isinstance(criteria, RankingCriteria):
                             sorted_model_rank_pairs = [
                                 (model_with_score[0], i)
                                 for i, model_with_score in enumerate(
@@ -162,15 +162,6 @@ class Miner(BaseMinerNeuron):
                                         completion.model_rank_pair_id = model_rank_pair[
                                             1
                                         ]
-
-                        elif criteria == CriteriaType.SCORE:
-                            for score_item in scores_response.scores:
-                                for i in range(len(synapse.responses)):
-                                    if (
-                                        score_item.model_id
-                                        == synapse.responses[i].model
-                                    ):
-                                        synapse.responses[i].score = score_item.score
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
                 # send off to MTurk workers in a non-blocking way

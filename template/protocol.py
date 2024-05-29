@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import bittensor as bt
 from pydantic import BaseModel, Field
@@ -8,6 +8,10 @@ from strenum import StrEnum
 
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
+from typing import TypeVar
+
+T = TypeVar("T", bound="CriteriaType")
+CriteriaType = Union[T, "RankingCriteria", "MultiScoreCriteria"]
 
 
 class TaskType(StrEnum):
@@ -16,9 +20,20 @@ class TaskType(StrEnum):
     CODE_GENERATION = "code_generation"
 
 
-class CriteriaType(StrEnum):
-    PREFERENCE_RANKING = "preference_ranking"
-    SCORING = "scoring"
+class RankingCriteria(BaseModel):
+    type: str = "ranking"
+    options: List[str] = Field(
+        description="List of options human labeller will see", default=[]
+    )
+
+
+class MultiScoreCriteria(BaseModel):
+    type: str = "multi-score"
+    options: List[str] = Field(
+        description="List of options human labeller will see", default=[]
+    )
+    min: float = Field(description="Minimum score for the task", default=1.0)
+    max: float = Field(description="Maximum score for the task", default=10.0)
 
 
 class ScoringMethod(StrEnum):
@@ -120,7 +135,7 @@ class FeedbackRequest(bt.Synapse):
         allow_mutation=False,
     )
     task_type: str = Field(description="Type of task", allow_mutation=False)
-    criteria_types: List[CriteriaType] = Field(
+    criteria_types: List[Union[RankingCriteria, MultiScoreCriteria]] = Field(
         description="Types of criteria for the task",
         allow_mutation=False,
     )
