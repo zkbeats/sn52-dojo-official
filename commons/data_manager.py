@@ -18,13 +18,25 @@ class DataManager:
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(DataManager, cls).__new__(cls)
+            cls._ensure_paths_exist()
         return cls._instance
 
+    @classmethod
+    def _ensure_paths_exist(cls):
+        cls.get_validator_state_filepath().parent.mkdir(parents=True, exist_ok=True)
+        cls.get_requests_data_path().parent.mkdir(parents=True, exist_ok=True)
+
     @staticmethod
-    def get_ranking_data_filepath() -> Path:
+    def get_requests_data_path() -> Path:
         config = ObjectManager.get_config()
         base_path = config.data_manager.base_path
-        return base_path / "data" / "ranking" / "data.pkl"
+        return base_path / "data" / "requests.pkl"
+
+    @staticmethod
+    def get_validator_state_filepath() -> Path:
+        config = ObjectManager.get_config()
+        base_path = config.data_manager.base_path
+        return base_path / "data" / "validator_state.pt"
 
     @classmethod
     async def _load_without_lock(cls, path) -> Optional[List[DendriteQueryResponse]]:
@@ -72,7 +84,7 @@ class DataManager:
 
     @classmethod
     async def save_response(cls, response: DendriteQueryResponse):
-        path = DataManager.get_ranking_data_filepath()
+        path = DataManager.get_requests_data_path()
         async with cls._lock:
             # ensure parent path exists
             if not path.exists():
@@ -93,7 +105,7 @@ class DataManager:
     @classmethod
     async def append_responses(cls, request_id: str, responses: List[FeedbackRequest]):
         async with cls._lock:
-            _path = DataManager.get_ranking_data_filepath()
+            _path = DataManager.get_requests_data_path()
             data = await cls._load_without_lock(path=_path)
             found_response_index = next(
                 (i for i, x in enumerate(data) if x.request.request_id == request_id),
@@ -110,7 +122,7 @@ class DataManager:
     @classmethod
     async def get_by_request_id(cls, request_id):
         async with cls._lock:
-            _path = DataManager.get_ranking_data_filepath()
+            _path = DataManager.get_requests_data_path()
             data = await cls._load_without_lock(path=_path)
             found_response = next(
                 (x for x in data if x.request.request_id == request_id),
@@ -122,7 +134,7 @@ class DataManager:
     async def remove_responses(
         cls, responses: List[DendriteQueryResponse]
     ) -> Optional[DendriteQueryResponse]:
-        path = DataManager.get_ranking_data_filepath()
+        path = DataManager.get_requests_data_path()
         async with cls._lock:
             data = await DataManager._load_without_lock(path=path)
             assert isinstance(data, list)
@@ -143,9 +155,8 @@ class DataManager:
     async def validator_save(cls, scores):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
-        config = ObjectManager.get_config()
-        # Save the state of the validator to file.
         async with cls._validator_lock:
+            cls._ensure_paths_exist()
             # nonzero_hotkey_to_accuracy = {
             #     k: v for k, v in hotkey_to_accuracy.items() if v != 0
             # }
@@ -153,18 +164,18 @@ class DataManager:
                 {
                     "scores": scores,
                 },
-                config.neuron.full_path + "/validator_state.pt",
+                cls.get_validator_state_filepath(),
             )
 
     @classmethod
     async def validator_load(cls):
         """Loads the state of the validator from a file."""
         bt.logging.info("Loading validator state.")
-        config = ObjectManager.get_config()
         async with cls._validator_lock:
+            cls._ensure_paths_exist()
             try:
                 # Load the state of the validator from file.
-                state = torch.load(config.neuron.full_path + "/validator_state.pt")
+                state = torch.load(cls.get_validator_state_filepath())
                 return True, state["scores"]
             except FileNotFoundError:
                 bt.logging.error("Validator state file not found.")
