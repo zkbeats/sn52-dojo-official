@@ -1,13 +1,21 @@
 import asyncio
+import json
 import pickle
 from pathlib import Path
 from typing import Any, List, Optional
 
 import bittensor as bt
 import torch
+from loguru import logger
+from strenum import StrEnum
 
 from commons.objects import ObjectManager
 from template.protocol import DendriteQueryResponse, FeedbackRequest
+
+
+class ValidatorStateKeys(StrEnum):
+    SCORES = "scores"
+    DOJO_TASKS_TO_TRACK = "dojo_tasks_to_track"
 
 
 class DataManager:
@@ -152,17 +160,21 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores):
+    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id):
         """Saves the state of the validator to a file."""
         bt.logging.info("Saving validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
-            # nonzero_hotkey_to_accuracy = {
-            #     k: v for k, v in hotkey_to_accuracy.items() if v != 0
-            # }
+            dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
+            if not dojo_task_data:
+                raise ValueError("Dojo task data is empty.")
+            logger.warning(f"Saving validator state with data: {dojo_task_data=}")
             torch.save(
                 {
-                    "scores": scores,
+                    ValidatorStateKeys.SCORES: scores,
+                    ValidatorStateKeys.DOJO_TASKS_TO_TRACK: json.loads(
+                        json.dumps(requestid_to_mhotkey_to_task_id)
+                    ),
                 },
                 cls.get_validator_state_filepath(),
             )
@@ -174,9 +186,11 @@ class DataManager:
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             try:
-                # Load the state of the validator from file.
                 state = torch.load(cls.get_validator_state_filepath())
-                return True, state["scores"]
+                return state
             except FileNotFoundError:
                 bt.logging.error("Validator state file not found.")
-                return False, None
+                return None
+            except Exception as e:
+                logger.error(f"Unexpected error: {e}")
+                return None

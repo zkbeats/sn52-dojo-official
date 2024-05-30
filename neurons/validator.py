@@ -729,30 +729,27 @@ class Validator(BaseNeuron):
     def save_state(self):
         """Saves the state of the validator to a file."""
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(DataManager.validator_save(self.scores))
+        loop.run_until_complete(
+            DataManager.validator_save(
+                self.scores, DojoTaskTracker._rid_to_mhotkey_to_task_id
+            )
+        )
 
     def load_state(self):
         """Loads the state of the validator from a file."""
         loop = asyncio.get_event_loop()
-        success, scores = loop.run_until_complete(DataManager.validator_load())
-        if success:
-            self.scores = scores
+        state_data = loop.run_until_complete(DataManager.validator_load())
+        if state_data is None:
+            logger.error("Failed to load validator state data")
+            return
+        logger.info(f"Loading state data: {state_data}")
+        self.scores = state_data[ValidatorStateKeys.SCORES]
+        DojoTaskTracker._rid_to_mhotkey_to_task_id = state_data[
+            ValidatorStateKeys.DOJO_TASKS_TO_TRACK
+        ]
 
     @classmethod
     async def log_validator_status(cls):
         while not cls._should_exit:
             bt.logging.info(f"Validator running... {time.time()}")
             await asyncio.sleep(20)
-
-
-if __name__ == "__main__":
-
-    async def main():
-        validator = Validator()
-        await asyncio.gather(
-            validator.run(),
-            validator.log_validator_status(),
-            DojoTaskTracker().monitor_task_completions(),
-        )
-
-    asyncio.run(main())
