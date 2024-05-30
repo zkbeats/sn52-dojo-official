@@ -9,7 +9,7 @@ from pathlib import Path
 
 console = Console()
 
-DOJO_API_BASE_URL = "http://localhost:9946"
+DOJO_API_BASE_URL = "***REMOVED***"
 
 
 def success(message: str, emoji: str = ":white_check_mark:"):
