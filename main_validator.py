@@ -3,14 +3,13 @@ from contextlib import asynccontextmanager
 
 import bittensor as bt
 import uvicorn
-import wandb
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+import wandb
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
-from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
 from neurons.validator import DojoTaskTracker
 
@@ -22,10 +21,8 @@ validator = ObjectManager.get_validator()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # BEFORE YIELD == ON STARTUP
     bt.logging.info("Performing startup tasks...")
     yield
-    # AFTER YIELD == ON SHUTDOWN
     bt.logging.info("Performing shutdown tasks...")
     validator._should_exit = True
     DojoTaskTracker()._should_exit = True
@@ -55,9 +52,11 @@ async def main():
     )
     server = uvicorn.Server(config)
     running_tasks = [
-        asyncio.create_task(validator.log_validator_status()),
+        # TODO re-enable after working on scoring
+        # asyncio.create_task(validator.log_validator_status()),
         asyncio.create_task(validator.run()),
-        asyncio.create_task(validator.update_score_and_send_feedback()),
+        # asyncio.create_task(validator.update_score_and_send_feedback()),
+        asyncio.create_task(DojoTaskTracker.monitor_task_completions()),
     ]
 
     await server.serve()
@@ -68,6 +67,10 @@ async def main():
             await task
         except asyncio.CancelledError:
             bt.logging.info(f"Cancelled task {task.get_name()}")
+        except Exception as e:
+            bt.logging.error(f"Task {task.get_name()} raised an exception: {e}")
+            pass
+
     bt.logging.info("Exiting main function.")
 
 

@@ -1,6 +1,5 @@
 import asyncio
 import copy
-from random import random
 import threading
 import time
 from collections import defaultdict
@@ -11,26 +10,26 @@ import bittensor as bt
 import numpy as np
 import torch
 from fastapi.encoders import jsonable_encoder
+from loguru import logger
 from torch.nn import functional as F
-import wandb
 
-from commons.data_manager import DataManager
+import wandb
+from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, init_wandb
+from commons.utils import get_epoch_time
 from template.base.neuron import BaseNeuron
 from template.protocol import (
-    SCORING_METHOD_PRIORITY,
     AWSCredentials,
     DendriteQueryResponse,
-    MTurkResponse,
     FeedbackRequest,
+    MTurkResponse,
     MultiScoreCriteria,
     RankingCriteria,
-    ScoringResult,
     ScoringMethod,
+    ScoringResult,
     SyntheticQA,
     TaskType,
 )
@@ -40,21 +39,14 @@ from template.utils.uids import (
     extract_miner_uids,
     is_miner,
 )
-from loguru import logger
-
-
-def _filter_valid_responses(responses: List[FeedbackRequest]) -> List[FeedbackRequest]:
-    return [response for response in responses if len(response.ranks) > 0]
 
 
 class DojoTaskTracker:
     _instance = None
-    # request id to miner hotkey to task id
     _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
         lambda: defaultdict(str)
     )
     _lock = asyncio.Lock()
-    _background_tasks = set()
     _should_exit: bool = False
 
     def __new__(cls, *args, **kwargs):
@@ -90,8 +82,7 @@ class DojoTaskTracker:
         }
 
     @classmethod
-    async def update_task_map(cls, responses: List[FeedbackRequest]):
-        dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
+    async def update_task_map(cls, dojo_responses: List[FeedbackRequest]):
         if not dojo_responses:
             bt.logging.warning("No Dojo responses found")
             return
@@ -104,10 +95,13 @@ class DojoTaskTracker:
                 )
             )
             bt.logging.info(
-                f"Validated N={len(dojo_responses)} responses into {len(valid_responses)} valid responses for request id: {responses[0].request_id}"
+                f"Got {len(valid_responses)} valid Dojo responses to update task tracker"
             )
 
             for r in valid_responses:
+                if r.request_id not in cls._rid_to_mhotkey_to_task_id:
+                    cls._rid_to_mhotkey_to_task_id[r.request_id] = {}
+
                 cls._rid_to_mhotkey_to_task_id[r.request_id][r.axon.hotkey] = (
                     r.dojo_task_id
                 )
@@ -115,7 +109,7 @@ class DojoTaskTracker:
 
     @classmethod
     async def monitor_task_completions(cls):
-        SLEEP_SECONDS = 10
+        SLEEP_SECONDS = 30
         while not cls._should_exit:
             bt.logging.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
             async with cls._lock:
@@ -135,7 +129,9 @@ class DojoTaskTracker:
                             )
                             continue
 
-                        task_results = await DojoAPI.get_task_and_results(task_id)
+                        task_results = await DojoAPI.get_task_results_by_task_id(
+                            task_id
+                        )
                         if not task_results:
                             bt.logging.warning(
                                 f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
@@ -160,6 +156,9 @@ class DojoTaskTracker:
                             request_id=request_id,
                             responses=data.request.responses,
                         )
+                        logger.info(
+                            f"Appending Dojo task results for request id: {request_id}"
+                        )
                         await DataManager.append_responses(request_id, [parsed_request])
             await asyncio.sleep(SLEEP_SECONDS)
 
@@ -182,9 +181,10 @@ class Validator(BaseNeuron):
         self.load_state()
         bt.logging.debug(f"Scores state: {self.scores}")
 
-        # Init sync with the network. Updates the metagraph.
-        self.sync()
-        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
+        # manually always register and always sync metagraph when application starts
+        self.check_registered()
+        self.resync_metagraph()
+        # init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
@@ -382,10 +382,8 @@ class Validator(BaseNeuron):
                     responses=d.responses,
                 )
 
-                # TOOD wandb logging here
-                # calculate by hotkey as well, perform weighting here
-                GT_WEIGHT = 0.65
-                CONSENSUS_WEIGHT = 0.35
+                GT_WEIGHT = 0.4
+                CONSENSUS_WEIGHT = 0.6
                 # TODO for now only single criteria
                 # log_data is score by each miner
                 score_data = {}
@@ -541,7 +539,7 @@ class Validator(BaseNeuron):
         )
 
         dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
-        await DojoTaskTracker().update_task_map(dojo_responses)
+        await DojoTaskTracker.update_task_map(dojo_responses)
         non_dojo_responses = list(filter(lambda r: r not in dojo_responses, responses))
 
         response_data = DendriteQueryResponse(
@@ -555,9 +553,6 @@ class Validator(BaseNeuron):
         return
 
     async def run(self):
-        # manually always register and always sync metagraph when application starts
-        self.sync()
-
         bt.logging.info(
             f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
@@ -699,7 +694,7 @@ class Validator(BaseNeuron):
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
-        rewards = torch.zeros((len(self.metagraph.axons),))
+        rewards = np.zeros((len(self.metagraph.axons),))
         neuron_hotkeys: List[str] = [neuron.hotkey for neuron in self.metagraph.neurons]
         for index, (key, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
