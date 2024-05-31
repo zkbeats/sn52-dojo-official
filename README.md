@@ -31,24 +31,19 @@
 <summary>Table of Contents</summary>
 
 - [Introduction](#introduction)
-- [Features](#features)
-- [Use Cases](#use-cases)
 - [Minimum Requirements](#minimum-requirements)
   - [Miner](#miner)
   - [Validator](#validator)
 - [Getting Started](#getting-started)
   - [Mining](#mining)
-    - [Amazon Mechanical Turk Setup Guide](#amazon-mechanical-turk-setup-guide)
-      - [MTurk Setup](#mturk-setup)
-      - [AWS SNS](#aws-sns)
-      - [AWS **Lambda**](#aws-lambda)
   - [Validating](#validating)
-- [Types of Requests](#types-of-requests)
-- [Mechanisms](#mechanisms)
-  - [Human Feedback Loop](#human-feedback-loop)
+- [Subnet Mechanisms](#subnet-mechanisms)
+  - [Responsibiltiies of Miners](#responsibilities-of-miners)
+  - [Responsibilities of Validators](#responsibilities-of-validators)
+  - [Task Lifecycle, User Journey and Data Flow](#task-lifecycle-user-journey-and-data-flow)
+- [Scoring Mechanism](#scoring-mechanism)
+  - [Miner Scoring](#miner-scoring)
   - [Validator Scoring](#validator-scoring)
-  - [Consensus \& Classification Accuracy](#consensus--classification-accuracy)
-- [Building a reward model](#building-a-reward-model)
 - [Roadmap](#roadmap)
 - [License](#license)
 
@@ -61,60 +56,63 @@
 ---
 
 # Introduction
-Reinforcement Learning Human Feedback (RLHF) is based on reward models that are trained with preference datasets. These preference datasets and reward models are built by large private companies like OpenAI, Anthropic, Google, Meta, etc. While they release aligned LLMs, they don't release the Reward Model. Hence, we don't have a say in determining which responses are good or bad. _Why should big corporations have the power to decide what is good or bad?_ __Let's decentralize that power, by having a decentralized, consensus-based Reward Model.__
+The development of open-source AI models is often hindered by the lack of high-quality human-generated datasets. Closed-source AI developers, aiming to reduce data collection costs, have created significant social and economic equity challenges, with workers being paid less than $2 per hour for mentally and emotionally taxing tasks. The benefits of these models have been concentrated among a select few, exacerbating inequalities among contributors.
 
-Introducing the Dojo, a subnet where participants are given the power to decide what is good or bad, and these results are collectively evaluated using our consensus mechanism. We also introduce the first of its kind by connecting our subnet layer to an external application layer (Amazon Mechanical Turk) to allow the subnet to access a globally available and 24/7 workforce to provide high quality human intelligence task feedback.
+The solution lies in creating an open platform to gather human-generated datasets, allowing anyone to earn by contributing their intelligence. This approach, however, introduces new challenges, such as performing quality control, verifying that contributions are genuinely human and preventing sybil attacks.
 
-# Features
-🤗 Open Source Reward Models<br>
-👨‍💻 Human Feedback Loop<br>
-📝 Text-based Reward Models<br>
-🧧 Low minimum cost to participate<br>
+Enter Tensorplex Dojo — an open platform designed to crowdsource high-quality human-generated datasets. Powered by Bittensor, the Dojo Subnet addresses these challenges with several key features such as Synthetic Task Generation, Obfuscation and in the future, Proof of Stake.
 
-# Use Cases
-Our Dojo subnet provides decentralised, consensus-based Reward Modelling that allows applications to be built on top of it. One example use case is fine-tuning of Large Language Models (LLMs), where a model being fine-tuned may query our API to score multiple LLM outputs with respect to a prompt. This may also be used to compare quality of responses among different LLMs.
+The Dojo Subnet offers multiple use cases:
 
-Other use cases include text-based and image-based evaluations like on other subnets. In each subnet, they typically need to evaluate text based prompt & responses, so each subnet has to write their own versions of these evaluations and our subnet could abstract these evaluations away and serve all of them, where the scalability is only limited by the modalities (text, image, etc.) that are being supported on this subnet.
+- Synthetically generated tasks: These tasks can bootstrap the human participant pool and also can be used for model training or fine-tuning from the get go.
 
-# Minimum Requirements
+- Cross-subnet validation: Validators can use responses to rate the quality of outputs across other Bittensor subnets, thereby incentivising the miners to improve their performance.
+
+- External data acquisition: Entities outside the Bittensor ecosystem can tap into the subnet to acquire high-quality human-generated data.
+
+By democratising the collection of human preference data, the Dojo Subnet not only addresses existing equity issues but also paves the way for more inclusive and ethical AI development.
+
+## Benefits to participants contributing through Dojo:
+
+- Open platform: Anyone capable can contribute, ensuring broad participation and diverse data collection.
+
+- Flexible work environment: Participants enjoy the freedom to work on tasks at their convenience from any location.
+
+- Quick payment: Rewards are streamed consistently to participants, as long as they complete sufficient tasks within a stipulated deadline and have them accepted by the subnet.
+
+<br>
+
+# Prerequisites
 - Python 3.11 and above
 - PM2
+- Docker
+- Third party API Keys __(Validators Only)__
+  - OpenRouter
+  - WanDB
+  - Together __(Optional)__
+  - OpenAI
+  - Hugging Face
 
-## Miner
+# System Requirements
+
+### Miner
 - 4 cores
 - 8 GB RAM
 - 32GB SSD
 
-## Validator
+### Validator
 - 8 cores
 - 32 GB RAM
 - 1 TB SSD
 
 # Getting Started
-To get started as a miner or validator, these are the common steps both a miner and validator have to go through. 
 
+To get started as a miner or validator, these are the common steps both a miner and validator have to go through.
+> The following guide is tailored for distributions utilizing APT as the package manager. Adjust the installation steps as per the requirements of your system.
+> 
+> We will utilize /opt directory as our preferred location in this guide.
 
-1. setup python environment
-
-```bash
-cd dojo-subnet/
-# create new virtual env
-python -m venv env_name 
-# activate our virtual env
-source env_name/bin/activate 
-# verify python environment version
-python --version
-```
-
-2. install requirements.txt
-
-```bash
-source env_name/bin/activate 
-pip install -r requirements.txt
-```
-
-3. install pm2 
-
+Install PM2 (__If not already installed__)
 ```bash
 apt-get update
 apt-get install -y ca-certificates curl gnupg
@@ -129,312 +127,373 @@ npm install -g pm2
 pm2 install pm2-logrotate
 ```
 
-4. setup bittensor wallet
+Install Docker CE (__If not already installed__)
 ```bash
-# create new coldkey
-btcli wallet new_coldkey --wallet.name your_coldkey_name
-# create new hotkey
-btcli wallet new_hotkey --wallet.name your_coldkey_name
-
-# you will be prompted with the following...
-Enter hotkey name (default):
+apt-get install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
+mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-5. prepare .env file
-
-Copy the `.env.miner.example` or `.env.validator.example` file into a separate `.env` file. These are supposed to contain certain API keys required for your miner/validator to function as expected.
-
-<font size="6">**Remember, never commit this .env file!**</font>
-
-## Mining
-
-To start the miner, run one of the following command(s):
+Clone the project, set up and configure python virtual environment
 ```bash
-# using huggingface model
-python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
---logging.debug --axon.port 9599 --neuron.type miner --scoring_method "hf_model" \
---model_name "OpenAssistant/reward-model-deberta-v3-large-v2"
+# In this guide, we will utilize the /opt directory as our preferred location.
+cd /opt
 
-# using llm api 
-python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
---logging.debug --axon.port 9599 --neuron.type miner --scoring_method "llm_api" \
---model_name "mistralai/Mixtral-8x7B-Instruct-v0.1"
+# Clone the project
+git clone https://github.com/tensorplex-labs/dojo-subnet.git
+cd dojo-subnet/
 
-# using aws mturk, --model_name is not used
-python main_miner.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
---logging.debug --axon.port 9599 --neuron.type miner --scoring_method "aws_mturk"
+# Set up python virtual environment and pip packages
+python -m venv env
+env/bin/pip install -r requirements.txt --no-cache-dir
+env/bin/pip install -e . --no-cache-dir
 ```
 
-When providing scoring for prompt & completions, there are currently 3 methods:
-- using a HuggingFace model
-- using a LLM like mistralai/Mixtral-8x7B-Instruct-v0.1 via [TogetherAI's Inference endpoints](https://docs.together.ai/docs/inference-models).
-- human feedback via [Amazon Mechanical Turk](https://www.mturk.com/)
+# Miners
 
-If you wish to earn a higher miner trust and incentives, you will need to use different scoring methods such as those with human feedback (Amazon Mechanical Turk), and/or have better classification accuracy on human preference datasets.
-
-Note that in order to Amazon Mechanical Turk, there are additional steps to take, see the [Amazon MTurk setup guide](#amazon-mechanical-turk-setup-guide).
-
-<blockquote class="callout callout_default">
-<p>❗NOTE❗ when using APIs, make sure to check the supported models. Currently TogetherAI and OpenAI are supported. For more providers, please send us a request via Discord or help contribute to our repository! 
-
-See the <a href="./contrib/CONTRIBUTING.md">guidelines for contributing</a>.
-</p>
-</blockquote>
-
-<br>
-
-
-### Amazon Mechanical Turk Setup Guide
-
-This guide will go through how to setup Amazon Mechanical Turk so that we can send tasks to humans that will contribute to scoring requests.
-
-<details>
-
-<summary><strong>Click me for details!</strong></summary>
-
-
-#### MTurk Setup
-
-1. Sign up for AWS account at https://portal.aws.amazon.com/billing/signup#/start/email
-2. Sign up for AWS MTurk Requester account at https://requester.mturk.com/begin_aws_signin, which will link the two accounts together.
-3. Setup an IAM policy to get AWS Access Key ID and Secret
-- Go to https://console.aws.amazon.com/console
-- Use the search bar to search for "IAM" and click on the first result.
-- Click on "Users" in the side bar and then go to "Create User".
-<img src="./assets/iam/iam1.jpg">
-
-- Specify this IAM user's name, in this case I am using "lambda_mturk_role"
-<img src="./assets/iam/iam6.jpg">
-
-- Set permissions of the IAM user. Click on "Attach policies directly" and search for "AmazonMechanicalTurkFullAccess" using the search bar and select it.
-<img src="./assets/iam/iam7.jpg">
-
-- Go on to the next page and click on "Create User".
-<img src="./assets/iam/iam9.jpg">
-
-- Now that the user is created, head back to the Users section, and click on the name of the user previously created.
-<img src="./assets/iam/iam8.jpg">
-
-- Go to the "Security Credentials" tab, then click on "Create access key".
-<img src="./assets/iam/iam2.jpg">
-
-- Select "Application running outside AWS". 
-<img src="./assets/iam/iam5.jpg">
-
-- Set a description to something memorable for future reference. In this case I am using "lambda_mturk_role for subnet" as the description. Then click on "Create access key".
-<img src="./assets/iam/iam4.jpg">
-
-- Now get the access key credentials and copy it over to your `.env` file for the respective variables.
+Activate the python virtual environment
 ```bash
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_KEY=
-```
-<img src="./assets/iam/iam3.jpg">
-
-<br>
-
-Next you will need o create a new role, which will allow validators to verify that the MTurk task was actually completed on the platform.
-
-1. Go to IAM > Roles > Create Role
-2. Select "Custom trust policy" and paste the following JSON.
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "Statement1",
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": "*"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
-}
-```
-<img src="./assets/role/role1.jpg">
-
-3. Skip the adding permissions step, and set a role name.
-4. Go back to IAM > Roles and click on the role you just created, then go to Permissions > Create Inline Policy.
-<img src="./assets/role/role3.jpg">
-
-
-5. Now search for "MechanicalTurk" and allow the following functions to be called. You permissions JSON should look like the following:
-<img src="./assets/role/role2.jpg">
-
-```json
-{
-	"Version": "2012-10-17",
-	"Statement": [
-		{
-			"Sid": "VisualEditor0",
-			"Effect": "Allow",
-			"Action": "mechanicalturk:ListAssignmentsForHIT",
-			"Resource": "*"
-		}
-	]
-}
-```
-6. Set your policy name, then Create policy and now your role should have a minimal policy that allows only 1 function to be called.
-
-<img src="./assets/role/role4.jpg">
-
-7. Grab the ARN, which should look like `arn:aws:iam::1234567890:role/role_name` and place it into the `AWS_ASSUME_ROLE_ARN` env variable.
-
-<br>
- 
-
-We will now need to setup AWS Simple Notification Service (SNS) and AWS Lambda, where AWS SNS is for subscribing to MTurk events and AWS Lambda executes code that will forward the responses to our miner.
-
-#### AWS SNS
-
-1. Search for "Simple Notification Service" using the search bar.
-
-2. From the dashboard, navigate to "Topics", and click on "Create Topic".
-
-<img src="./assets/sns/sns1.jpg">
-<img src="./assets/sns/sns2.jpg">
-
-3. Fill out the topic name, in this case I have assigned "mturk_sns_topic", you must also choose "Standard" type so that AWS Lambda may be used with SNS. 
-
-<img src="./assets/sns/sns4.jpg">
-
-4. Afterwards, click on "Create Topic" all the way at the bottom. 
-
-<img src="./assets/sns/sns3.jpg">
-
-5. Navigate to "Edit" and scroll down to "Access Policy". You will need the "Resource" field which looks like `arn:aws:sns:us-east-1:<your_aws_id>:mturk_sns_topic` so copy it first.
-
-<img src="./assets/sns/sns6.jpg">
-<img src="./assets/sns/sns7.jpg">
-
-6. Replace the access policy with the following:
-
-```json
-{
-  "Version": "2008-10-17",
-  "Id": "__default_policy_ID",
-  "Statement": [
-    {
-      "Sid": "__default_statement_ID",
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "mturk-requester.amazonaws.com"
-      },
-      "Action": "SNS:Publish",
-      "Resource": "arn:aws:sns:us-east-1:<your_aws_id>:test_topic"
-    }
-  ]
-}
+source env/bin/activate
 ```
 
-<br>
-Almost there!
-
-#### AWS **Lambda**
-
-1. Use the search bar to navigate to AWS Lambda and click on "Create function"
-<img src="./assets/lambda/lambda1.jpg">
-
-2. Setup the function name, in this case I have used "mturk_event_forwarder" and set your runtime to Python >= 3.11, and click on "Create function"
-<img src="./assets/lambda/lambda2.jpg">
-3. Upon successful creation you will now see the following message.
-<img src="./assets/lambda/lambda3.jpg">
-4. Navigate to "Code" tab and click on the "lambda function" section of the code editor.
-<img src="./assets/lambda/lambda4.jpg">
-5. Grab the code from  `commons/human_feedback/aws_lambda_function.py` and paste it into the code editor. 
-6. You will now see a "Changed not deployed" bubble. Click on "Deploy" so that your changes are saved!
-<img src="./assets/lambda/lambda5.jpg">
-
-7. Navigate to the "Configuration" tab at the top, and go to "Environment Variables", and click on "Edit".
-<img src="./assets/lambda/lambda6.jpg">
-
-8. You will need to add the following 2 environment variables.
-`TARGET_URL` and `MTURK_ENDPOINT_URL`.
-<img src="./assets/lambda/lambda7.jpg">
-
-- TARGET_URL can be found from your miner's machine, go to the command line and run `curl ifconfig.me` -> this will allow you to get your external IP, combine this with the `api.port` inside of `config.py` to construct the TARGET_URL.
+Create your wallets and register them to our subnet
 ```bash
-TARGET_URL="https://<external_ip>:<api.port>/api/human_feedback/callback
-```
-- MTURK_ENDPOINT_URL refers to either a production or sandbox requester URL of AWS MTurk.
+# create your wallets
+btcli wallet new_coldkey
 
+btcli wallet new_hotkey
+
+# register your wallet to our subnet
+# Devnet
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 1 --subtensor.network ***REMOVED***
+
+# Testnet
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test 
+```
+
+Retrieve the API Key and Subscription Key with Dojo CLI
 ```bash
-# production
-MTURK_ENDPOINT_URL="https://mturk-requester.us-east-1.amazonaws.com"
-# sandbox
-MTURK_ENDPOINT_URL="https://mturk-requester-sandbox.us-east-1.amazonaws.com"
+# Start the dojo cli tool
+# Upon starting the CLI it will ask if you wanna use the default path for bittensor wallets, which is `~/.bittensor/wallets/`.
+# If you want to use a different path, please enter 'n' and then specify the path when prompted.
+dojo
+
+# TIP: During the whole process, you could actually use tab-completion to display the options, so you don't have to remember them all. Please TAB your way guys! :bowing_man:
+# It should be prompting you to enter you coldkey and hotkey
+# After entering the coldkey and hotkey, you should be in the command line interface for dojo, please authenticate by running the following command.
+# You should see a message saying "✅ Wallet coldkey name and hotkey name set successfully."
+authenticate
+
+# Afterwards, please generate an API Key with the following command.
+# You should see a message saying:  "✅ All API keys: ['sk-<KEY>]". Displaying a list of your API Keys.
+api_key generate
+
+# Lastly, please generate a Subscription Key with the following command.
+# You should see a message saying:  "✅ All Subscription keys: ['sk-<KEY>]". Displaying a list of your Subscription Keys.
+subscription_key generate
+
+# :rocket: You should now have all the required keys, and be able to start mining.
+
+# Other commands available to the CLI:
+# You can always run the following command to get your current keys.
+api_key list
+subscription_key list
+
+# WIP :construction_worker:
+# You can also delete your keys with the following command.
+api_key delete
+subscription_key delete
 ```
 
-<font size="6"> **You are highly encouraged to try out requests on the sandbox environment before trying it out on the production environment!**</font> 
+Create .env file
+```bash
+# copy .env.example
+cp .env.example .env
 
-To do this you will need to link your AWS account to the request sandbox at https://requestersandbox.mturk.com, after that try running `python scripts/test_aws_mturk.py --neuron.type miner --aws_mturk_environment sandbox`
+# ENV's that needs to be filled for miners:
+DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***" # Please select one
+DOJO_API_KEY="sk-<KEY>"
+```
 
-9. Go back to SNS, and set SNS to be a trigger for the Lambda function. Click on "Add Trigger" and select "SNS" from the dropdown. Search for the SNS topic name.
-<img src="./assets/lambda/lambda8.jpg">
-<img src="./assets/lambda/lambda9.jpg">
-<img src="./assets/lambda/lambda10.jpg">
-<img src="./assets/lambda/lambda11.jpg">
+Start the miner by running the following commands:
+```bash
+# For Devnet
+pm2 start main_miner.py \
+--name dojo-miner \
+--interpreter env/bin/python3 \
+-- --netuid 1 \
+--wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--axon.port 9602 \
+--neuron.type miner \
+--scoring_method "dojo" \
+--subtensor.network ***REMOVED***
 
+# For Testnet
+pm2 start main_miner.py \
+--name dojo-miner \
+--interpreter env/bin/python3 \
+-- --netuid 98 \
+--wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--axon.port 9602 \
+--neuron.type miner \
+--scoring_method "dojo" \
+--subtensor.network test
+```
 
-10. When publishing MTurk tasks in production, you will definitely hit an error. This is because the monthly spending limit by sending a request to them at https://support.aws.amazon.com/#/contacts/aws-mechanical-turk, asking to raise the monthly spending limit on your account.
+## Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
+Note: URLs are different for devnet, testnet and mainnet.  
+Devnet: ***REMOVED***  
+Testnet: ***REMOVED***  
+Mainnet: https://dojo.tensorplex.ai  
 
+1. Head to ***REMOVED*** | ***REMOVED*** | https://dojo.tensorplex.ai and login and sign with your Metamask wallet.
+- You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
+- Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.png)
+- Click "Next" and "Continue", then finally it will be requesting a signature from your wallet, please sign and it will be connected. ![image](./assets/ui/wallet_sign.png)
+- Once connected, the top navigation bar should display your wallet address. ![image](./assets/ui/wallet_connected.png)
 
-<!-- <img src="./assets/mturk_prod_error.jpg"> -->
+2. Once connected, please stay connected to your wallet and click on "Enter Subscription Key". ![image](./assets/subscription/enter_subscription.png)
+- Give your subscription a name, and enter your subscription key generated earlier before running the miner. *_Refer to step 4 of "Getting Started" if you need to retrieve your key_* ![image](./assets/subscription/enter_details.png)
+- Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
+- Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
 
-<br>
-<blockquote class="callout callout_default" theme="🥳">
-  <h3>🎉 AWS MTURK SETUP DONE 🎉</h3>
-  <p>Your AWS MTurk setup is finally done, you just need to wait 1-3 days for approval to use MTurk as a scoring method to earn higher incentives! Head back to the <a href="#mining">Mining</a> section to start your miner and start earning daily rewards!</p>
-</blockquote>
-
-</details>
-
+Congratulations, you magnificent mining maestro! Grab your virtual pickaxe and let the digital gold rush begin! :rocket::fire:  
 
 ## Validating
 
-1. Visit https://huggingface.co/settings/tokens to generate a new token if you haven't done so already, and place this in the `HF_TOKEN` your `.env` file from earlier.
+### Requirements for running a validator
+- Openrouter API Key
+- Deploy the synthetic QA API on the same server as the validator
 
-To start the validator, you are __highly encouraged__ to use the `run.sh` script as the validator code will receive updates frequently.
+### Setup the Synthetic QA API Server
+Start a redis server
 ```bash
-pm2 start run.sh --name dojo_validator_autoupdate -- --netuid 1 --subtensor.network finney --wallet.name your_coldkey \
---wallet.hotkey your_hotkey --logging.debug --axon.port 9500 --neuron.type validator --hf_dataset_contrib.off
+# You can use the template provided in this project to start a redis server, feel free to modify the commands below and the docker-compose file to suit your needs
+mkdir /opt/redis
+cp docker-compose.yaml /opt/redis
+echo "--requirepass <change_me>" > /opt/redis/redis.conf
+cd /opt/redis && docker compose up -d
+
+# TODO: Start with binary etc
 ```
 
-If you do not wish to use the bash script, you may run the following:
+Clone the Synthetic QA API Server project
 ```bash
-python main_validator.py --netuid 1 --subtensor.network finney --wallet.name your_coldkey --wallet.hotkey your_hotkey \
---logging.debug --axon.port 9500 --neuron.type validator --hf_dataset_contrib.off
+cd /opt
+
+# git clone synthetic qa api server
+git clone https://github.com/tensorplex-labs/synthetic-qa-api.git
+cd synthetic-qa-api
+
+# Set up python virtual environment and pip packages
+python -m venv env
+env/bin/pip install -r requirements.txt --no-cache-dir
 ```
 
-# Types of Requests
-- `RankingRequest`
-  - This represents a request from validators, where miners are expected to use tools at their disposal to provide scores to each completion, which is a response to an original prompt.
-- `RankingResult`
-  - This represents the consensus score across all queried miners, referenced by the completion ID.
-- `MTurkResponse`
-  - This represents a completed `RankingRequest` sent from the miner to Amazon MTurk workers, and the payload is a dictionary of completion ID to score.
+Setup .env file
+```bash
+# copy .env.example
+cp .env.example .env
 
-# Mechanisms
+# edit the .env file with vim, vi or nano
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_USERNAME=default
+REDIS_PASSWORD=<PASSWORD>
+OPENROUTER_API_KEY=sk-or-v1-<KEYS>
+# optional, depending on what provider is being used at the moment
+TOGETHER_API_KEY=
+OPENAI_API_KEY=
+```
 
-## Human Feedback Loop
-There may be delays in terms of responses from Amazon MTurk workers, so validators have to serve axons as well in order to receive forwarded MTurk responses from miners once they are completed. This breaks the traditional way of only validators calling miners.
+Deploy the synthetic QA API Server
+```bash
+# start the api server with pm2
+pm2 start "uvicorn main:app --host 127.0.0.1 --port 5003 --workers 4" --name dojo-synthetic-api
+```
+
+### Start Validating
+
+Head back to dojo-subnet project and set up the .env file
+```bash
+cd /opt/dojo-subnet
+
+# copy .env.example
+cp .env.example .env
+
+# edit the .env file with vim, vi or nano
+DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***" # Please select one
+SYNTHETIC_API_URL="http://127.0.0.1:5003"
+TOKENIZERS_PARALLELISM=true
+OPENROUTER_API_KEY="sk-or-v1-<KEY>"
+WANDB_API_KEY="<wandb_key>"
+
+# Optional or if you've chosen it
+TOGETHER_API_KEY=
+OPENAI_API_KEY=
+HF_TOKEN=
+```
+
+Start the validator
+```bash
+# start the validator
+# Devnet
+pm2 start main_validator.py \
+--name dojo-test-validator \
+--interpreter env/bin/python3 \
+-- --netuid 1 \
+--wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--axon.port 9603 \
+--neuron.type validator \
+--scoring_method "dojo" \
+--subtensor.network ***REMOVED***
+
+# Testnet
+pm2 start main_validator.py \
+--name dojo-test-validator \
+--interpreter env/bin/python3 \
+-- --netuid 98 \
+--wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--axon.port 9603 \
+--neuron.type validator \
+--scoring_method "dojo" \
+--subtensor.network test
+```
+
+To start with autoupdate (__optional__)
+```bash
+# TODO: Include autoupdate steps.
+```
+
+# Subnet Mechanisms
+
+## Responsibiltiies of Miners
+Miners are required to gather Participants to complete tasks. Miners are expected to build and curate their Participant pools to strategically complete Tasks based on domain expertise in order to succeed in the Dojo subnet. 
+
+## Responsibilities of Validators
+Validators are responsible to play the role of Instructor, Augmenter, Output Generator and Obfuscator in the Task generation phase, as well as to calculate the scoring, set reward and miner trust. The terms will be described in the next section.
+
+## Task Lifecycle, User Journey and Data Flow
+![image](./assets/doc/task_lifecycle.png)
+<center> Figure 1: High-level Task Lifecycle Diagram</center>
+
+Important terms:
+- Task: A task consists of an instruction that is accompanied by multiple responses to be ranked by human contributors. The task is considered complete only when sufficient and high quality preference data points are collected for the task. 
+- Worker: The entity used to describe human contributors regardless of the associated miner. Miners are expected to curate their pool of workers in terms of quality and domain expertise to specialize, and workers are free to be associated with different miners’ organisations (hotkeys). 
+- Instructor: The object class that generates the instruction of the task.
+
+Task generation begins with the Instructor creating instructions for Tasks based on randomly sampled combinations of Task Seeds. The list of Task Seeds is initially defined by Tensorplex, and will incorporate more diverse task seeds based on organic requests / future collaborations with interested parties. Inspired by the [Self Instruct framework](https://arxiv.org/pdf/2212.10560),  a few-shot prompting technique will be employed on a sample of existing task seeds for SOTA LLMs to generate Tasks with new instructions. A filter will also be applied to check against the Global Task Database which stores completed and rejected Tasks by running a series of semantic filters and comparators.
+
+![image](./assets/doc/synthetic_ground_truth_generation_process.png)
+<center> Figure 2: Synthetic Ground Truth Generation Process </center>
+<br>
+
+For the Task instructions that are generated successfully, the Augmenter will perform several iterations of augmentation on the initial Task instruction to produce n-set of different Task instructions that deviates from the original Task instruction progressively. The goal of such augmentation is for LLMs to follow the augmented prompts and produce objectively subpar responses in order to build the synthetic ground truth for human preference ranking scoring. This is critical in assessing and assigning Miner trust to the worker pool to build a reliable Dojo participant community.
+
+The original Task instructions, along with the augmented Task instructions will be sent to the Output Generator, where LLM is used to generate the responses to the corresponding instructions. Depending on the domain, various prompting techniques such as CoT and execution feedback may be applied to ensure reasonable and compilable responses are produced for workers’ ranking. 
+
+Next, the Obfuscator will apply data obfuscation of various layers/forms on the responses which prevents the participants from performing lookup attacks. The obfuscation process will not affect the functionality or quality of the response.
+
+Finally, after applying data obfuscation, the task which contains the original instruction and the responses generated from the original and augmented instructions will be compiled and managed by Task Manager, which the Miners obtain the tasks from.
+
+![image](./assets/doc/subnet_entities.png)
+<center> Figure 3. Task Dissemination from Validators to Participants </center>
+<br>
+Once the task is assigned to the Miner, the Miners can decide how to pass this task to the Participant, who may be a separate entity. The Participant’s outputs are associated with the respective Miner's hotkey for scoring and reward calculations. These are the various methods for task assignment and completion:
+
+- Dojo Interface: Miners who prefer to mine conveniently can create a personalized API key through the CLI, which will then be used by the Participants to contribute through the Dojo Interface.
+
+- Local Dojo Interface: Sophisticated miners are recommended to run a localised Dojo interface to eliminate the dependency on the Dojo API. (Coming soon)
+
+- External Platforms: Miners can also choose to distribute these tasks to an external service provider such as scale.ai, AWS mTurk, Prolific, Appen or Web3 data labeling platforms. However, these miners will need to be responsible for quality control and ensuring tasks are completed within the stipulated deadlines. (Coming soon)
+
+![image](./assets/doc/dojo_interface.png)
+<center> Figure 4: Dojo interface for measuring prompt similarity of different UI outputs </center>
+<br>
+
+Finally, the completed task will be logged in the Global Task Database, marking the end of the lifecycle of a Task. 
+
+# Scoring Mechanism
+
+## Miner Scoring 
+The scoring formula for Miners is the summation of the score of the tasks computed in the past few epochs. The individual task score is a weighted function of the following metrics:
+- Weighted Cohen’s Kappa: Calculates the agreement between Miners while controlling for the probability of chance agreement, providing a more robust measure of reliability compared to simple percent agreement. A weighted variant of Cohen’s kappa will be used as we are concerned with the relative ranking of the responses generated by LLMs.
+- Spearman’s Correlation: Measures the strength and direction of a monotonic relationship between two continuous or ordinal variables, robust to non-normal distributions and outliers, helps to assess the agreement among Miners and as well as against ground truth. 
+- Distance against synthetic ground truth: To address the loss of fidelity of Spearman’s correlation.
+
+While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth. 
+
+![image](./assets/doc/scoring_mechanism.png)
+<center> Figure 5: Augmented Prompt Deviation as Synthetic Ground Truth </center>
+<br>
+
+While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth.
+
+![image](./assets/doc/inconsistent_results.png)
+<center> Figure 6: Inconsistent Participants Results </center>
+<br>
+
+The Cohen’s Kappa metric can also be used to monitor data quality, i.e. do not assign miner trust if Weighted Cohen’s Kappa is not above a certain threshold (no consensus between Miners is achieved).
+
+![image](./assets/doc/attack.png)
+<center> Figure 7: Various failure modes and the corresponding reaction of the scoring mehchanism </center>
+<br>
+
+The scoring mechanism is designed to handle various attack vectors and failure modes, and will be continually improved on to ensure a fair, productive and collaborative environment for all participants.
+
+![image](./assets/doc/llm_as_synthetic_truth.png)
+<center> Figure 8: LLM Leaderboard as Synthetic Ground Truth </center>
+<br>
+
+The Synthetic Ground Truth could be derived from other sources such as a publicly available LLM leaderboard, where the rank of the leaderboard in specific domain can be used as a proxy for the accuracy score.
+
+![image](./assets/doc/partial_ground_truth.png)
+<center> Figure 9: Task with Partial Ground Truths </center>
+<br>
+
+Participants can also determine accuracy scores of responses that do not have ground truth. For example, a*, b*, c* can be processed in different manners with the intention to improve the outputs like using various experimental prompt engineering frameworks, or using new LLMs that are not yet benchmarked.
+
 
 ## Validator Scoring
 Due to the need to provide ample time for human feedback, the deadline for each `RankingRequest` is currently set to 4 hours. Only after the deadline has been passed, validators will score all participants responses. This deadline is generous and provides plenty of time for the feedback loop.
 
-## Consensus & Classification Accuracy
-As a miner, you will be evaluated on the classification accuracy on a set of human preference datasets, and this will act as a multiplier towards your consensus score, thus to gain more emissions as a miner you will need to perform better in terms of classification accuracy on some human preference datasets. This is done to incentivise miners to create better reward models because scoring initially uses Spearman correlation. Thus if someone has a better reward model but steers away from consensus, they may be penalised. We want to incentivise people to build better reward models. These classification scores get reset every 24 hours.
-
-
-# Building a reward model
-Coming soon...
 
 # Roadmap
-- 🌏 Release of API service
-- 🖼️ Image-based Reward Models
-- 🤖 Integrations with other feedback interfaces using basic.ai, scale, argilla
-- 🤗 Release of dataset from consensus
+- V0 (Tensorplex Devnet)
+    - Subnet Validator and Miner Code
+    - Dojo Worker API
+    - Dojo User Interface
+
+- V1 (Bittensor Testnet)
+    - Multiple Modality Support
+    - Scoring Mechanism
+
+- V2 (Bittensor Mainnet)
+    - Cross-Subnet Integration
+
+- V3 (Bittensor Mainnet + Dojo Mainnet)
+    - On-chain Execution of Task Completions
+    - Proof-of-stake Consensus Mechanism
+
+- V4 (Bittensor Mainnet + Dojo Mainnet)
+    - External Reputation Staking Mechanism
 
 # License
 This repository is licensed under the MIT License.
