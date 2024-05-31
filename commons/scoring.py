@@ -16,7 +16,6 @@ logger.remove()  # Remove the default logger
 logger.add(sys.stderr, level="DEBUG")  # Add a new logger with the desired level
 from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
-from sklearn.metrics import cohen_kappa_score
 from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_gt_ranks, get_leaderboard_scores
@@ -54,7 +53,8 @@ class ConsensusScore(BaseModel):
 
     weighted_score: torch.Tensor
     spearman_by_miner: torch.Tensor
-    cohen_kappa_by_miner: torch.Tensor
+    # cohen_kappa_by_miner: torch.Tensor
+    icc_by_miner: torch.Tensor
     dist_penalty_by_miner: torch.Tensor
 
 
@@ -75,7 +75,6 @@ class Score(BaseModel):
 class Scoring:
     @staticmethod
     def _spearman_scoring(responses: List[FeedbackRequest]):
-        # TODO refactor for future scoring use
         # map results...
         request_id = responses[0].request_id
         nested_dict: Dict[str, Dict[str, float]] = defaultdict(
@@ -282,27 +281,29 @@ class Scoring:
         spearman_corr = spearman.statistic[0, 1:]
         logger.info(f"{spearman_corr=}")
 
-        # TODO fix this for continuous data
         # this doesn't work for continuous data, use ICC instead
-        cohen_kappa = [
-            cohen_kappa_score(miner_output, avg) for miner_output in miner_outputs
-        ]
+        # cohen_kappa = [
+        #     cohen_kappa_score(miner_output, avg) for miner_output in miner_outputs
+        # ]
 
         dist_penalty = -1 * torch.sum(
             torch.square(torch.tensor(avg - miner_outputs)), axis=1
         ).to(dtype=torch.float64)
         snorm = F.normalize(torch.tensor(spearman_corr), dim=0, p=2)
-        cknorm = F.normalize(torch.tensor(cohen_kappa), dim=0, p=2)
+        # cknorm = F.normalize(torch.tensor(cohen_kappa), dim=0, p=2)
+        icc_norm = F.normalize(torch.tensor(icc_arr), dim=0, p=2)
         dnorm = F.normalize(dist_penalty, dim=0, p=2)
-        bt.logging.debug(snorm)
-        bt.logging.debug(cknorm)
-        bt.logging.trace(dnorm)
-        combined_sm = F.softmax(snorm + cknorm + 1.5 * dnorm, dim=0)
-        bt.logging.trace(f"{combined_sm}")
+        logger.debug(snorm)
+        # bt.logging.debug(cknorm)
+        logger.debug(icc_norm)
+        logger.debug(dnorm)
+        combined = F.softmax(snorm + icc_norm + 1.5 * dnorm, dim=0)
+        logger.debug(combined)
         return ConsensusScore(
-            weighted_score=combined_sm,
+            weighted_score=combined,
             spearman_by_miner=snorm,
-            cohen_kappa_by_miner=cknorm,
+            # cohen_kappa_by_miner=cknorm,
+            icc_by_miner=icc_norm,
             dist_penalty_by_miner=dnorm,
         )
 
