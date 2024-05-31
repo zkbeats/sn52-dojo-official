@@ -377,9 +377,31 @@ pm2 start main_validator.py \
 --subtensor.network test
 ```
 
-To start with autoupdate (__optional__)
+To start with autoupdate for validators (__optional__)
 ```bash
-# TODO: Include autoupdate steps.
+# Devnet
+pm2 start run.sh \
+--interpreter bash \
+--name dojo-autoupdater \
+-- --wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--subtensor.network ***REMOVED*** \
+--neuron.type validator \
+--scoring_method "dojo" \
+--axon.port 9603
+
+# Testnet
+pm2 start run.sh \
+--interpreter bash \
+--name dojo-autoupdater \
+-- --wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--subtensor.network test \
+--neuron.type validator \
+--scoring_method "dojo" \
+--axon.port 9603
 ```
 
 # Subnet Mechanisms
