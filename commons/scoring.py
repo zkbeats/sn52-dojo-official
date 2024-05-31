@@ -20,15 +20,12 @@ from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_gt_ranks, get_leaderboard_scores
 from template.protocol import (
-    CodeAnswer,
     CriteriaType,
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
-    Response,
     ScoringMethod,
     ScoringResult,
-    TaskType,
 )
 
 
@@ -384,121 +381,3 @@ def _calculate_average_rank_by_model(
         sorted(model_id_to_average_rank.items(), key=lambda item: item[1])
     )
     return sorted_dict
-
-
-def prepare_responses():
-    miner_a = FeedbackRequest(
-        axon=bt.TerminalInfo(hotkey="hotkeyA"),
-        prompt="Write a hello world program in python",
-        task_type=TaskType.CODE_GENERATION,
-        criteria_types=[
-            MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
-        ],
-        responses=[
-            Response(
-                model="anthropic/claude-3-haiku-20240307",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=75,
-            ),
-            Response(
-                model="anthropic/claude-3-opus-20240229",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=100,
-            ),
-            Response(
-                model="anthropic/claude-3-sonnet-20240229",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=50,
-            ),
-            Response(
-                model="meta-llama/llama-3-8b-instruct",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=69,
-            ),
-        ],
-    )
-
-    miner_b = FeedbackRequest(
-        axon=bt.TerminalInfo(hotkey="hotkeyB"),
-        prompt="Write a hello world program in python",
-        task_type=TaskType.CODE_GENERATION,
-        criteria_types=[
-            MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
-        ],
-        responses=[
-            Response(
-                model="anthropic/claude-3-haiku-20240307",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=51,
-            ),
-            Response(
-                model="anthropic/claude-3-opus-20240229",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=49,
-            ),
-            Response(
-                model="anthropic/claude-3-sonnet-20240229",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=52,
-            ),
-            Response(
-                model="meta-llama/llama-3-8b-instruct",
-                completion=CodeAnswer(
-                    code="print('hello, world!')",
-                    language="python",
-                    files=[],
-                    additional_notes=None,
-                    installation_commands="",
-                ),
-                score=53,
-            ),
-        ],
-    )
-    return [miner_a, miner_b]
-
-
-if __name__ == "__main__":
-    responses = prepare_responses()
-    Scoring.consensus_score(responses[0].criteria_types[0], responses)
