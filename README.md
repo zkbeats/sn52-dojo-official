@@ -270,7 +270,7 @@ Mainnet: https://dojo.tensorplex.ai
 - Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
 - Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
 
-Congratulations, you magnificent mining maestro:wizard:! Grab your virtual pickaxe and let the digital gold rush begin! :rocket::fire:  
+Congratulations, you magnificent mining maestro🧙! Grab your virtual pickaxe and let the digital gold rush begin! 🚀🔥 
 
 ## Validating
 
