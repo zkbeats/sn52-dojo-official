@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import wandb
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
+from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from neurons.validator import DojoTaskTracker
 
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     DojoTaskTracker()._should_exit = True
     validator.save_state()
     wandb.finish()
+    await DojoAPI._http_client.aclose()
 
 
 app = FastAPI(lifespan=lifespan)

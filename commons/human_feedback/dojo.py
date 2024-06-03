@@ -1,17 +1,18 @@
 import datetime
 import json
 from typing import Dict, List, Optional
-from requests_toolbelt import MultipartEncoder
-import httpx
-from commons import utils
 
+import httpx
+from dotenv import load_dotenv
+from loguru import logger
+from requests_toolbelt import MultipartEncoder
+
+from commons import utils
 from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
 )
-from dotenv import load_dotenv
-from loguru import logger
 
 load_dotenv()
 
@@ -27,19 +28,17 @@ class DojoAPI:
     async def _get_task_by_id(cls, task_id: str):
         """Gets task by task id and checks completion status"""
         url = f"{DOJO_API_BASE_URL}/api/v1/tasks/{task_id}"
-        async with cls._http_client as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.json()
+        response = await cls._http_client.get(url)
+        response.raise_for_status()
+        return response.json()
 
     @classmethod
     async def _get_task_results_by_task_id(cls, task_id: str):
         """Gets task results from task id"""
-        url = f"{DOJO_API_BASE_URL}/api/v1/tasks/get-results/{task_id}"
-        async with cls._http_client as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.json()
+        url = f"{DOJO_API_BASE_URL}/api/v1/tasks/task-result/{task_id}"
+        response = await cls._http_client.get(url)
+        response.raise_for_status()
+        return response.json()
 
     @classmethod
     async def get_task_results_by_task_id(cls, task_id: str) -> Optional[List[Dict]]:
@@ -70,70 +69,70 @@ class DojoAPI:
         ranking_request: FeedbackRequest,
     ):
         path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
-        async with httpx.AsyncClient() as client:
-            taskData = {
-                "prompt": ranking_request.prompt,
-                "responses": [
-                    {"model": c.model, "completion": c.completion.dict()}
-                    for c in ranking_request.responses
-                ],
-                "task": str(ranking_request.task_type).upper(),
-                "criteria": [],
-            }
-            for criteria_type in ranking_request.criteria_types:
-                if isinstance(criteria_type, RankingCriteria):
-                    taskData["criteria"].append(
-                        {
-                            **criteria_type.dict(),
-                            "options": [
-                                # TODO remove model from name
-                                f"Model {option}"
-                                for option in criteria_type.dict().get("options", [])
-                            ],
-                        }
-                    )
-                elif isinstance(criteria_type, MultiScoreCriteria):
-                    logger.warning(f"Criteria dict: {criteria_type.dict()}")
-                    taskData["criteria"].append(
-                        {
-                            **criteria_type.dict(),
-                            "options": [
-                                # TODO remove model from name
-                                f"Model {option}"
-                                for option in criteria_type.dict().get("options", [])
-                            ],
-                        }
-                    )
-                else:
-                    logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
-
-            body = {
-                "title": "LLM Code Generation Task",
-                "body": ranking_request.prompt,
-                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
-                .replace(microsecond=0, tzinfo=datetime.timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
-                "taskData": json.dumps([taskData]),
-                "maxResults": "10",
-            }
-
-            mp = MultipartEncoder(fields=body)
-            response = await client.post(
-                path,
-                data=mp.to_string(),
-                headers={
-                    "x-api-key": DOJO_API_KEY,
-                    "content-type": mp.content_type,
-                },
-            )
-
-            if response.status_code == 200:
-                task_ids = response.json()["body"]
-                logger.success(f"Successfully created task with\ntask ids:{task_ids}")
-            else:
-                logger.error(
-                    f"Error occurred when trying to create task\nErr:{response.json()['error']}"
+        taskData = {
+            "prompt": ranking_request.prompt,
+            "responses": [
+                {"model": c.model, "completion": c.completion.dict()}
+                for c in ranking_request.responses
+            ],
+            "task": str(ranking_request.task_type).upper(),
+            "criteria": [],
+        }
+        for criteria_type in ranking_request.criteria_types:
+            if isinstance(criteria_type, RankingCriteria):
+                taskData["criteria"].append(
+                    {
+                        **criteria_type.dict(),
+                        "options": [
+                            # TODO remove model from name
+                            f"Model {option}"
+                            for option in criteria_type.dict().get("options", [])
+                        ],
+                    }
                 )
-            response.raise_for_status()
-            return task_ids
+            elif isinstance(criteria_type, MultiScoreCriteria):
+                logger.warning(f"Criteria dict: {criteria_type.dict()}")
+                taskData["criteria"].append(
+                    {
+                        **criteria_type.dict(),
+                        "options": [
+                            # TODO remove model from name
+                            f"Model {option}"
+                            for option in criteria_type.dict().get("options", [])
+                        ],
+                    }
+                )
+            else:
+                logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
+
+        body = {
+            "title": "LLM Code Generation Task",
+            "body": ranking_request.prompt,
+            "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
+            .replace(microsecond=0, tzinfo=datetime.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "taskData": json.dumps([taskData]),
+            # TODO set to 1 for testing purposes
+            "maxResults": "1",
+        }
+
+        mp = MultipartEncoder(fields=body)
+        response = await cls._http_client.post(
+            path,
+            data=mp.to_string(),
+            headers={
+                "x-api-key": DOJO_API_KEY,
+                "content-type": mp.content_type,
+            },
+        )
+
+        if response.status_code == 200:
+            task_ids = response.json()["body"]
+            logger.success(f"Successfully created task with\ntask ids:{task_ids}")
+        else:
+            logger.error(
+                f"Error occurred when trying to create task\nErr:{response.json()['error']}"
+            )
+        response.raise_for_status()
+        return task_ids
