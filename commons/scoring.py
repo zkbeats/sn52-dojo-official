@@ -382,13 +382,13 @@ class Scoring:
     def calculate_score(
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
-        responses: List[FeedbackRequest],
+        miner_responses: List[FeedbackRequest],
     ) -> Dict[CriteriaType, Score]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
         criteria_to_miner_scores = defaultdict(Score)
         for criteria in criteria_types:
-            gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
-            consensus_score = Scoring.consensus_score(criteria, responses)
+            gt_score = Scoring.cmp_ground_truth(criteria, request, miner_responses)
+            consensus_score = Scoring.consensus_score(criteria, miner_responses)
             criteria_to_miner_scores[criteria] = Score(
                 ground_truth=gt_score, consensus=consensus_score
             )
