@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import json
 import threading
 import time
 from collections import defaultdict
@@ -60,27 +61,6 @@ class DojoTaskTracker:
     ) -> List[FeedbackRequest]:
         return list(filter(lambda r: r.scoring_method == ScoringMethod.DOJO, responses))
 
-    @staticmethod
-    def _parse_dojo_task_results(results: List[Dict]):
-        """Given a list of task results from Dojo API, calculate the average across multiple task results
-        to determine a final ranking"""
-        parsed_results = defaultdict(int)
-
-        for result in results:
-            for rank, model_hash in result.items():
-                rank_int = int(rank)
-                parsed_results[model_hash] += rank_int
-
-        sorted_model_hash_count = dict(
-            sorted(parsed_results.items(), key=lambda item: item[1])
-        )
-        # TODO handle edge case where total ranks for all models are the same
-        # TODO handle edge case where same ranks sum for 2 different model hashes
-        return {
-            model_id: rank
-            for rank, model_id in enumerate(sorted_model_hash_count.keys(), start=1)
-        }
-
     @classmethod
     async def update_task_map(cls, dojo_responses: List[FeedbackRequest]):
         if not dojo_responses:
@@ -111,55 +91,101 @@ class DojoTaskTracker:
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
         while not cls._should_exit:
-            bt.logging.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
-            async with cls._lock:
-                if not cls._rid_to_mhotkey_to_task_id:
-                    bt.logging.warning("No Dojo tasks to monitor")
-                    await asyncio.sleep(SLEEP_SECONDS)
-                    continue
-
-                for (
-                    request_id,
-                    miner_to_task_id,
-                ) in cls._rid_to_mhotkey_to_task_id.items():
-                    for miner_hotkey, task_id in miner_to_task_id.items():
-                        if not task_id:
-                            bt.logging.warning(
-                                f"No task ID found for miner hotkey: {miner_hotkey}"
-                            )
-                            continue
-
-                        task_results = await DojoAPI.get_task_results_by_task_id(
-                            task_id
-                        )
-                        if not task_results:
-                            bt.logging.warning(
-                                f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
-                            )
-                            continue
-
-                        data = await DataManager.get_by_request_id(request_id)
-                        if not data.request:
-                            bt.logging.error(
-                                f"No request on disk found for request id: {request_id}"
-                            )
-                            continue
-
-                        model_id_to_rank = DojoTaskTracker._parse_dojo_task_results(
-                            task_results
-                        )
-                        for completion in data.request.responses:
-                            if completion.model in model_id_to_rank:
-                                completion.rank_id = model_id_to_rank[completion.model]
-
-                        parsed_request = FeedbackRequest(
-                            request_id=request_id,
-                            responses=data.request.responses,
-                        )
+            try:
+                logger.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
+                async with cls._lock:
+                    if not cls._rid_to_mhotkey_to_task_id:
+                        bt.logging.warning("No Dojo tasks to monitor")
+                        await asyncio.sleep(SLEEP_SECONDS)
+                        continue
+                    else:
                         logger.info(
-                            f"Appending Dojo task results for request id: {request_id}"
+                            f"Monitoring Dojo tasks: {json.dumps(json.loads(cls._rid_to_mhotkey_to_task_id))}"
                         )
-                        await DataManager.append_responses(request_id, [parsed_request])
+
+                    for (
+                        request_id,
+                        miner_to_task_id,
+                    ) in cls._rid_to_mhotkey_to_task_id.items():
+                        for miner_hotkey, task_id in miner_to_task_id.items():
+                            logger.info(
+                                f"Miner hotkey: {miner_hotkey}, task_id: {task_id}, request id: {request_id}"
+                            )
+                            if not task_id:
+                                bt.logging.warning(
+                                    f"No task ID found for miner hotkey: {miner_hotkey}"
+                                )
+                                continue
+
+                            task_results = await DojoAPI.get_task_results_by_task_id(
+                                task_id
+                            )
+                            if not task_results:
+                                bt.logging.warning(
+                                    f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
+                                )
+                                continue
+
+                            data = await DataManager.get_by_request_id(request_id)
+                            if not data.request:
+                                bt.logging.error(
+                                    f"No request on disk found for request id: {request_id}"
+                                )
+                                continue
+
+                            # calculate average rank/scores across a single miner's workers
+                            model_id_to_avg_rank = defaultdict(float)
+                            model_id_to_avg_score = defaultdict(float)
+                            num_ranks, num_scores = 0, 0
+                            for result in task_results["result_data"]:
+                                type = result["type"]
+                                value = result["value"]
+                                if type == RankingCriteria.type:
+                                    for rank, model_id in value.items():
+                                        model_id_to_avg_rank[model_id] += rank
+                                        num_ranks += 1
+                                elif type == MultiScoreCriteria.type:
+                                    for model_id, score in value.items():
+                                        model_id_to_avg_score[model_id] += score
+                                        num_scores += 1
+
+                            # dvide all sums by the number of ranks and scores
+                            for model_id in model_id_to_avg_rank:
+                                model_id_to_avg_rank[model_id] /= num_ranks
+                            for model_id in model_id_to_avg_score:
+                                model_id_to_avg_score[model_id] /= num_scores
+
+                            for completion in data.request.responses:
+                                model_id = completion.model
+                                if RankingCriteria in data.request.criteria_types:
+                                    completion.rank_id = model_id_to_avg_rank[model_id]
+
+                                if MultiScoreCriteria in data.request.criteria_types:
+                                    completion.score = model_id_to_avg_score[model_id]
+
+                            parsed_request = FeedbackRequest(
+                                request_id=request_id,
+                                responses=data.request.responses,
+                            )
+
+                            if model_id_to_avg_rank:
+                                logger.info(
+                                    f"Parsed request with ranks data: {model_id_to_avg_rank}"
+                                )
+                            if model_id_to_avg_score:
+                                logger.info(
+                                    f"Parsed request with scores data: {model_id_to_avg_score}"
+                                )
+
+                            logger.info(
+                                f"Appending Dojo task results for request id: {request_id}"
+                            )
+                            await DataManager.append_responses(
+                                request_id, [parsed_request]
+                            )
+            except Exception as e:
+                logger.error(f"Error during Dojo task monitoring {str(e)}")
+                pass
             await asyncio.sleep(SLEEP_SECONDS)
 
 
@@ -382,7 +408,6 @@ class Validator(BaseNeuron):
 
                 GT_WEIGHT = 0.4
                 CONSENSUS_WEIGHT = 0.6
-                # TODO for now only single criteria
                 # log_data is score by each miner
                 score_data = {}
                 assert len(criteria_to_miner_score.keys()) == 1
@@ -506,9 +531,6 @@ class Validator(BaseNeuron):
                         options=[completion.model for completion in data.responses],
                         min=1.0,
                         max=100.0,
-                    ),
-                    RankingCriteria(
-                        options=[completion.model for completion in data.responses]
                     ),
                 ],
                 prompt=data.prompt,
