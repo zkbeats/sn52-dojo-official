@@ -45,6 +45,7 @@ from template.utils.uids import (
 
 class DojoTaskTracker:
     _instance = None
+    # request id -> miner hotkey -> task id
     _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
         lambda: defaultdict(str)
     )
@@ -96,18 +97,17 @@ class DojoTaskTracker:
                 logger.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
                 async with cls._lock:
                     if not cls._rid_to_mhotkey_to_task_id:
-                        bt.logging.warning("No Dojo tasks to monitor")
                         await asyncio.sleep(SLEEP_SECONDS)
                         continue
-                    else:
-                        logger.info(
-                            f"Monitoring Dojo tasks: {cls._rid_to_mhotkey_to_task_id}"
-                        )
 
-                    for (
-                        request_id,
-                        miner_to_task_id,
-                    ) in cls._rid_to_mhotkey_to_task_id.items():
+                    logger.info(
+                        f"Monitoring Dojo tasks: {cls._rid_to_mhotkey_to_task_id}"
+                    )
+
+                    for request_id in list(cls._rid_to_mhotkey_to_task_id.keys()):
+                        miner_to_task_id = cls._rid_to_mhotkey_to_task_id[request_id]
+                        processed_hotkeys = set()
+
                         for miner_hotkey, task_id in miner_to_task_id.items():
                             logger.info(
                                 f"Miner hotkey: {miner_hotkey}, task_id: {task_id}, request id: {request_id}"
@@ -137,7 +137,8 @@ class DojoTaskTracker:
                             # calculate average rank/scores across a single miner's workers
                             model_id_to_avg_rank = defaultdict(float)
                             model_id_to_avg_score = defaultdict(float)
-                            num_ranks, num_scores = 0, 0
+                            # keep track so we average across the miner's worker pool
+                            num_ranks_by_workers, num_scores_by_workers = 0, 0
                             for result in task_results:
                                 for result_data in result["result_data"]:
                                     type = result_data["type"]
@@ -145,17 +146,17 @@ class DojoTaskTracker:
                                     if type == CriteriaTypeEnum.RANKING_CRITERIA:
                                         for rank, model_id in value.items():
                                             model_id_to_avg_rank[model_id] += rank
-                                            num_ranks += 1
+                                        num_ranks_by_workers += 1
                                     elif type == CriteriaTypeEnum.MULTI_SCORE:
                                         for model_id, score in value.items():
                                             model_id_to_avg_score[model_id] += score
-                                            num_scores += 1
+                                        num_scores_by_workers += 1
 
                             # dvide all sums by the number of ranks and scores
                             for model_id in model_id_to_avg_rank:
-                                model_id_to_avg_rank[model_id] /= num_ranks
+                                model_id_to_avg_rank[model_id] /= num_ranks_by_workers
                             for model_id in model_id_to_avg_score:
-                                model_id_to_avg_score[model_id] /= num_scores
+                                model_id_to_avg_score[model_id] /= num_scores_by_workers
 
                             # mimic miners responding to the dendrite call
                             miner_response = copy.deepcopy(data.request)
@@ -164,11 +165,16 @@ class DojoTaskTracker:
                             )
                             for completion in miner_response.responses:
                                 model_id = completion.model
-                                if RankingCriteria in miner_response.criteria_types:
-                                    completion.rank_id = model_id_to_avg_rank[model_id]
 
-                                if MultiScoreCriteria in miner_response.criteria_types:
-                                    completion.score = model_id_to_avg_score[model_id]
+                                for criteria in miner_response.criteria_types:
+                                    if isinstance(criteria, RankingCriteria):
+                                        completion.rank_id = model_id_to_avg_rank[
+                                            model_id
+                                        ]
+                                    elif isinstance(criteria, MultiScoreCriteria):
+                                        completion.score = model_id_to_avg_score[
+                                            model_id
+                                        ]
 
                             if model_id_to_avg_rank:
                                 logger.info(
@@ -179,12 +185,25 @@ class DojoTaskTracker:
                                     f"Parsed request with scores data: {model_id_to_avg_score}"
                                 )
 
-                            logger.info(
-                                f"Appending Dojo task results for request id: {request_id}"
-                            )
-                            await DataManager.append_responses(
+                            status = await DataManager.append_responses(
                                 request_id, [miner_response]
                             )
+                            logger.info(
+                                f"Appending Dojo task results for request id: {request_id}, was successful? {status}"
+                            )
+                            if status:
+                                processed_hotkeys.add(miner_hotkey)
+
+                        # determine if we should completely remove the request from the tracker
+                        if processed_hotkeys == set(miner_to_task_id.keys()):
+                            logger.info(
+                                f"All hotkeys processed for request id {request_id}, removing from tracker"
+                            )
+                            del cls._rid_to_mhotkey_to_task_id[request_id]
+                        else:
+                            for hotkey in processed_hotkeys:
+                                del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
+
             except Exception as e:
                 traceback.print_exc()
                 logger.error(f"Error during Dojo task monitoring {str(e)}")
