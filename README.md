@@ -114,33 +114,33 @@ To get started as a miner or validator, these are the common steps both a miner 
 
 Install PM2 (__If not already installed__)
 ```bash
-apt-get update
-apt-get install -y ca-certificates curl gnupg
-mkdir -p /etc/apt/keyrings
-curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+sudo mkdir -p /etc/apt/keyrings
+sudo curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
 NODE_MAJOR=20
 echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-apt-get update
-apt-get install nodejs -y
+sudo apt-get update
+sudo apt-get install nodejs -y
 
-npm install -g pm2
-pm2 install pm2-logrotate
+sudo npm install -g pm2
+sudo pm2 install pm2-logrotate
 ```
 
 Install Docker CE (__If not already installed__)
 ```bash
-apt-get install \
+sudo apt-get install \
     ca-certificates \
     curl \
     gnupg \
     lsb-release
-mkdir -m 0755 -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo mkdir -m 0755 -p /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
 Clone the project, set up and configure python virtual environment
@@ -270,7 +270,7 @@ Mainnet: https://dojo.tensorplex.ai
 - Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
 - Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
 
-Congratulations, you magnificent mining maestro! Grab your virtual pickaxe and let the digital gold rush begin! :rocket::fire:  
+Congratulations, you magnificent mining maestro:wizard:! Grab your virtual pickaxe and let the digital gold rush begin! :rocket::fire:  
 
 ## Validating
 
