@@ -16,11 +16,16 @@ class TaskType(StrEnum):
     CODE_GENERATION = "code_generation"
 
 
+class CriteriaTypeEnum(StrEnum):
+    RANKING_CRITERIA = "ranking"
+    MULTI_SCORE = "multi-score"
+
+
 class RankingCriteria(BaseModel):
     class Config:
         allow_mutation = False
 
-    type: str = "ranking"
+    type: str = CriteriaTypeEnum.RANKING_CRITERIA.value
     options: List[str] = Field(
         description="List of options human labeller will see", default=[]
     )
@@ -30,7 +35,7 @@ class MultiScoreCriteria(BaseModel):
     class Config:
         allow_mutation = False
 
-    type: str = "multi-score"
+    type: str = CriteriaTypeEnum.MULTI_SCORE.value
     options: List[str] = Field(
         default=[], description="List of options human labeller will see"
     )

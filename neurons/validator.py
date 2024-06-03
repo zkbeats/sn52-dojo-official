@@ -1,8 +1,8 @@
 import asyncio
 import copy
-import json
 import threading
 import time
+import traceback
 from collections import defaultdict
 from traceback import print_exception
 from typing import Dict, List, Tuple
@@ -24,6 +24,7 @@ from commons.utils import get_epoch_time
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     AWSCredentials,
+    CriteriaTypeEnum,
     DendriteQueryResponse,
     FeedbackRequest,
     MTurkResponse,
@@ -100,7 +101,7 @@ class DojoTaskTracker:
                         continue
                     else:
                         logger.info(
-                            f"Monitoring Dojo tasks: {json.dumps(json.loads(cls._rid_to_mhotkey_to_task_id))}"
+                            f"Monitoring Dojo tasks: {cls._rid_to_mhotkey_to_task_id}"
                         )
 
                     for (
@@ -137,17 +138,18 @@ class DojoTaskTracker:
                             model_id_to_avg_rank = defaultdict(float)
                             model_id_to_avg_score = defaultdict(float)
                             num_ranks, num_scores = 0, 0
-                            for result in task_results["result_data"]:
-                                type = result["type"]
-                                value = result["value"]
-                                if type == RankingCriteria.type:
-                                    for rank, model_id in value.items():
-                                        model_id_to_avg_rank[model_id] += rank
-                                        num_ranks += 1
-                                elif type == MultiScoreCriteria.type:
-                                    for model_id, score in value.items():
-                                        model_id_to_avg_score[model_id] += score
-                                        num_scores += 1
+                            for result in task_results:
+                                for result_data in result["result_data"]:
+                                    type = result_data["type"]
+                                    value = result_data["value"]
+                                    if type == CriteriaTypeEnum.RANKING_CRITERIA:
+                                        for rank, model_id in value.items():
+                                            model_id_to_avg_rank[model_id] += rank
+                                            num_ranks += 1
+                                    elif type == CriteriaTypeEnum.MULTI_SCORE:
+                                        for model_id, score in value.items():
+                                            model_id_to_avg_score[model_id] += score
+                                            num_scores += 1
 
                             # dvide all sums by the number of ranks and scores
                             for model_id in model_id_to_avg_rank:
@@ -155,18 +157,18 @@ class DojoTaskTracker:
                             for model_id in model_id_to_avg_score:
                                 model_id_to_avg_score[model_id] /= num_scores
 
-                            for completion in data.request.responses:
+                            # mimic miners responding to the dendrite call
+                            miner_response = copy.deepcopy(data.request)
+                            miner_response.axon = bt.TerminalInfo(
+                                hotkey=miner_hotkey,
+                            )
+                            for completion in miner_response.responses:
                                 model_id = completion.model
-                                if RankingCriteria in data.request.criteria_types:
+                                if RankingCriteria in miner_response.criteria_types:
                                     completion.rank_id = model_id_to_avg_rank[model_id]
 
-                                if MultiScoreCriteria in data.request.criteria_types:
+                                if MultiScoreCriteria in miner_response.criteria_types:
                                     completion.score = model_id_to_avg_score[model_id]
-
-                            parsed_request = FeedbackRequest(
-                                request_id=request_id,
-                                responses=data.request.responses,
-                            )
 
                             if model_id_to_avg_rank:
                                 logger.info(
@@ -181,9 +183,10 @@ class DojoTaskTracker:
                                 f"Appending Dojo task results for request id: {request_id}"
                             )
                             await DataManager.append_responses(
-                                request_id, [parsed_request]
+                                request_id, [miner_response]
                             )
             except Exception as e:
+                traceback.print_exc()
                 logger.error(f"Error during Dojo task monitoring {str(e)}")
                 pass
             await asyncio.sleep(SLEEP_SECONDS)
