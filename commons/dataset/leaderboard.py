@@ -1,13 +1,13 @@
 import copy
-from enum import auto
 import random
-from strenum import LowercaseStrEnum, StrEnum
-import requests
-from commons.utils import keccak256_hash, ttl_cache
 from typing import List, Tuple
+
 import bittensor as bt
-from Crypto.Hash import keccak
 import numpy as np
+import requests
+from strenum import StrEnum
+
+from commons.utils import keccak256_hash, ttl_cache
 
 
 class Leaderboard(StrEnum):
@@ -82,11 +82,7 @@ def get_leaderboard_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
 
         scores[i] = score
 
-    models_with_scores_ranked = sorted(
-        zip(models, scores), key=lambda x: (x[1] is not None, x[1]), reverse=True
-    )
-
-    return models_with_scores_ranked
+    return zip(models, scores)
 
 
 def get_gt_ranks(models_with_scores: Tuple[str, float]):
