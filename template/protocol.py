@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Union
 import bittensor as bt
 from pydantic import BaseModel, Field
 from strenum import StrEnum
-# from commons.dataset.synthetic import CodeAnswer
 
+# from commons.dataset.synthetic import CodeAnswer
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
 
@@ -175,7 +175,7 @@ class DendriteQueryResponse(BaseModel):
         allow_mutation = True
 
     request: FeedbackRequest
-    responses: List[FeedbackRequest]
+    miner_responses: List[FeedbackRequest]
 
 
 class ScoreItem(BaseModel):

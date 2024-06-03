@@ -122,7 +122,7 @@ class DataManager:
             if not found_response_index:
                 return
 
-            data[found_response_index].responses.extend(responses)
+            data[found_response_index].miner_responses.extend(responses)
             # overwrite the data
             await cls._save_without_lock(_path, data)
         return

@@ -379,7 +379,7 @@ class Validator(BaseNeuron):
                 criteria_to_miner_score = Scoring.calculate_score(
                     criteria_types=d.request.criteria_types,
                     request=d.request,
-                    responses=d.responses,
+                    miner_responses=d.miner_responses,
                 )
 
                 GT_WEIGHT = 0.4
@@ -402,7 +402,7 @@ class Validator(BaseNeuron):
 
                     hotkey_to_score = {
                         r.axon.hotkey: criteria_to_miner_score[criteria][i]
-                        for i, r in enumerate(d.responses)
+                        for i, r in enumerate(d.miner_responses)
                     }
 
                     self.update_scores(hotkey_to_scores=hotkey_to_score)
@@ -441,8 +441,8 @@ class Validator(BaseNeuron):
                     )
 
                     # craft hotkey to score
-                    assert len(d.responses) == len(mean_weighted_consensus_scores)
-                    assert len(d.responses) == len(mean_weighted_consensus_scores)
+                    assert len(d.miner_responses) == len(mean_weighted_consensus_scores)
+                    assert len(d.miner_responses) == len(mean_weighted_consensus_scores)
                     # update the scores based on the rewards
                     score_data["scores_by_hotkey"] = {
                         hotkey: score.dict()
@@ -469,7 +469,7 @@ class Validator(BaseNeuron):
                         "completions": jsonable_encoder(d.request.responses),
                         "num_completions": len(d.request.responses),
                         "scores": score_data,
-                        "num_responses": len(d.responses),
+                        "num_responses": len(d.miner_responses),
                     }
                 )
 
@@ -544,7 +544,7 @@ class Validator(BaseNeuron):
 
         response_data = DendriteQueryResponse(
             request=synapse,
-            responses=non_dojo_responses,
+            miner_responses=non_dojo_responses,
         )
         await DataManager.save_response(response=response_data)
         bt.logging.info(
