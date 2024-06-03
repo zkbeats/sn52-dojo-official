@@ -12,7 +12,61 @@ from template.protocol import (
 )
 
 
-def prepare_responses():
+def prepare_multi_score():
+    request = FeedbackRequest(
+        prompt="Write a hello world program in python",
+        task_type=TaskType.CODE_GENERATION,
+        criteria_types=[
+            MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
+        ],
+        responses=[
+            Response(
+                model="anthropic/claude-3-haiku-20240307",
+                completion=CodeAnswer(
+                    code="print('hello, world!')",
+                    language="python",
+                    files=[],
+                    additional_notes=None,
+                    installation_commands="",
+                ),
+                score=None,
+            ),
+            Response(
+                model="anthropic/claude-3-opus-20240229",
+                completion=CodeAnswer(
+                    code="print('hello, world!')",
+                    language="python",
+                    files=[],
+                    additional_notes=None,
+                    installation_commands="",
+                ),
+                score=None,
+            ),
+            Response(
+                model="anthropic/claude-3-sonnet-20240229",
+                completion=CodeAnswer(
+                    code="print('hello, world!')",
+                    language="python",
+                    files=[],
+                    additional_notes=None,
+                    installation_commands="",
+                ),
+                score=None,
+            ),
+            Response(
+                model="meta-llama/llama-3-8b-instruct",
+                completion=CodeAnswer(
+                    code="print('hello, world!')",
+                    language="python",
+                    files=[],
+                    additional_notes=None,
+                    installation_commands="",
+                ),
+                score=None,
+            ),
+        ],
+    )
+
     miner_a = FeedbackRequest(
         axon=bt.TerminalInfo(hotkey="hotkeyA"),
         prompt="Write a hello world program in python",
@@ -122,17 +176,18 @@ def prepare_responses():
             ),
         ],
     )
-    return [miner_a, miner_b]
+
+    return request, [miner_a, miner_b]
 
 
 class TestConsensusScoring(unittest.TestCase):
     def setUp(self):
-        self.same_score_responses = prepare_responses()
+        self.same_score_responses = prepare_multi_score()
 
     def test_consensus_no_exceptions(self):
         try:
-            responses = prepare_responses()
-            Scoring.consensus_score(responses[0].criteria_types[0], responses)
+            request, miner_responses = prepare_multi_score()
+            Scoring.consensus_score(request.criteria_types[0], request, miner_responses)
         except Exception as e:
             self.fail(f"consensus_score raised an exception: {e}")
 
