@@ -89,7 +89,6 @@ class DojoAPI:
                     }
                 )
             elif isinstance(criteria_type, MultiScoreCriteria):
-                logger.warning(f"Criteria dict: {criteria_type.dict()}")
                 taskData["criteria"].append(
                     {
                         **criteria_type.dict(),
