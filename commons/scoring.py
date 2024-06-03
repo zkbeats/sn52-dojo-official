@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
 from torch.nn import functional as F
 
-from commons.dataset.leaderboard import get_gt_ranks, get_leaderboard_scores
+from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
     CriteriaType,
     FeedbackRequest,
@@ -178,6 +178,7 @@ class Scoring:
         logger.info("Average scores: ", avg)
         logger.info("Miner outptus", miner_outputs)
         if isinstance(criteria, RankingCriteria):
+            # TODO calculate icc  for ranking as well
             logger.debug("ranking criteria")
             avg, miner_outputs = Scoring._process_for_ranking(responses)
         elif isinstance(criteria, MultiScoreCriteria):
@@ -308,44 +309,62 @@ class Scoring:
     def cmp_ground_truth(
         criteria: CriteriaType,
         request: FeedbackRequest,
-        responses: List[FeedbackRequest],
+        miner_responses: List[FeedbackRequest],
     ):
-        if isinstance(criteria, RankingCriteria):
-            # already sorting according to score
-            model_score_tuples = get_leaderboard_scores(
-                [completion.model for completion in request.responses]
-            )
-            # ensure we have the same ordering by model id
-            model_ids_sorted = [model[0] for model in model_score_tuples]
-            all_miner_ranks = [
+        # determine the ground truth ordering based on request
+        model_score_tuples = get_leaderboard_scores(
+            [completion.model for completion in request.responses]
+        )
+        model_with_score_sorted = sorted(
+            model_score_tuples, key=lambda x: (x[1] is not None, x[1]), reverse=True
+        )
+        model_ids_sorted = [model[0] for model in model_with_score_sorted]
+
+        # sort miner outputs according to ground truth order
+        # this may be scores or ranks
+        miner_outputs = None
+
+        def _get_miner_response_by_criteria(criteria, completion):
+            if isinstance(criteria, RankingCriteria):
+                return completion.rank_id
+            elif isinstance(criteria, MultiScoreCriteria):
+                return completion.score
+
+        miner_outputs = np.array(
+            [
                 [
-                    completion.rank_id
+                    _get_miner_response_by_criteria(criteria, completion)
                     for completion in sorted(
                         response.responses,
                         key=lambda x: model_ids_sorted.index(x.model),
                     )
                 ]
-                for response in responses
+                for response in miner_responses
             ]
+        )
 
-            gt_ranks = get_gt_ranks(models_with_scores=model_score_tuples)
-            bt.logging.trace(f"{gt_ranks=}")
-            """Calculate difference between a miner's ranks and the ground truth"""
-            if isinstance(all_miner_ranks, list):
-                all_miner_ranks = np.array(all_miner_ranks)
-            if isinstance(gt_ranks, list):
-                ground_truth_ranks = np.array(gt_ranks)
+        # this may be scores or ranks
+        def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
+            gt = []
+            if isinstance(criteria, RankingCriteria):
+                gt = [i + 1 for i in range(len(model_with_score_sorted))]
+            elif isinstance(criteria, MultiScoreCriteria):
+                gt = [score for _, score in model_with_score_sorted]
+            return np.array(gt)
 
-            diff_gt = -1 * np.linalg.norm(
-                all_miner_ranks - ground_truth_ranks, ord=2, axis=1
-            )
-            bt.logging.trace(f"{diff_gt=}")
-            diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
-            bt.logging.trace(f"{diff_gt_sm=}")
-            return GroundTruthScore(
-                weighted_scores_by_miner=diff_gt_sm,
-                raw_scores_by_miner=torch.tensor(diff_gt),
-            )
+        ground_truth = _get_ground_truth_by_criteria(criteria, model_with_score_sorted)
+
+        diff_gt = torch.tensor(
+            -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
+        )
+        bt.logging.trace(f"{diff_gt=}")
+        diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
+        bt.logging.trace(f"{diff_gt_sm=}")
+
+        return GroundTruthScore(
+            weighted_scores_by_miner=diff_gt_sm,
+            raw_scores_by_miner=diff_gt,
+        )
 
     @staticmethod
     def calculate_score(
