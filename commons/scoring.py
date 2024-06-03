@@ -160,13 +160,17 @@ class Scoring:
         return avg_ranks, all_miner_ranks
 
     @staticmethod
-    def consensus_score(criteria: CriteriaType, responses: List[FeedbackRequest]):
+    def consensus_score(
+        criteria: CriteriaType,
+        request: FeedbackRequest,
+        miner_responses: List[FeedbackRequest],
+    ):
         """Given a list of responses, will only return a dict of hotkey to their normalized scores.
         e.g. if a miner failed to respond, its hotkey won't be a key in the dict.
         """
 
         # depending on the criteria, this may be average ranks or average scores
-        if not len(responses):
+        if not len(miner_responses):
             raise ValueError("Responses cannot be empty")
 
         # shape (num completions)
@@ -180,12 +184,12 @@ class Scoring:
         if isinstance(criteria, RankingCriteria):
             # TODO calculate icc  for ranking as well
             logger.debug("ranking criteria")
-            avg, miner_outputs = Scoring._process_for_ranking(responses)
+            avg, miner_outputs = Scoring._process_for_ranking(miner_responses)
         elif isinstance(criteria, MultiScoreCriteria):
             logger.debug("got multi score criteria")
             # calculate average score per model
             model_id_to_scores = defaultdict(list)
-            for response in responses:
+            for response in miner_responses:
                 for completion in response.responses:
                     model_id_to_scores[completion.model].append(completion.score)
             # for each model calculate the average score
@@ -206,7 +210,7 @@ class Scoring:
                             key=lambda x: model_id_to_avg_score[x.model],
                         )
                     ]
-                    for response in responses
+                    for response in miner_responses
                 ]
             )
 
@@ -215,13 +219,14 @@ class Scoring:
             logger.info(f"Miner outptus {miner_outputs}")
             logger.info(f"Model id to avg {model_id_to_avg_score}")
 
+            # create df with the original number of completions
             df = pd.DataFrame(
                 {
-                    "subject": [i for i in range(len(responses[0].responses))],
+                    "subject": [i for i in range(len(request.responses))],
                 }
             )
             # prepare dataframe for calculating ICC
-            for response in responses:
+            for response in miner_responses:
                 rater_id = response.axon.hotkey
                 ordered_scores = [
                     x.score
@@ -292,7 +297,6 @@ class Scoring:
         icc_norm = F.normalize(torch.tensor(icc_arr), dim=0, p=2)
         dnorm = F.normalize(dist_penalty, dim=0, p=2)
         logger.debug(snorm)
-        # bt.logging.debug(cknorm)
         logger.debug(icc_norm)
         logger.debug(dnorm)
         combined = F.softmax(snorm + icc_norm + 1.5 * dnorm, dim=0)
@@ -300,7 +304,6 @@ class Scoring:
         return ConsensusScore(
             weighted_score=combined,
             spearman_by_miner=snorm,
-            # cohen_kappa_by_miner=cknorm,
             icc_by_miner=icc_norm,
             dist_penalty_by_miner=dnorm,
         )
