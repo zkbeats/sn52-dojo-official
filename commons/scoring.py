@@ -24,6 +24,7 @@ from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
+    Response,
     ScoringMethod,
     ScoringResult,
 )
@@ -67,6 +68,22 @@ class Score(BaseModel):
     weighted_ground_truth: Optional[torch.Tensor] = Field(
         description="Weighted score from ground truth"
     )
+
+
+def _get_miner_response_by_criteria(criteria, response: Response):
+    if isinstance(criteria, RankingCriteria):
+        return response.rank_id
+    elif isinstance(criteria, MultiScoreCriteria):
+        return response.score
+
+
+def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
+    gt = []
+    if isinstance(criteria, RankingCriteria):
+        gt = [i + 1 for i in range(len(model_with_score_sorted))]
+    elif isinstance(criteria, MultiScoreCriteria):
+        gt = [score for _, score in model_with_score_sorted]
+    return np.array(gt)
 
 
 class Scoring:
@@ -139,27 +156,6 @@ class Scoring:
         return ranking_result
 
     @staticmethod
-    def _process_for_ranking(responses: List[FeedbackRequest]):
-        model_id_to_avg_rank = _calculate_average_rank_by_model(responses)
-        # shape (num miners, num completions)
-        # order ranks based on their order in the sorted dict
-        all_miner_ranks = [
-            [
-                x.rank_id
-                for x in sorted(
-                    response.responses, key=lambda x: model_id_to_avg_rank[x.model]
-                )
-            ]
-            for response in responses
-        ]
-        all_miner_ranks = np.array(all_miner_ranks)
-        bt.logging.trace(all_miner_ranks.shape)
-
-        # compute spearman correlation and handle nan values
-        avg_ranks = np.array([i + 1 for i in range(len(model_id_to_avg_rank.keys()))])
-        return avg_ranks, all_miner_ranks
-
-    @staticmethod
     def consensus_score(
         criteria: CriteriaType,
         request: FeedbackRequest,
@@ -179,16 +175,49 @@ class Scoring:
         miner_outputs = None
         icc_arr = []
 
+        # for ordering based on criteria
+        model_id_to_avg_rank = defaultdict(list)
+        model_id_to_scores = defaultdict(list)
+
         logger.info("Average scores: ", avg)
         logger.info("Miner outptus", miner_outputs)
+
         if isinstance(criteria, RankingCriteria):
-            # TODO calculate icc  for ranking as well
             logger.debug("ranking criteria")
-            avg, miner_outputs = Scoring._process_for_ranking(miner_responses)
+            for response in miner_responses:
+                for completion in response.responses:
+                    # if completion.model_id not in model_id_to_average_rank:
+                    #     model_id_to_average_rank[completion.model_id] = []
+                    model_id_to_avg_rank[completion.model].append(completion.rank_id)
+
+            for model_id, ranks in model_id_to_avg_rank.items():
+                model_id_to_avg_rank[model_id] = sum(ranks) / len(ranks)
+
+            model_id_to_avg_rank = dict(
+                sorted(model_id_to_avg_rank.items(), key=lambda item: item[1])
+            )
+
+            # shape (num miners, num completions)
+            # order ranks based on their order in the sorted dict
+            miner_outputs = [
+                [
+                    _get_miner_response_by_criteria(criteria, x)
+                    for x in sorted(
+                        response.responses, key=lambda x: model_id_to_avg_rank[x.model]
+                    )
+                ]
+                for response in miner_responses
+            ]
+            miner_outputs = np.array(miner_outputs)
+            avg = np.array([i + 1 for i in range(len(model_id_to_avg_rank.keys()))])
+
+            logger.info(f"Average scores: {avg}")
+            logger.info(f"Miner outptus {miner_outputs}")
+            logger.info(f"Model id to avg {model_id_to_avg_rank}")
+
         elif isinstance(criteria, MultiScoreCriteria):
             logger.debug("got multi score criteria")
             # calculate average score per model
-            model_id_to_scores = defaultdict(list)
             for response in miner_responses:
                 for completion in response.responses:
                     model_id_to_scores[completion.model].append(completion.score)
@@ -219,49 +248,6 @@ class Scoring:
             logger.info(f"Miner outptus {miner_outputs}")
             logger.info(f"Model id to avg {model_id_to_avg_score}")
 
-            # create df with the original number of completions
-            df = pd.DataFrame(
-                {
-                    "subject": [i for i in range(len(request.responses))],
-                }
-            )
-            # prepare dataframe for calculating ICC
-            for response in miner_responses:
-                rater_id = response.axon.hotkey
-                ordered_scores = [
-                    x.score
-                    for x in sorted(
-                        response.responses, key=lambda x: model_id_to_avg_score[x.model]
-                    )
-                ]
-                # order scores based on order in model_id_to_avg_score
-                df[rater_id] = ordered_scores
-            rater_ids = list(df.columns)
-            rater_ids.remove("subject")
-            df["avg"] = df[rater_ids].mean(axis=1)
-
-            # this works because we are calculating ICC for each rater VS the avg
-            for rater_id in rater_ids:
-                data_by_rater = df[["subject", rater_id, "avg"]]
-                # only use the columns for the current rater and avg
-                data_by_rater = data_by_rater.melt(
-                    id_vars=["subject"], var_name=rater_id, value_name="score"
-                )
-                icc = pg.intraclass_corr(
-                    data=data_by_rater,
-                    targets="subject",
-                    raters=rater_id,
-                    ratings="score",
-                )
-                logger.debug("ICC raw")
-                logger.debug(icc)
-
-                # take ICC(2,1)
-                icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
-                icc_arr.append(icc2_value)
-            icc_arr: np.ndarray = np.array(icc_arr)
-            logger.info(f"ICC: {icc_arr}")
-
         else:
             raise NotImplementedError(
                 f"Consensus score for type {criteria} not implemented yet"
@@ -269,6 +255,52 @@ class Scoring:
 
         if avg is None or miner_outputs is None:
             raise ValueError("avg and miner_outputs cannot be None")
+
+        # create df with the original number of completions
+        df = pd.DataFrame(
+            {
+                "subject": [i for i in range(len(request.responses))],
+            }
+        )
+        # prepare dataframe for calculating ICC
+        for response in miner_responses:
+            rater_id = response.axon.hotkey
+            ordered_scores = [
+                x.score
+                for x in sorted(
+                    response.responses,
+                    key=lambda x: model_id_to_avg_score[x.model]
+                    if criteria == MultiScoreCriteria
+                    else model_id_to_avg_rank[x.model],
+                )
+            ]
+            # order scores based on order in model_id_to_avg_score
+            df[rater_id] = ordered_scores
+        rater_ids = list(df.columns)
+        rater_ids.remove("subject")
+        df["avg"] = df[rater_ids].mean(axis=1)
+
+        # this works because we are calculating ICC for each rater VS the avg
+        for rater_id in rater_ids:
+            data_by_rater = df[["subject", rater_id, "avg"]]
+            # only use the columns for the current rater and avg
+            data_by_rater = data_by_rater.melt(
+                id_vars=["subject"], var_name=rater_id, value_name="score"
+            )
+            icc = pg.intraclass_corr(
+                data=data_by_rater,
+                targets="subject",
+                raters=rater_id,
+                ratings="score",
+            )
+            logger.debug("ICC raw")
+            logger.debug(icc)
+
+            # take ICC(2,1)
+            icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
+            icc_arr.append(icc2_value)
+        icc_arr: np.ndarray = np.array(icc_arr)
+        logger.info(f"ICC: {icc_arr}")
 
         # spearman_corr = [
         #     scipy.stats.spearmanr(miner_output, avg).statistic
@@ -284,23 +316,18 @@ class Scoring:
         spearman_corr = spearman.statistic[0, 1:]
         logger.info(f"{spearman_corr=}")
 
-        # this doesn't work for continuous data, use ICC instead
-        # cohen_kappa = [
-        #     cohen_kappa_score(miner_output, avg) for miner_output in miner_outputs
-        # ]
-
         dist_penalty = -1 * torch.sum(
             torch.square(torch.tensor(avg - miner_outputs)), axis=1
         ).to(dtype=torch.float64)
-        snorm = F.normalize(torch.tensor(spearman_corr), dim=0, p=2)
-        # cknorm = F.normalize(torch.tensor(cohen_kappa), dim=0, p=2)
-        icc_norm = F.normalize(torch.tensor(icc_arr), dim=0, p=2)
-        dnorm = F.normalize(dist_penalty, dim=0, p=2)
+        dnorm = F.softmax(dist_penalty, dim=0)
+        snorm = F.softmax(torch.tensor(spearman_corr), dim=0)
+        icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
+        combined = F.softmax(snorm + icc_norm + 1.5 * dnorm, dim=0)
+        logger.debug(dnorm)
         logger.debug(snorm)
         logger.debug(icc_norm)
-        logger.debug(dnorm)
-        combined = F.softmax(snorm + icc_norm + 1.5 * dnorm, dim=0)
         logger.debug(combined)
+
         return ConsensusScore(
             weighted_score=combined,
             spearman_by_miner=snorm,
@@ -327,17 +354,11 @@ class Scoring:
         # this may be scores or ranks
         miner_outputs = None
 
-        def _get_miner_response_by_criteria(criteria, completion):
-            if isinstance(criteria, RankingCriteria):
-                return completion.rank_id
-            elif isinstance(criteria, MultiScoreCriteria):
-                return completion.score
-
         miner_outputs = np.array(
             [
                 [
-                    _get_miner_response_by_criteria(criteria, completion)
-                    for completion in sorted(
+                    _get_miner_response_by_criteria(criteria, r)
+                    for r in sorted(
                         response.responses,
                         key=lambda x: model_ids_sorted.index(x.model),
                     )
@@ -347,13 +368,6 @@ class Scoring:
         )
 
         # this may be scores or ranks
-        def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
-            gt = []
-            if isinstance(criteria, RankingCriteria):
-                gt = [i + 1 for i in range(len(model_with_score_sorted))]
-            elif isinstance(criteria, MultiScoreCriteria):
-                gt = [score for _, score in model_with_score_sorted]
-            return np.array(gt)
 
         ground_truth = _get_ground_truth_by_criteria(criteria, model_with_score_sorted)
 
