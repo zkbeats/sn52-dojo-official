@@ -124,8 +124,8 @@ class DataManager:
 
             data[found_response_index].miner_responses.extend(responses)
             # overwrite the data
-            await cls._save_without_lock(_path, data)
-        return
+            is_saved = await cls._save_without_lock(_path, data)
+            return is_saved
 
     @classmethod
     async def get_by_request_id(cls, request_id):
@@ -166,8 +166,8 @@ class DataManager:
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
-            if not dojo_task_data:
-                raise ValueError("Dojo task data is empty.")
+            if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
+                raise ValueError("Dojo task data and scores are empty. Skipping save.")
 
             logger.warning(
                 f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
