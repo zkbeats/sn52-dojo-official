@@ -84,9 +84,7 @@ class DojoAPI:
                     {
                         **criteria_type.dict(),
                         "options": [
-                            # TODO remove model from name
-                            f"Model {option}"
-                            for option in criteria_type.dict().get("options", [])
+                            option for option in criteria_type.dict().get("options", [])
                         ],
                     }
                 )
@@ -96,9 +94,7 @@ class DojoAPI:
                     {
                         **criteria_type.dict(),
                         "options": [
-                            # TODO remove model from name
-                            f"Model {option}"
-                            for option in criteria_type.dict().get("options", [])
+                            option for option in criteria_type.dict().get("options", [])
                         ],
                     }
                 )
