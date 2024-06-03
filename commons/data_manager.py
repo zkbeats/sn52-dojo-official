@@ -168,11 +168,9 @@ class DataManager:
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
             if not dojo_task_data:
                 raise ValueError("Dojo task data is empty.")
-            if torch.count_nonzero(scores) == 0:
-                raise ValueError("Scores are empty.")
 
             logger.warning(
-                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} requess"
+                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
             )
             torch.save(
                 {
