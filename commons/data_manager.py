@@ -162,13 +162,18 @@ class DataManager:
     @classmethod
     async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Saving validator state.")
+        bt.logging.info("Attempting to save validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
             if not dojo_task_data:
                 raise ValueError("Dojo task data is empty.")
-            logger.warning(f"Saving validator state with data: {dojo_task_data=}")
+            if torch.count_nonzero(scores) == 0:
+                raise ValueError("Scores are empty.")
+
+            logger.warning(
+                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} requess"
+            )
             torch.save(
                 {
                     ValidatorStateKeys.SCORES: scores,

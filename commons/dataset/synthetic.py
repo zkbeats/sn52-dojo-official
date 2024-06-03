@@ -3,13 +3,13 @@ import functools
 import os
 import time
 from typing import List
-import aiohttp
 
+import aiohttp
 import bittensor as bt
 from dotenv import load_dotenv
 from tenacity import AsyncRetrying, RetryError, stop_after_attempt
-from commons.utils import log_retry_info
 
+from commons.utils import log_retry_info
 from template.protocol import SyntheticQA
 
 load_dotenv()

@@ -176,10 +176,8 @@ class Validator(BaseNeuron):
         self.dendrite = bt.dendrite(wallet=self.wallet)
         bt.logging.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
-        bt.logging.info("Building validation weights.")
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
         self.load_state()
-        bt.logging.debug(f"Scores state: {self.scores}")
 
         # manually always register and always sync metagraph when application starts
         self.check_registered()
@@ -517,7 +515,7 @@ class Validator(BaseNeuron):
                 responses=data.responses,
             )
             bt.logging.info(
-                f"Sending synapse request {synapse.request_id} off to miners"
+                f"Sending synapse request id: {synapse.request_id} off to miners"
             )
 
         all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
@@ -562,8 +560,6 @@ class Validator(BaseNeuron):
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                bt.logging.info(f"step({self.step}) block({self.block})")
-
                 synthetic_data = await SyntheticAPI.get_qa()
                 await self.send_request(data=synthetic_data)
 
@@ -610,10 +606,10 @@ class Validator(BaseNeuron):
         bt.logging.debug(f"normalized weights uids: {self.metagraph.uids}")
 
         if torch.count_nonzero(normalized_weights).item() == 0:
-            bt.logging.error("All weights are zero, therefore no valid weights to set")
+            bt.logging.warning("All weights are zero, skipping...")
             return
 
-        bt.logging.success("Some weights are non zero.... time to set them!")
+        bt.logging.success("Attempting to set weights")
 
         # Process the raw weights to final_weights via subtensor limitations.
         (
@@ -723,12 +719,16 @@ class Validator(BaseNeuron):
 
     def save_state(self):
         """Saves the state of the validator to a file."""
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(
-            DataManager.validator_save(
-                self.scores, DojoTaskTracker._rid_to_mhotkey_to_task_id
+        try:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(
+                DataManager.validator_save(
+                    self.scores, DojoTaskTracker._rid_to_mhotkey_to_task_id
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Failed to save validator state: {e}")
+            pass
 
     def load_state(self):
         """Loads the state of the validator from a file."""
@@ -737,11 +737,17 @@ class Validator(BaseNeuron):
         if state_data is None:
             logger.error("Failed to load validator state data")
             return
-        logger.info(f"Loading state data: {state_data}")
+
+        logger.success("Loaded validator state successfully")
         self.scores = state_data[ValidatorStateKeys.SCORES]
         DojoTaskTracker._rid_to_mhotkey_to_task_id = state_data[
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
         ]
+
+        logger.info(f"Scores state: {self.scores}")
+        logger.info(
+            f"Dojo Tasks to track: {DojoTaskTracker._rid_to_mhotkey_to_task_id}"
+        )
 
     @classmethod
     async def log_validator_status(cls):

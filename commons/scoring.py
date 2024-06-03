@@ -1,5 +1,4 @@
 import json
-import sys
 from collections import defaultdict
 from typing import Dict, List, Optional
 
@@ -10,10 +9,6 @@ import pingouin as pg
 import torch
 from attr import define, field
 from loguru import logger
-
-# Configure Loguru logger
-logger.remove()  # Remove the default logger
-logger.add(sys.stderr, level="DEBUG")  # Add a new logger with the desired level
 from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
 from torch.nn import functional as F
