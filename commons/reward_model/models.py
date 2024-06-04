@@ -20,9 +20,9 @@ from commons.llm.openai_proxy import Provider, get_openai_client
 from commons.llm.prompts import PromptBuilder, ScoreRange
 from commons.utils import PydanticUtils
 from template.protocol import (
-    Response,
     ModelConfig,
     PreferenceResponse,
+    Response,
     ScoresResponse,
 )
 
