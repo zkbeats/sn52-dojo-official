@@ -27,6 +27,8 @@ from template.utils.uids import is_miner
 
 
 class Miner(BaseMinerNeuron):
+    _should_exit = False
+
     def __init__(self):
         super(Miner, self).__init__()
         # Dendrite lets us send messages to other nodes (axons) in the network.
@@ -87,20 +89,20 @@ class Miner(BaseMinerNeuron):
                         synapse.prompt,
                         completion.text,
                     )
-                    for completion in synapse.completions
+                    for completion in synapse.responses
                 ]
                 scores = await asyncio.gather(*tasks)
                 sorted_model_scores = sorted(
                     (
-                        (completion.model_id, score)
-                        for completion, score in zip(synapse.completions, scores)
+                        (completion.model, score)
+                        for completion, score in zip(synapse.responses, scores)
                     ),
                     key=lambda x: x[1],
                     reverse=True,
                 )
 
-                for i in range(len(synapse.completions)):
-                    key = synapse.completions[i].model_id
+                for i in range(len(synapse.responses)):
+                    key = synapse.responses[i].model
                     index = next(
                         (
                             i
@@ -114,7 +116,7 @@ class Miner(BaseMinerNeuron):
                             "You fucked up and placed the wrong item in the list"
                         )
                         continue
-                    synapse.completions[i].rank_id = index
+                    synapse.responses[i].rank_id = index
 
             elif scoring_method.casefold() == ScoringMethod.LLM_API:
                 synapse.scoring_method = ScoringMethod.LLM_API
@@ -122,21 +124,21 @@ class Miner(BaseMinerNeuron):
                     provider=get_config().llm_provider,
                     model_name=get_config().model_name,
                     prompt=synapse.prompt,
-                    completions=synapse.completions,
+                    completions=synapse.responses,
                 )
 
-                for i in range(len(synapse.completions)):
+                for i in range(len(synapse.responses)):
                     matching_score_item = next(
                         (
                             item
                             for item in scores_response.scores
-                            if item.model_id == synapse.completions[i].model_id
+                            if item.model_id == synapse.responses[i].model
                         ),
                         None,
                     )
                     if not matching_score_item:
                         continue
-                    synapse.completions[i].rank_id = matching_score_item.rank_id
+                    synapse.responses[i].rank_id = matching_score_item.rank_id
 
                     for criteria in synapse.criteria_types:
                         sorted_model_score_pairs = sorted(
@@ -155,20 +157,20 @@ class Miner(BaseMinerNeuron):
                                 )
                             ]
                             for model_rank_pair in sorted_model_rank_pairs:
-                                for completion in synapse.completions:
-                                    if completion.model_id == model_rank_pair[0]:
+                                for completion in synapse.responses:
+                                    if completion.model == model_rank_pair[0]:
                                         completion.model_rank_pair_id = model_rank_pair[
                                             1
                                         ]
 
                         elif criteria == CriteriaType.SCORE:
                             for score_item in scores_response.scores:
-                                for i in range(len(synapse.completions)):
+                                for i in range(len(synapse.responses)):
                                     if (
                                         score_item.model_id
-                                        == synapse.completions[i].model_id
+                                        == synapse.responses[i].model
                                     ):
-                                        synapse.completions[i].score = score_item.score
+                                        synapse.responses[i].score = score_item.score
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
                 # send off to MTurk workers in a non-blocking way
@@ -176,7 +178,7 @@ class Miner(BaseMinerNeuron):
                 task = functools.partial(
                     MTurkUtils.create_mturk_task,
                     prompt=synapse.prompt,
-                    completions=synapse.completions,
+                    completions=synapse.responses,
                     reward_in_dollars=0.10,
                 )
                 synapse.scoring_method = ScoringMethod.AWS_MTURK
@@ -207,6 +209,14 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
+        bt.logging.warning(f"Got request from {caller_hotkey}")
+
+        # TODO @dev remember to remove these when going live
+        if caller_hotkey.lower() in [
+            "5CAmJ1Pt6HAG21Q3cJaYS3nS7yCRACDSNaxHcGj2fHmtqRDH".lower(),
+            "5D2gFiQzwhCDN5sa8RQGuTTLay7HpRL2y4xh637rNQret8Ky".lower(),
+        ]:
+            return False, "Request received from validator on testnet"
 
         caller_uid = self.metagraph.hotkeys.index(caller_hotkey)
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
@@ -251,8 +261,8 @@ class Miner(BaseMinerNeuron):
 
         bt.logging.info("Metagraph updated")
 
-
-async def log_miner_status():
-    while True:
-        bt.logging.info(f"Miner running... {time.time()}")
-        await asyncio.sleep(20)
+    @classmethod
+    async def log_miner_status(cls):
+        while not cls._should_exit:
+            bt.logging.info(f"Miner running... {time.time()}")
+            await asyncio.sleep(20)

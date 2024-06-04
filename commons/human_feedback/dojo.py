@@ -1,19 +1,20 @@
 import asyncio
 import datetime
+import json
 import os
 from typing import Dict, List
+from requests_toolbelt import MultipartEncoder
 from fastapi.encoders import jsonable_encoder
 import httpx
-from strenum import StrEnum
 
-from template.protocol import FeedbackRequest, TaskType, CriteriaType
+from template.protocol import FeedbackRequest, CriteriaType
 from dotenv import load_dotenv
+from loguru import logger
 
 load_dotenv()
 
 
-# TODO @dev change to URL before launch
-DOJO_API_BASE_URL = "http://localhost:8080"
+DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if not DOJO_API_BASE_URL:
     raise ValueError("DOJO_API_BASE_URL is not set")
 
@@ -52,8 +53,9 @@ def check_task_completion_status(response_json: Dict):
 
 
 class DojoAPI:
-    _api_key = get_dojo_api_key()
-    _http_client = httpx.AsyncClient(headers={"Authorization": f"Bearer {_api_key}"})
+    # _api_key = get_dojo_api_key()
+    # _http_client = httpx.AsyncClient(headers={"Authorization": f"Bearer {_api_key}"})
+    _http_client = httpx.AsyncClient()
 
     @classmethod
     async def get_task_by_id(cls, task_id: str):
@@ -94,11 +96,14 @@ class DojoAPI:
         cls,
         ranking_request: FeedbackRequest,
     ):
-        path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-task"
-        async with cls._http_client as client:
+        path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
+        async with httpx.AsyncClient() as client:
             taskData = {
                 "prompt": ranking_request.prompt,
-                "responses": [c.dict() for c in ranking_request.completions],
+                "responses": [
+                    {"model": c.model, "completion": c.completion.dict()}
+                    for c in ranking_request.responses
+                ],
                 "task": str(ranking_request.task_type).upper(),
                 "criteria": [],
             }
@@ -107,23 +112,44 @@ class DojoAPI:
                     {
                         "type": "ranking",
                         "options": [
-                            f"{completion.model_id}"
-                            for _, completion in enumerate(ranking_request.completions)
+                            f"Model {completion.model}"
+                            for _, completion in enumerate(ranking_request.responses)
                         ],
                     }
                 )
+
             body = {
                 "title": "LLM Code Generation Task",
                 "body": ranking_request.prompt,
-                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=8))
-                .replace(microsecond=0)
-                .isoformat(),
-                "taskData": taskData,
-                "maxResults": 10,
+                "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
+                .replace(microsecond=0, tzinfo=datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "taskData": json.dumps([taskData]),
+                "maxResults": "10",
             }
-            response = await client.post(path, json=jsonable_encoder(body))
+
+            DOJO_API_KEY = os.getenv("DOJO_API_KEY")
+            if not DOJO_API_KEY:
+                logger.error("DOJO_API_KEY is not set")
+
+            mp = MultipartEncoder(fields=body)
+            response = await client.post(
+                path,
+                data=mp.to_string(),
+                headers={
+                    "x-api-key": DOJO_API_KEY,
+                    "content-type": mp.content_type,
+                },
+            )
+
             if response.status_code == 200:
                 task_ids = response.json()["body"]
+                logger.success(f"Successfully created task with\ntask ids:{task_ids}")
+            else:
+                logger.error(
+                    f"Error occurred when trying to create task\nErr:{response.json()['error']}"
+                )
             response.raise_for_status()
             return task_ids
 

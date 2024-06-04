@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import bittensor as bt
 from pydantic import BaseModel, Field
 from strenum import StrEnum
-from commons.dataset.synthetic import CodeAnswer
+# from commons.dataset.synthetic import CodeAnswer
 
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
@@ -25,7 +25,7 @@ class ScoringMethod(StrEnum):
     HF_MODEL = "hf_model"
     LLM_API = "llm_api"
     AWS_MTURK = "aws_mturk"
-    DOJO = "dojo_worker"
+    DOJO = "dojo"
 
 
 # higher value in this map are priortised and allowed to override data on the miner side
@@ -37,18 +37,54 @@ SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
 }
 
 
-class Completion(CodeAnswer):
-    class Config:
-        allow_mutation = False
+# # NOTE refactored and p[laced into]
+# class Completion(CodeAnswer):
+#     class Config:
+#         allow_mutation = False
+
+#     cid: str = Field(
+#         default_factory=get_new_uuid,
+#         description="Unique identifier for the completion",
+#     )
+#     model_id: str = Field(description="Model that generated the completion")
+#     text: str = Field(description="Text of the completion")
+#     rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
+#     score: float = Field("Score of the completion")
+
+
+class FileObject(BaseModel):
+    filename: str = Field(description="Name of the file")
+    content: str = Field(description="Content of the file which can be code or json")
+    language: str = Field(description="Programming language of the file")
+
+
+class CodeAnswer(BaseModel):
+    files: List[FileObject] = Field(description="List of FileObjects")
+    installation_commands: str = Field(
+        description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
+    )
+    additional_notes: Optional[str] = Field(
+        description="Any additional notes or comments about the code solution"
+    )
+
+
+class Response(BaseModel):
+    model: str = Field(description="Model that generated the completion")
+    completion: CodeAnswer
 
     cid: str = Field(
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
-    model_id: str = Field(description="Model that generated the completion")
-    text: str = Field(description="Text of the completion")
-    rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
-    score: float = Field("Score of the completion")
+    rank_id: Optional[int] = Field(
+        description="Rank of the completion", examples=[1, 2, 3, 4]
+    )
+    score: Optional[float] = Field(description="Score of the completion")
+
+
+class SyntheticQA(BaseModel):
+    prompt: str
+    responses: List[Response]
 
 
 class ModelConfig(BaseModel):
@@ -79,11 +115,11 @@ class FeedbackRequest(bt.Synapse):
         description="Prompt or query from the user sent the LLM",
         allow_mutation=False,
     )
-    completions: List[Completion] = Field(
+    responses: List[Response] = Field(
         description="List of completions for the prompt",
         allow_mutation=False,
     )
-    task_type: TaskType = Field(description="Type of task", allow_mutation=False)
+    task_type: str = Field(description="Type of task", allow_mutation=False)
     criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
         allow_mutation=False,
@@ -94,7 +130,7 @@ class FeedbackRequest(bt.Synapse):
     mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
     dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
     aws_credentials: Optional[AWSCredentials] = Field(
-        "Temporary AWS credentials from the miner that validator can use to verify task completions"
+        description="Temporary AWS credentials from the miner that validator can use to verify task completions"
     )
 
 

@@ -30,7 +30,8 @@ __spec_version__ = (
 from . import protocol
 from . import base
 
-VALIDATOR_MIN_STAKE = 20_000
+# TODO @dev change before live
+VALIDATOR_MIN_STAKE = 99
 
 GENERATOR_MODELS = [
     "openai/gpt-3.5-turbo",

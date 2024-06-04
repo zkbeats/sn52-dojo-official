@@ -11,25 +11,25 @@ import numpy as np
 import torch
 from fastapi.encoders import jsonable_encoder
 from torch.nn import functional as F
+import wandb
 
 from commons.data_manager import DataManager
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
-from commons.logging.wandb_logging import wandb_log
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, init_wandb
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     SCORING_METHOD_PRIORITY,
     AWSCredentials,
-    Completion,
     CriteriaType,
     DendriteQueryResponse,
     MTurkResponse,
     FeedbackRequest,
     ScoringResult,
     ScoringMethod,
+    SyntheticQA,
     TaskType,
 )
 from template.utils.config import get_config
@@ -38,6 +38,7 @@ from template.utils.uids import (
     extract_miner_uids,
     is_miner,
 )
+from loguru import logger
 
 
 def _filter_valid_responses(responses: List[FeedbackRequest]) -> List[FeedbackRequest]:
@@ -89,6 +90,10 @@ class DojoTaskTracker:
     @classmethod
     async def update_task_map(cls, responses: List[FeedbackRequest]):
         dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
+        if not dojo_responses:
+            bt.logging.warning("No Dojo responses found")
+            return
+
         async with cls._lock:
             valid_responses = list(
                 filter(
@@ -145,15 +150,13 @@ class DojoTaskTracker:
                         model_id_to_rank = DojoTaskTracker._parse_dojo_task_results(
                             task_results
                         )
-                        for completion in data.request.completions:
-                            if completion.model_id in model_id_to_rank:
-                                completion.rank_id = model_id_to_rank[
-                                    completion.model_id
-                                ]
+                        for completion in data.request.responses:
+                            if completion.model in model_id_to_rank:
+                                completion.rank_id = model_id_to_rank[completion.model]
 
                         parsed_request = FeedbackRequest(
                             request_id=request_id,
-                            completions=data.request.completions,
+                            responses=data.request.responses,
                         )
                         await DataManager.append_responses(request_id, [parsed_request])
             await asyncio.sleep(SLEEP_SECONDS)
@@ -345,7 +348,7 @@ class Validator(BaseNeuron):
         )
         if CriteriaType.PREFERENCE_RANKING in [synapse.criteria_types]:
             is_missing_ranks = any(
-                completion.rank_id is None for completion in synapse.completions
+                completion.rank_id is None for completion in synapse.responses
             )
             if is_missing_ranks:
                 bt.logging.warning("One or more completions are missing rank IDs.")
@@ -385,57 +388,114 @@ class Validator(BaseNeuron):
                 f"Got {len(filtered_data)} requests past deadline and ready to score"
             )
             for d in filtered_data:
-                criteria_to_miner_scores = Scoring.calculate_score(
+                criteria_to_miner_score = Scoring.calculate_score(
                     criteria_types=d.request.criteria_types,
                     request=d.request,
                     responses=d.responses,
                 )
 
-                # calculate mean across all criteria
-                mean_miner_scores = (
-                    torch.stack(
-                        [
-                            miner_scores
-                            for miner_scores in criteria_to_miner_scores.values()
-                        ]
-                    )
-                    .mean(dim=0)
-                    .tolist()
-                )
-                bt.logging.trace(
-                    f"mean miner scores across differerent criteria: {mean_miner_scores.shape} {mean_miner_scores}"
-                )
+                # TOOD wandb logging here
+                # calculate by hotkey as well, perform weighting here
+                GT_WEIGHT = 0.65
+                CONSENSUS_WEIGHT = 0.35
+                # TODO for now only single criteria
+                # log_data is score by each miner
+                score_data = {}
+                assert len(criteria_to_miner_score.keys()) == 1
+                for criteria in criteria_to_miner_score:
+                    miner_scores = criteria_to_miner_score[criteria]
+                    weighted_gt = GT_WEIGHT * miner_scores.ground_truth
+                    weighted_consensus = CONSENSUS_WEIGHT * miner_scores.consensus
+                    # update weighted scores
+                    criteria_to_miner_score[
+                        criteria
+                    ].weighted_consensus = weighted_consensus
+                    criteria_to_miner_score[
+                        criteria
+                    ].weighted_ground_truth = weighted_gt
 
-                # craft hotkey to score
-                assert len(d.responses) == len(mean_miner_scores)
-                hotkey_to_scores = {
-                    r.axon.hotkey: mean_miner_scores[i]
-                    for i, r in enumerate(d.responses)
-                }
-                # update the scores based on the rewards
-                self.update_scores(hotkey_to_scores=hotkey_to_scores)
-                await self.send_scores(
-                    synapse=ScoringResult(
-                        request_id=d.request.request_id,
-                        hotkey_to_scores=hotkey_to_scores,
-                    ),
-                    hotkeys=list(hotkey_to_scores.keys()),
-                )
+                    hotkey_to_score = {
+                        r.axon.hotkey: criteria_to_miner_score[criteria][i]
+                        for i, r in enumerate(d.responses)
+                    }
+
+                    self.update_scores(hotkey_to_scores=hotkey_to_score)
+                    await self.send_scores(
+                        synapse=ScoringResult(
+                            request_id=d.request.request_id,
+                            hotkey_to_scores=hotkey_to_score,
+                        ),
+                        hotkeys=list(hotkey_to_score.keys()),
+                    )
+
+                    # calculate mean across all criteria
+                    mean_weighted_consensus_scores = (
+                        torch.stack(
+                            [
+                                miner_scores.consensus
+                                for miner_scores in criteria_to_miner_score.values()
+                            ]
+                        )
+                        .mean(dim=0)
+                        .tolist()
+                    )
+                    mean_weighted_gt_scores = (
+                        torch.stack(
+                            [
+                                miner_scores.ground_truth
+                                for miner_scores in criteria_to_miner_score.values()
+                            ]
+                        )
+                        .mean(dim=0)
+                        .tolist()
+                    )
+
+                    bt.logging.info(
+                        f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
+                    )
+
+                    # craft hotkey to score
+                    assert len(d.responses) == len(mean_weighted_consensus_scores)
+                    assert len(d.responses) == len(mean_weighted_consensus_scores)
+                    # update the scores based on the rewards
+                    score_data["scores_by_hotkey"] = {
+                        hotkey: score.dict()
+                        for hotkey, score in hotkey_to_score.items()
+                    }
+                    score_data["mean"] = {
+                        "consensus": mean_weighted_consensus_scores,
+                        "ground_truth": mean_weighted_gt_scores,
+                    }
+                    self.update_scores(hotkey_to_scores=hotkey_to_score)
+                    await self.send_scores(
+                        synapse=ScoringResult(
+                            request_id=d.request.request_id,
+                            hotkey_to_scores=hotkey_to_score,
+                        ),
+                        hotkeys=list(hotkey_to_score.keys()),
+                    )
 
                 wandb_data = jsonable_encoder(
                     {
                         "task": d.request.task_type,
                         "criteria": d.request.criteria_types,
                         "prompt": d.request.prompt,
-                        "completions": jsonable_encoder(d.request.completions),
-                        "num_completions": len(d.request.completions),
-                        "scores": hotkey_to_scores,
+                        "completions": jsonable_encoder(d.request.responses),
+                        "num_completions": len(d.request.responses),
+                        "scores": score_data,
                         "num_responses": len(d.responses),
-                        "avg_miner_scores": hotkey_to_scores,
-                        "miner_scores_by_criteria": criteria_to_miner_scores,
                     }
                 )
-                asyncio.create_task(wandb_log(wandb_data))
+
+                async def _log_wandb(wandb_data: Dict):
+                    loop = asyncio.get_running_loop()
+
+                    def log_wandb(data: dict):
+                        wandb.log(data, sync=False)
+
+                    await loop.run_in_executor(None, log_wandb, wandb_data)
+
+                asyncio.create_task(_log_wandb(wandb_data))
 
                 # once we have scored a response, just remove it
                 await DataManager.remove_responses(d)
@@ -445,17 +505,21 @@ class Validator(BaseNeuron):
     async def send_request(
         self,
         synapse: FeedbackRequest = None,
+        data: SyntheticQA = None,
     ):
         start = get_epoch_time()
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
         if synapse is None:
-            data = await SyntheticAPI.get_qa()
+            if not data:
+                logger.error("Failed to generate data from synthetic gen API")
+                return
+
             synapse = FeedbackRequest(
-                task_type=TaskType.CODE_GENERATION,
+                task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[CriteriaType.PREFERENCE_RANKING],
-                prompt=data["prompt"],
-                completions=[Completion.parse_obj(d) for d in data["responses"]],
+                prompt=data.prompt,
+                responses=data.responses,
             )
             bt.logging.info(f"Sending synapse: {synapse.dict()} off to miners")
 
@@ -487,7 +551,7 @@ class Validator(BaseNeuron):
         )
         await DataManager.save_response(response=response_data)
         bt.logging.info(
-            "Sending request to miners & processing took ", get_epoch_time() - start
+            f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
         return
 
@@ -506,7 +570,8 @@ class Validator(BaseNeuron):
             while True:
                 bt.logging.info(f"step({self.step}) block({self.block})")
 
-                await self.send_request()
+                synthetic_data = await SyntheticAPI.get_qa()
+                await self.send_request(data=synthetic_data)
 
                 # # Check if we should exit.
                 if self._should_exit:
@@ -517,7 +582,7 @@ class Validator(BaseNeuron):
                 self.sync()
 
                 self.step += 1
-                await asyncio.sleep(12)
+                await asyncio.sleep(60)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -680,7 +745,6 @@ if __name__ == "__main__":
             validator.run(),
             validator.log_validator_status(),
             DojoTaskTracker().monitor_task_completions(),
-            SyntheticAPI.populate_queue(),
         )
 
     asyncio.run(main())

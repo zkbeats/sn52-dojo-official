@@ -70,6 +70,7 @@ setup(
     url="https://github.com/tensorplex-labs/dojo-subnet",
     author="jarvis8x7b",
     packages=find_packages(),
+    entry_points={"console_scripts": ["dojo=dojo_cli:main"]},
     include_package_data=True,
     license="MIT",
     python_requires=">=3.10",

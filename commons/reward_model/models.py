@@ -20,7 +20,7 @@ from commons.llm.openai_proxy import Provider, get_openai_client
 from commons.llm.prompts import PromptBuilder, ScoreRange
 from commons.utils import PydanticUtils
 from template.protocol import (
-    Completion,
+    Response,
     ModelConfig,
     PreferenceResponse,
     ScoresResponse,
@@ -121,7 +121,7 @@ class RewardModel:
 
     @staticmethod
     async def llm_api_score_text(
-        provider: Provider, model_name: str, prompt: str, completions: List[Completion]
+        provider: Provider, model_name: str, prompt: str, completions: List[Response]
     ):
         client = get_openai_client(provider)
         score_range = ScoreRange(lower=0, upper=1)

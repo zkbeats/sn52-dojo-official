@@ -1,18 +1,17 @@
 import asyncio
 import json
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import bittensor as bt
 import numpy as np
-from pydantic import validate_arguments
+from pydantic import validate_arguments, Field, BaseModel
 import scipy
 from attr import define, field
 import torch
 from torch.nn import functional as F
 from sklearn.metrics import cohen_kappa_score
 from commons.dataset.leaderboard import diff_gt, get_gt_ranks, get_leaderboard_scores
-from commons.dataset.mock import MockData
 
 from template.protocol import (
     CriteriaType,
@@ -29,6 +28,38 @@ class Result:
     cid_to_hotkey_to_score: Dict[str, Dict[str, float]] = field(factory=dict)
 
 
+class GroundTruthScore(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
+    weighted_scores_by_miner: torch.Tensor
+    raw_scores_by_miner: torch.Tensor
+
+
+class ConsensusScore(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
+    weighted_score: torch.Tensor
+    spearman_by_miner: torch.Tensor
+    cohen_kappa_by_miner: torch.Tensor
+    dist_penalty_by_miner: torch.Tensor
+
+
+class Score(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
+    ground_truth: GroundTruthScore = Field(description="Raw score from ground truth")
+    consensus: ConsensusScore = Field(description="Raw score from ground truth")
+    weighted_consensus: Optional[torch.Tensor] = Field(
+        description="Weighted score from consensus"
+    )
+    weighted_ground_truth: Optional[torch.Tensor] = Field(
+        description="Weighted score from ground truth"
+    )
+
+
 class Scoring:
     @staticmethod
     def _spearman_scoring(responses: List[FeedbackRequest]):
@@ -40,7 +71,7 @@ class Scoring:
         )
         for response in responses:
             hotkey = response.axon.hotkey
-            for completion in response.completions:
+            for completion in response.responses:
                 nested_dict[completion.cid][hotkey] = completion.score
 
         data = json.loads(json.dumps(nested_dict))
@@ -108,7 +139,7 @@ class Scoring:
             [
                 x.rank_id
                 for x in sorted(
-                    response.completions, key=lambda x: model_id_to_avg_rank[x.model_id]
+                    response.responses, key=lambda x: model_id_to_avg_rank[x.model]
                 )
             ]
             for response in responses
@@ -152,7 +183,12 @@ class Scoring:
             bt.logging.trace(dnorm)
             combined_sm = F.softmax(snorm + cknorm + 1.5 * dnorm, dim=0)
             bt.logging.trace(f"{combined_sm}")
-            return combined_sm
+            return ConsensusScore(
+                weighted_score=combined_sm,
+                spearman_by_miner=snorm,
+                cohen_kappa_by_miner=cknorm,
+                dist_penalty_by_miner=dnorm,
+            )
 
     @staticmethod
     def cmp_ground_truth(
@@ -165,7 +201,7 @@ class Scoring:
         elif criteria == CriteriaType.PREFERENCE_RANKING:
             # already sorting according to score
             model_score_tuples = get_leaderboard_scores(
-                [completion.model_id for completion in request.completions]
+                [completion.model for completion in request.responses]
             )
             # ensure we have the same ordering by model id
             model_ids_sorted = [model[0] for model in model_score_tuples]
@@ -173,8 +209,8 @@ class Scoring:
                 [
                     completion.rank_id
                     for completion in sorted(
-                        response.completions,
-                        key=lambda x: model_ids_sorted.index(x.model_id),
+                        response.responses,
+                        key=lambda x: model_ids_sorted.index(x.model),
                     )
                 ]
                 for response in responses
@@ -194,24 +230,25 @@ class Scoring:
             bt.logging.trace(f"{diff_gt=}")
             diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
             bt.logging.trace(f"{diff_gt_sm=}")
-            return diff_gt_sm
+            return GroundTruthScore(
+                weighted_scores_by_miner=diff_gt_sm,
+                raw_scores_by_miner=torch.tensor(diff_gt),
+            )
 
     @staticmethod
-    @validate_arguments
     def calculate_score(
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
         responses: List[FeedbackRequest],
-    ) -> Dict[CriteriaType, torch.Tensor]:
+    ) -> Dict[CriteriaType, Score]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
-        criteria_to_miner_scores = defaultdict(list)
+        criteria_to_miner_scores = defaultdict(Score)
+        # TODO @dev support different criteria in the future
         for criteria in criteria_types:
             gt_score = Scoring.cmp_ground_truth(criteria, request, responses)
             consensus_score = Scoring.consensus_score(criteria, responses)
-            print(f"{gt_score}")
-            print(f"{consensus_score}")
-            criteria_to_miner_scores[criteria] = torch.tensor(
-                0.65 * gt_score + 0.35 * consensus_score
+            criteria_to_miner_scores[criteria] = Score(
+                ground_truth=gt_score, consensus=consensus_score
             )
         return criteria_to_miner_scores
 
@@ -221,10 +258,10 @@ def _calculate_average_rank_by_model(
 ) -> Dict[str, float]:
     model_id_to_average_rank = defaultdict(list)
     for request in responses:
-        for completion in request.completions:
+        for completion in request.responses:
             # if completion.model_id not in model_id_to_average_rank:
             #     model_id_to_average_rank[completion.model_id] = []
-            model_id_to_average_rank[completion.model_id].append(completion.rank_id)
+            model_id_to_average_rank[completion.model].append(completion.rank_id)
 
     for model_id, ranks in model_id_to_average_rank.items():
         model_id_to_average_rank[model_id] = sum(ranks) / len(ranks)
@@ -236,7 +273,8 @@ def _calculate_average_rank_by_model(
 
 
 if __name__ == "__main__":
-    test_requests = MockData.generate_test_data()[:5]
+    # test_requests = MockData.generate_test_data()[:5]
+    test_requests = []
     for tr in test_requests:
         for completion in tr.completions:
             print((completion.model_id, completion.rank_id), end=" ")

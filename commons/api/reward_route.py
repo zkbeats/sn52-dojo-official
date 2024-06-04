@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from commons.objects import ObjectManager
 
 from commons.utils import get_new_uuid
-from template.protocol import Completion, FeedbackRequest, ScoringMethod
+from template.protocol import Response, FeedbackRequest, ScoringMethod
 import bittensor as bt
 
 load_dotenv()
@@ -38,7 +38,8 @@ async def reward_request_handler(request: ExternalRequest):
         n_completions=len(request.completions),
         pid=get_new_uuid(),
         prompt=request.prompt,
-        completions=[Completion(text=c) for c in request.completions],
+        # TODO this needs proper refactoring later on
+        responses=[Response() for c in request.completions],
     )
 
     try:
