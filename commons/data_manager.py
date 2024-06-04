@@ -91,7 +91,7 @@ class DataManager:
             return False
 
     @classmethod
-    async def save_response(cls, response: DendriteQueryResponse):
+    async def save_dendrite_response(cls, response: DendriteQueryResponse):
         path = DataManager.get_requests_data_path()
         async with cls._lock:
             # ensure parent path exists
@@ -101,28 +101,27 @@ class DataManager:
             data = await DataManager._load_without_lock(path=path)
             if not data:
                 # store initial data
-                await DataManager._save_without_lock(path, [response])
-                return
+                success = await DataManager._save_without_lock(path, [response])
+                return success
 
             # append our data, if the existing data exists
             assert isinstance(data, list)
             data.append(response)
-            await DataManager._save_without_lock(path, data)
-        return
+            success = await DataManager._save_without_lock(path, data)
+            return success
 
     @classmethod
-    async def append_responses(cls, request_id: str, responses: List[FeedbackRequest]):
+    async def overwrite_miner_responses_by_request_id(
+        cls, request_id: str, miner_responses: List[FeedbackRequest]
+    ):
         async with cls._lock:
             _path = DataManager.get_requests_data_path()
             data = await cls._load_without_lock(path=_path)
-            found_response_index = next(
+            found_idx = next(
                 (i for i, x in enumerate(data) if x.request.request_id == request_id),
                 None,
             )
-            if not found_response_index:
-                return
-
-            data[found_response_index].miner_responses.extend(responses)
+            data[found_idx].miner_responses = miner_responses
             # overwrite the data
             is_saved = await cls._save_without_lock(_path, data)
             return is_saved

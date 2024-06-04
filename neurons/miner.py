@@ -9,9 +9,9 @@ from typing import Dict, Tuple
 
 import bittensor as bt
 
-from commons.objects import ObjectManager
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
+from commons.objects import ObjectManager
 from commons.reward_model.models import RewardModel
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
@@ -19,8 +19,8 @@ from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     FeedbackRequest,
     RankingCriteria,
-    ScoringResult,
     ScoringMethod,
+    ScoringResult,
 )
 from template.utils.config import get_config
 from template.utils.uids import is_miner
@@ -200,7 +200,7 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
-        bt.logging.warning(f"Got request from {caller_hotkey}")
+        bt.logging.debug(f"Got request from {caller_hotkey}")
 
         # TODO @dev remember to remove these when going live
         if caller_hotkey.lower() in [

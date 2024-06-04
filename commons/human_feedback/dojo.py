@@ -108,7 +108,6 @@ class DojoAPI:
             .isoformat()
             .replace("+00:00", "Z"),
             "taskData": json.dumps([taskData]),
-            # TODO set to 1 for testing purposes
             "maxResults": "1",
         }
 

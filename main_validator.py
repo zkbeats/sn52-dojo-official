@@ -27,7 +27,6 @@ async def lifespan(app: FastAPI):
     bt.logging.info("Performing shutdown tasks...")
     validator._should_exit = True
     DojoTaskTracker()._should_exit = True
-    validator.save_state()
     wandb.finish()
     await DojoAPI._http_client.aclose()
 
