@@ -1,4 +1,3 @@
-import json
 from collections import defaultdict
 from typing import Dict, List, Optional
 
@@ -10,7 +9,6 @@ import torch
 from attr import define, field
 from loguru import logger
 from pydantic import BaseModel, Field
-from scipy.stats import spearmanr
 from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_leaderboard_scores
@@ -20,8 +18,6 @@ from template.protocol import (
     MultiScoreCriteria,
     RankingCriteria,
     Response,
-    ScoringMethod,
-    ScoringResult,
 )
 
 
@@ -45,10 +41,8 @@ class ConsensusScore(BaseModel):
         arbitrary_types_allowed = True
 
     weighted_score: torch.Tensor
-    spearman_by_miner: torch.Tensor
-    # cohen_kappa_by_miner: torch.Tensor
+    mse_by_miner: torch.Tensor
     icc_by_miner: torch.Tensor
-    dist_penalty_by_miner: torch.Tensor
 
 
 class Score(BaseModel):
@@ -83,74 +77,6 @@ def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
 
 class Scoring:
     @staticmethod
-    def _spearman_scoring(responses: List[FeedbackRequest]):
-        # map results...
-        request_id = responses[0].request_id
-        nested_dict: Dict[str, Dict[str, float]] = defaultdict(
-            lambda: defaultdict(float)
-        )
-        for response in responses:
-            hotkey = response.axon.hotkey
-            for completion in response.responses:
-                nested_dict[completion.cid][hotkey] = completion.score
-
-        data = json.loads(json.dumps(nested_dict))
-        result = Result(request_id=request_id, cid_to_hotkey_to_score=data)
-        cid_to_average = {
-            cid: np.mean(list(hotkey_scores.values()))
-            for cid, hotkey_scores in result.cid_to_hotkey_to_score.items()
-        }
-        averages = list(cid_to_average.values())
-
-        # shape (num miners, num completions)
-        miner_scores = np.array(
-            [
-                [
-                    hotkey_scores.get(r.axon.hotkey, 0)
-                    for hotkey_scores in result.cid_to_hotkey_to_score.values()
-                ]
-                for r in responses
-            ]
-        )
-
-        bt.logging.debug(f"Miner scores shape: {np.array(miner_scores).shape}")
-        bt.logging.debug(f"Average scores shape: {np.array(averages).shape}")
-
-        # compute spearman correlation and handle nan values
-        spearman_corr = [
-            np.nan_to_num(spearmanr(miner_score, averages)[0])
-            for miner_score in miner_scores
-        ]
-
-        for i, response in enumerate(responses):
-            if not response.scoring_method:
-                bt.logging.error(
-                    "Scoring method not set... defaulting to normal weights"
-                )
-                continue
-
-            if response.scoring_method == ScoringMethod.AWS_MTURK:
-                spearman_corr[i] *= 1.2
-
-        hotkeys = [r.axon.hotkey for r in responses]
-
-        # scale values in the range [-1, 1] to [0, 1]
-        spearman_corr = 0.5 * (np.array(spearman_corr) + 1)
-        hotkey_to_score = dict(zip(hotkeys, spearman_corr.tolist()))
-
-        scores = torch.tensor(list(hotkey_to_score.values()))
-        # ensure sum == 1
-        scores = F.softmax(scores, dim=0)
-        hotkey_to_adjusted_score = dict(zip(hotkey_to_score.keys(), scores))
-        # store in synapse to be forwarded to miners
-        ranking_result = ScoringResult(
-            request_id=responses[0].request_id,
-            cid_to_consensus=cid_to_average,
-            hotkey_to_scores=hotkey_to_adjusted_score,
-        )
-        return ranking_result
-
-    @staticmethod
     def consensus_score(
         criteria: CriteriaType,
         request: FeedbackRequest,
@@ -174,11 +100,8 @@ class Scoring:
         model_id_to_avg_rank = defaultdict(list)
         model_id_to_scores = defaultdict(list)
 
-        logger.info("Average scores: ", avg)
-        logger.info("Miner outptus", miner_outputs)
-
         if isinstance(criteria, RankingCriteria):
-            logger.debug("ranking criteria")
+            logger.debug("consensus scoring for ranking criteria")
             for response in miner_responses:
                 for completion in response.responses:
                     # if completion.model_id not in model_id_to_average_rank:
@@ -206,12 +129,8 @@ class Scoring:
             miner_outputs = np.array(miner_outputs)
             avg = np.array([i + 1 for i in range(len(model_id_to_avg_rank.keys()))])
 
-            logger.info(f"Average scores: {avg}")
-            logger.info(f"Miner outptus {miner_outputs}")
-            logger.info(f"Model id to avg {model_id_to_avg_rank}")
-
         elif isinstance(criteria, MultiScoreCriteria):
-            logger.debug("got multi score criteria")
+            logger.debug("consensus scoring for multi-score criteria")
             # calculate average score per model
             for response in miner_responses:
                 for completion in response.responses:
@@ -239,9 +158,6 @@ class Scoring:
             )
 
             avg: np.ndarray = np.array([v for k, v in model_id_to_avg_score.items()])
-            logger.info(f"Average scores: {avg}")
-            logger.info(f"Miner outptus {miner_outputs}")
-            logger.info(f"Model id to avg {model_id_to_avg_score}")
 
         else:
             raise NotImplementedError(
@@ -250,6 +166,10 @@ class Scoring:
 
         if avg is None or miner_outputs is None:
             raise ValueError("avg and miner_outputs cannot be None")
+
+        logger.info(f"Average across all miners: {avg}")
+        logger.info(f"Miner outputs {miner_outputs}")
+        logger.info(f"Model id to avg {model_id_to_avg_score}")
 
         # create df with the original number of completions
         df = pd.DataFrame(
@@ -288,46 +208,42 @@ class Scoring:
                 raters=rater_id,
                 ratings="score",
             )
-            logger.debug("ICC raw")
-            logger.debug(icc)
 
             # take ICC(2,1)
             icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
             icc_arr.append(icc2_value)
         icc_arr: np.ndarray = np.array(icc_arr)
+
         logger.info(f"ICC: {icc_arr}")
 
-        # spearman_corr = [
-        #     scipy.stats.spearmanr(miner_output, avg).statistic
-        #     for miner_output in miner_outputs
-        # ]
+        if np.isnan(icc_arr).all():
+            logger.warning("ICC array is all NaN.")
 
-        spearman = spearmanr(
-            np.expand_dims(avg, axis=0) if len(avg.shape) == 1 else avg,
-            miner_outputs,
-            axis=1,
-        )
-        # spearman == 2D matrix, remove diagonal, grab first row for correlation between avg and each miner
-        spearman_corr = spearman.statistic[0, 1:]
-        logger.info(f"{spearman_corr=}")
+        # only use this for ordinal data
+        # spearman = np.array(
+        #     [
+        #         spearmanr(miner_output, avg, nan_policy="propagate").statistic
+        #         for miner_output in miner_outputs
+        #     ]
+        # )
+        # num_nans = np.sum(np.isnan(spearman))
 
-        dist_penalty = -1 * torch.sum(
-            torch.square(torch.tensor(avg - miner_outputs)), axis=1
-        ).to(dtype=torch.float64)
-        dnorm = F.softmax(dist_penalty, dim=0)
-        snorm = F.softmax(torch.tensor(spearman_corr), dim=0)
+        # calculate MSE between each rater and the mean
+        # lower is better
+        # TODO fix the mse values beign a bit hjigh
+        mse = -1 * np.mean((miner_outputs - avg) ** 2, axis=1)
+        mse_norm = F.softmax(torch.tensor(mse), dim=0)
         icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
-        combined = F.softmax(snorm + icc_norm + 1.5 * dnorm, dim=0)
-        logger.debug(dnorm)
-        logger.debug(snorm)
-        logger.debug(icc_norm)
-        logger.debug(combined)
+        combined = F.softmax(icc_norm + mse_norm, dim=0)
+
+        logger.debug(f"MSE: {mse}")
+        logger.debug(f"ICC: {icc_norm}")
+        logger.debug(f"Combined: {combined}")
 
         return ConsensusScore(
             weighted_score=combined,
-            spearman_by_miner=snorm,
+            mse_by_miner=mse_norm,
             icc_by_miner=icc_norm,
-            dist_penalty_by_miner=dnorm,
         )
 
     @staticmethod
@@ -347,24 +263,32 @@ class Scoring:
 
         # sort miner outputs according to ground truth order
         # this may be scores or ranks
-        miner_outputs = None
+        # log miner models to check
+        miner_models = []
+        for r in miner_responses:
+            for completion in r.responses:
+                miner_models.append(completion.model)
 
-        miner_outputs = np.array(
-            [
-                [
-                    _get_miner_response_by_criteria(criteria, r)
-                    for r in sorted(
-                        response.responses,
-                        key=lambda x: model_ids_sorted.index(x.model),
-                    )
-                ]
-                for response in miner_responses
-            ]
-        )
+        miner_outputs = []
+        for response in miner_responses:
+            curr_miner_outputs = []
+            for completion in sorted(
+                response.responses, key=lambda r: model_ids_sorted.index(r.model)
+            ):
+                curr_miner_outputs.append(
+                    _get_miner_response_by_criteria(criteria, completion)
+                )
+            miner_outputs.append(curr_miner_outputs)
+        if miner_outputs == [] or None in miner_outputs:
+            raise ValueError("Miner outputs cannot be empty or contain None values")
+
+        miner_outputs = np.array(miner_outputs)
 
         # this may be scores or ranks
-
         ground_truth = _get_ground_truth_by_criteria(criteria, model_with_score_sorted)
+
+        logger.info(f"Miner outputs: {miner_outputs}")
+        logger.info(f"Ground truth: {ground_truth}")
 
         diff_gt = torch.tensor(
             -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
@@ -387,9 +311,32 @@ class Scoring:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
         criteria_to_miner_scores = defaultdict(Score)
         for criteria in criteria_types:
-            gt_score = Scoring.cmp_ground_truth(criteria, request, miner_responses)
-            consensus_score = Scoring.consensus_score(criteria, miner_responses)
-            criteria_to_miner_scores[criteria] = Score(
+            # valid responses
+            valid_miner_responses = []
+            for response in miner_responses:
+                values = [
+                    _get_miner_response_by_criteria(criteria, completion)
+                    for completion in response.responses
+                ]
+                if any(v is None for v in values):
+                    continue
+                valid_miner_responses.append(response)
+
+            if len(valid_miner_responses) < 2:
+                logger.warning(
+                    f"Skipping scoring for request id: {request.request_id} as not enough valid responses"
+                )
+                # TODO make the score just zeros
+                continue
+
+            gt_score = Scoring.cmp_ground_truth(
+                criteria, request, valid_miner_responses
+            )
+            consensus_score = Scoring.consensus_score(
+                criteria, request, valid_miner_responses
+            )
+
+            criteria_to_miner_scores[criteria.type] = Score(
                 ground_truth=gt_score, consensus=consensus_score
             )
         return criteria_to_miner_scores
