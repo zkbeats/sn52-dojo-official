@@ -168,7 +168,7 @@ class DataManager:
             if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
                 raise ValueError("Dojo task data and scores are empty. Skipping save.")
 
-            logger.warning(
+            logger.info(
                 f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
             )
             torch.save(

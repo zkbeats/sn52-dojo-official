@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     validator._should_exit = True
     DojoTaskTracker()._should_exit = True
     wandb.finish()
+    validator.save_state()
     await DojoAPI._http_client.aclose()
 
 
@@ -53,8 +54,7 @@ async def main():
     )
     server = uvicorn.Server(config)
     running_tasks = [
-        # TODO re-enable after working on scoring
-        # asyncio.create_task(validator.log_validator_status()),
+        asyncio.create_task(validator.log_validator_status()),
         asyncio.create_task(validator.run()),
         asyncio.create_task(validator.update_score_and_send_feedback()),
         asyncio.create_task(DojoTaskTracker.monitor_task_completions()),
