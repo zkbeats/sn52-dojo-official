@@ -228,9 +228,7 @@ class Scoring:
         # )
         # num_nans = np.sum(np.isnan(spearman))
 
-        # calculate MSE between each rater and the mean
-        # lower is better
-        # TODO fix the mse values beign a bit hjigh
+        # calculate MSE between each rater and the mean, lower is better
         mse = -1 * np.mean((miner_outputs - avg) ** 2, axis=1)
         mse_norm = F.softmax(torch.tensor(mse), dim=0)
         icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)

@@ -19,6 +19,7 @@ from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
+from commons.objects import ObjectManager
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time
 from template.base.neuron import BaseNeuron
@@ -221,8 +222,8 @@ class DojoTaskTracker:
                         else:
                             for hotkey in processed_hotkeys:
                                 del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
-                        # TODO enable after testing
-                        # ObjectManager.get_validator().save_state()
+
+                        ObjectManager.get_validator().save_state()
 
             except Exception as e:
                 traceback.print_exc()
@@ -422,22 +423,21 @@ class Validator(BaseNeuron):
                 data = await DataManager.load(path=DataManager.get_requests_data_path())
                 if not data:
                     bt.logging.debug(
-                        "Skipping scoring as no ranking data found, this means either all have been processed or you are running the validator for the first time."
+                        "Skipping scoring as no feedback data found, this means either all have been processed or you are running the validator for the first time."
                     )
                     continue
 
                 current_time = get_epoch_time()
                 # allow enough time for human feedback
-                # TODO remove this after testing
-                SECONDS_IN_4H = 2 * 60
+                TASK_DEADLINE = 30 * 60
                 filtered_data = [
                     d
                     for d in data
-                    if (current_time - d.request.epoch_timestamp) >= SECONDS_IN_4H
+                    if (current_time - d.request.epoch_timestamp) >= TASK_DEADLINE
                 ]
                 if not filtered_data:
                     bt.logging.warning(
-                        "Skipping scoring as no ranking data has been persisted for at least 8 hours."
+                        "Skipping scoring as no feedback data is due for scoring."
                     )
                     continue
 
