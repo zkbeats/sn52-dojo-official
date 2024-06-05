@@ -320,7 +320,20 @@ class Scoring:
                     for completion in response.responses
                 ]
                 if any(v is None for v in values):
+                    logger.error(
+                        f"Detected None values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
+                    )
                     continue
+                if isinstance(criteria, MultiScoreCriteria):
+                    default_value = (5 / 10) * (
+                        criteria.max - criteria.min
+                    ) + criteria.min
+                    if all(v == default_value for v in values):
+                        logger.error(
+                            f"Detected all values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
+                        )
+                        continue
+
                 valid_miner_responses.append(response)
 
             if len(valid_miner_responses) < 2:
