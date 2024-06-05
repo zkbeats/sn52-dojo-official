@@ -656,7 +656,7 @@ class Validator(BaseNeuron):
             bt.logging.warning("All weights are zero, skipping...")
             return
 
-        bt.logging.success("Attempting to set weights")
+        bt.logging.info("Attempting to set weights")
 
         # Process the raw weights to final_weights via subtensor limitations.
         (
