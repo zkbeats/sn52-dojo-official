@@ -20,7 +20,7 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, init_wandb
+from commons.utils import get_epoch_time
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     AWSCredentials,
@@ -95,15 +95,13 @@ class DojoTaskTracker:
         await asyncio.sleep(60)
         while not cls._should_exit:
             try:
-                logger.info(f"Monitoring Dojo Task completions... {get_epoch_time()}")
+                logger.info(
+                    f"Monitoring Dojo Task completions... {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id)} requests"
+                )
                 async with cls._lock:
                     if not cls._rid_to_mhotkey_to_task_id:
                         await asyncio.sleep(SLEEP_SECONDS)
                         continue
-
-                    logger.info(
-                        f"Monitoring Dojo tasks: {cls._rid_to_mhotkey_to_task_id}"
-                    )
 
                     for request_id in list(cls._rid_to_mhotkey_to_task_id.keys()):
                         miner_to_task_id = cls._rid_to_mhotkey_to_task_id[request_id]
@@ -252,7 +250,7 @@ class Validator(BaseNeuron):
         # manually always register and always sync metagraph when application starts
         self.check_registered()
         self.resync_metagraph()
-        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
+        # init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def blacklist_mturk_response(
         self, synapse: MTurkResponse
@@ -426,7 +424,7 @@ class Validator(BaseNeuron):
                     bt.logging.debug(
                         "Skipping scoring as no ranking data found, this means either all have been processed or you are running the validator for the first time."
                     )
-                    return
+                    continue
 
                 current_time = get_epoch_time()
                 # allow enough time for human feedback
@@ -441,53 +439,41 @@ class Validator(BaseNeuron):
                     bt.logging.warning(
                         "Skipping scoring as no ranking data has been persisted for at least 8 hours."
                     )
-                    return
+                    continue
 
                 bt.logging.info(
                     f"Got {len(filtered_data)} requests past deadline and ready to score"
                 )
                 for d in filtered_data:
-                    criteria_to_miner_score = Scoring.calculate_score(
+                    criteria_to_miner_score, hotkey_to_score = Scoring.calculate_score(
                         criteria_types=d.request.criteria_types,
                         request=d.request,
                         miner_responses=d.miner_responses,
                     )
+                    logger.info(f"Got hotkey to score: {hotkey_to_score}")
 
-                    GT_WEIGHT = 0.4
-                    CONSENSUS_WEIGHT = 0.6
-                    # log_data is score by each miner
-                    score_data = {}
-                    for criteria in criteria_to_miner_score:
-                        miner_scores = criteria_to_miner_score[criteria]
-                        weighted_gt = GT_WEIGHT * miner_scores.ground_truth
-                        weighted_consensus = CONSENSUS_WEIGHT * miner_scores.consensus
-                        # update weighted scores
-                        criteria_to_miner_score[
-                            criteria
-                        ].weighted_consensus = weighted_consensus
-                        criteria_to_miner_score[
-                            criteria
-                        ].weighted_ground_truth = weighted_gt
+                    if not hotkey_to_score:
+                        continue
 
-                        hotkey_to_score = {
-                            r.axon.hotkey: criteria_to_miner_score[criteria][i]
-                            for i, r in enumerate(d.miner_responses)
-                        }
+                    logger.debug(
+                        f"Initiailly had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
+                    )
 
-                        self.update_scores(hotkey_to_scores=hotkey_to_score)
-                        await self.send_scores(
-                            synapse=ScoringResult(
-                                request_id=d.request.request_id,
-                                hotkey_to_scores=hotkey_to_score,
-                            ),
-                            hotkeys=list(hotkey_to_score.keys()),
-                        )
+                    self.update_scores(hotkey_to_scores=hotkey_to_score)
+                    await self.send_scores(
+                        synapse=ScoringResult(
+                            request_id=d.request.request_id,
+                            hotkey_to_scores=hotkey_to_score,
+                        ),
+                        hotkeys=list(hotkey_to_score.keys()),
+                    )
 
+                    async def _log_wandb(wandb_data: Dict):
                         # calculate mean across all criteria
                         mean_weighted_consensus_scores = (
                             torch.stack(
                                 [
-                                    miner_scores.consensus
+                                    miner_scores.consensus.score
                                     for miner_scores in criteria_to_miner_score.values()
                                 ]
                             )
@@ -497,7 +483,7 @@ class Validator(BaseNeuron):
                         mean_weighted_gt_scores = (
                             torch.stack(
                                 [
-                                    miner_scores.ground_truth
+                                    miner_scores.ground_truth.score
                                     for miner_scores in criteria_to_miner_score.values()
                                 ]
                             )
@@ -509,6 +495,7 @@ class Validator(BaseNeuron):
                             f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
                         )
 
+                        score_data = {}
                         # update the scores based on the rewards
                         score_data["scores_by_hotkey"] = {
                             hotkey: score.dict()
@@ -519,27 +506,24 @@ class Validator(BaseNeuron):
                             "ground_truth": mean_weighted_gt_scores,
                         }
 
-                    wandb_data = jsonable_encoder(
-                        {
-                            "task": d.request.task_type,
-                            "criteria": d.request.criteria_types,
-                            "prompt": d.request.prompt,
-                            "completions": jsonable_encoder(d.request.responses),
-                            "num_completions": len(d.request.responses),
-                            "scores": score_data,
-                            "num_responses": len(d.miner_responses),
-                        }
-                    )
+                        wandb_data = jsonable_encoder(
+                            {
+                                "task": d.request.task_type,
+                                "criteria": d.request.criteria_types,
+                                "prompt": d.request.prompt,
+                                "completions": jsonable_encoder(d.request.responses),
+                                "num_completions": len(d.request.responses),
+                                "scores": score_data,
+                                "num_responses": len(d.miner_responses),
+                            }
+                        )
 
-                    async def _log_wandb(wandb_data: Dict):
                         loop = asyncio.get_running_loop()
 
                         def log_wandb(data: dict):
-                            wandb.log(data, sync=False)
+                            wandb.log(data, commit=True, sync=False)
 
                         await loop.run_in_executor(None, log_wandb, wandb_data)
-
-                    asyncio.create_task(_log_wandb(wandb_data))
 
                     # once we have scored a response, just remove it
                     await DataManager.remove_responses(d)
@@ -750,10 +734,11 @@ class Validator(BaseNeuron):
         nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
         if nan_value_indices.any():
             bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
+            return
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
-        rewards = np.zeros((len(self.metagraph.axons),))
+        rewards = torch.zeros((len(self.metagraph.axons),))
         neuron_hotkeys: List[str] = [neuron.hotkey for neuron in self.metagraph.neurons]
         for index, (key, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
@@ -775,9 +760,7 @@ class Validator(BaseNeuron):
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores.to(
-            self.device
-        )
+        self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores
         bt.logging.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):

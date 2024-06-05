@@ -32,7 +32,7 @@ class GroundTruthScore(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    weighted_scores_by_miner: torch.Tensor
+    score: torch.Tensor
     raw_scores_by_miner: torch.Tensor
 
 
@@ -40,7 +40,7 @@ class ConsensusScore(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    weighted_score: torch.Tensor
+    score: torch.Tensor
     mse_by_miner: torch.Tensor
     icc_by_miner: torch.Tensor
 
@@ -236,12 +236,12 @@ class Scoring:
         icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
         combined = F.softmax(icc_norm + mse_norm, dim=0)
 
-        logger.debug(f"MSE: {mse}")
+        logger.debug(f"MSE: {mse_norm}")
         logger.debug(f"ICC: {icc_norm}")
         logger.debug(f"Combined: {combined}")
 
         return ConsensusScore(
-            weighted_score=combined,
+            score=combined,
             mse_by_miner=mse_norm,
             icc_by_miner=icc_norm,
         )
@@ -298,7 +298,7 @@ class Scoring:
         bt.logging.trace(f"{diff_gt_sm=}")
 
         return GroundTruthScore(
-            weighted_scores_by_miner=diff_gt_sm,
+            score=diff_gt_sm,
             raw_scores_by_miner=diff_gt,
         )
 
@@ -310,6 +310,7 @@ class Scoring:
     ) -> Dict[CriteriaType, Score]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
         criteria_to_miner_scores = defaultdict(Score)
+        hotkey_to_final_score = defaultdict(float)
         for criteria in criteria_types:
             # valid responses
             valid_miner_responses = []
@@ -336,10 +337,18 @@ class Scoring:
                 criteria, request, valid_miner_responses
             )
 
+            for i, r in enumerate(valid_miner_responses):
+                consensus = 0.6 * consensus_score.score[i]
+                ground_truth = 0.4 * gt_score.score[i]
+
+                hotkey_to_final_score[r.axon.hotkey] = (consensus + ground_truth) / len(
+                    criteria_types
+                )
+
             criteria_to_miner_scores[criteria.type] = Score(
                 ground_truth=gt_score, consensus=consensus_score
             )
-        return criteria_to_miner_scores
+        return criteria_to_miner_scores, hotkey_to_final_score
 
 
 def _calculate_average_rank_by_model(

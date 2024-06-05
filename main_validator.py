@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     validator._should_exit = True
     DojoTaskTracker()._should_exit = True
     wandb.finish()
+    validator.save_state()
     await DojoAPI._http_client.aclose()
 
 
