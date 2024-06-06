@@ -214,14 +214,17 @@ class DojoTaskTracker:
                                 processed_hotkeys.add(miner_hotkey)
 
                         # determine if we should completely remove the request from the tracker
-                        if processed_hotkeys == set(miner_to_task_id.keys()):
-                            logger.info(
-                                f"All hotkeys processed for request id {request_id}, removing from tracker"
-                            )
-                            del cls._rid_to_mhotkey_to_task_id[request_id]
-                        else:
-                            for hotkey in processed_hotkeys:
-                                del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
+                        async with cls._lock:
+                            if processed_hotkeys == set(miner_to_task_id.keys()):
+                                logger.info(
+                                    f"All hotkeys processed for request id {request_id}, removing from tracker"
+                                )
+                                del cls._rid_to_mhotkey_to_task_id[request_id]
+                            else:
+                                for hotkey in processed_hotkeys:
+                                    del cls._rid_to_mhotkey_to_task_id[request_id][
+                                        hotkey
+                                    ]
 
                         ObjectManager.get_validator().save_state()
 
@@ -230,6 +233,14 @@ class DojoTaskTracker:
                 logger.error(f"Error during Dojo task monitoring {str(e)}")
                 pass
             await asyncio.sleep(SLEEP_SECONDS)
+
+    @classmethod
+    async def remove_by_request_id(cls, request_id: str):
+        if cls._rid_to_mhotkey_to_task_id.get(request_id, None) is None:
+            return
+        async with cls._lock:
+            del cls._rid_to_mhotkey_to_task_id[request_id]
+        return
 
 
 class Validator(BaseNeuron):
