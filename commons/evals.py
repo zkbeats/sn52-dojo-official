@@ -1,5 +1,4 @@
 import asyncio
-from typing_extensions import deprecated
 
 import bittensor as bt
 import torch

@@ -1,9 +1,7 @@
-import json
 from typing import List, Optional
 from pydantic import BaseModel, validator
 
 from template.protocol import Response
-import bittensor as bt
 
 
 system_score_completion_prompt = """

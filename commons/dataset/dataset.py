@@ -1,4 +1,3 @@
-from typing_extensions import deprecated
 from strenum import StrEnum
 from typing import Dict, Iterable, List, Tuple
 import random

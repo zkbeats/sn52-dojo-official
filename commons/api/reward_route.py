@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from commons.objects import ObjectManager
 
 from commons.utils import get_new_uuid
-from template.protocol import Response, FeedbackRequest, ScoringMethod
+from template.protocol import Response, FeedbackRequest
 import bittensor as bt
 
 load_dotenv()

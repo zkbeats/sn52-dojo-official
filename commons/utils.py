@@ -18,7 +18,6 @@ from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_
 
 import wandb
 import os
-from dotenv import load_dotenv
 
 
 def get_new_uuid():

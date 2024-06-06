@@ -1,14 +1,9 @@
 import json
 import os
-from typing import List, Union
 
-import bittensor as bt
-from fastapi.encoders import jsonable_encoder
 import huggingface_hub
 from dotenv import load_dotenv
-from huggingface_hub import CommitOperationAdd
 
-from template.protocol import Response
 
 load_dotenv()
 
