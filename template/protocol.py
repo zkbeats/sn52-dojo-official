@@ -1,11 +1,11 @@
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import bittensor as bt
 from pydantic import BaseModel, Field
 from strenum import StrEnum
-# from commons.dataset.synthetic import CodeAnswer
 
+# from commons.dataset.synthetic import CodeAnswer
 from commons.llm.openai_proxy import Provider
 from commons.utils import get_epoch_time, get_new_uuid
 
@@ -16,9 +16,34 @@ class TaskType(StrEnum):
     CODE_GENERATION = "code_generation"
 
 
-class CriteriaType(StrEnum):
-    PREFERENCE_RANKING = "preference_ranking"
-    SCORING = "scoring"
+class CriteriaTypeEnum(StrEnum):
+    RANKING_CRITERIA = "ranking"
+    MULTI_SCORE = "multi-score"
+
+
+class RankingCriteria(BaseModel):
+    class Config:
+        allow_mutation = False
+
+    type: str = CriteriaTypeEnum.RANKING_CRITERIA.value
+    options: List[str] = Field(
+        description="List of options human labeller will see", default=[]
+    )
+
+
+class MultiScoreCriteria(BaseModel):
+    class Config:
+        allow_mutation = False
+
+    type: str = CriteriaTypeEnum.MULTI_SCORE.value
+    options: List[str] = Field(
+        default=[], description="List of options human labeller will see"
+    )
+    min: float = Field(description="Minimum score for the task")
+    max: float = Field(description="Maximum score for the task")
+
+
+CriteriaType = Union[MultiScoreCriteria, RankingCriteria]
 
 
 class ScoringMethod(StrEnum):
@@ -155,7 +180,7 @@ class DendriteQueryResponse(BaseModel):
         allow_mutation = True
 
     request: FeedbackRequest
-    responses: List[FeedbackRequest]
+    miner_responses: List[FeedbackRequest]
 
 
 class ScoreItem(BaseModel):

@@ -4,6 +4,9 @@ import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
 from typing import Tuple, Type, get_origin
+from functools import lru_cache, update_wrapper
+from math import floor
+from typing import Any, Callable
 
 import bittensor as bt
 import jsonref
@@ -14,6 +17,8 @@ from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 import wandb
+import os
+from dotenv import load_dotenv
 
 
 def get_new_uuid():
@@ -22,6 +27,14 @@ def get_new_uuid():
 
 def get_epoch_time():
     return time.time()
+
+
+def loaddotenv(varname: str):
+    """Wrapper to get env variables for sanity checking"""
+    value = os.getenv(varname)
+    if not value:
+        raise SystemExit(f"{varname} is not set")
+    return value
 
 
 def keccak256_hash(data):
@@ -124,16 +137,6 @@ def check_registered(subtensor, wallet, config):
         exit()
 
 
-def should_resync_metagraph(subtensor, metagraph, wallet, config):
-    """
-    Check if enough blocks have elapsed since the last checkpoint to sync.
-    """
-    uid = metagraph.hotkeys.index(wallet.hotkey.ss58_address)
-    return (
-        ttl_get_block(subtensor) - metagraph.last_update[uid]
-    ) > config.neuron.epoch_length
-
-
 def get_external_ip() -> str:
     response = requests.get("https://ifconfig.me/ip")
     response.raise_for_status()
@@ -229,38 +232,6 @@ class PydanticUtils:
                 result[field_name] = field.field_info.description
         return result
 
-    # @classmethod
-    # def build_minimal_json(cls, model: Type[BaseModel]):
-    #     result = {
-    #         "files": "filename(Name of the file), content(Content of the file), language(Programming language of the file) as separate keys, type: List[Dict['filename', 'content', 'language']]",
-    #         "installation_commands": "Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run",
-    #         "additional_notes": "Any additional notes or comments about the code solution",
-    #     }
-    #     return result
-
-
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 Opentensor Foundation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
-from functools import lru_cache, update_wrapper
-from math import floor
-from typing import Any, Callable
-
 
 # LRU Cache with TTL
 def ttl_cache(maxsize: int = 128, typed: bool = False, ttl: int = -1):
@@ -348,13 +319,3 @@ def ttl_get_block(subtensor) -> int:
     Note: self here is the miner or validator instance
     """
     return subtensor.get_current_block()
-
-
-def main():
-    pydantic_utils = PydanticUtils()
-    minimal_json = pydantic_utils.build_minimal_json()
-    print(minimal_json)
-
-
-if __name__ == "__main__":
-    main()

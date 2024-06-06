@@ -15,13 +15,13 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import time
+import asyncio
 import threading
 import traceback
 
 import bittensor as bt
-from commons.utils import serve_axon
 
+from commons.utils import serve_axon
 from template.base.neuron import BaseNeuron
 
 
@@ -33,7 +33,7 @@ class BaseMinerNeuron(BaseNeuron):
     def __init__(self):
         super(BaseMinerNeuron, self).__init__()
 
-    def run(self):
+    async def run(self):
         """
         Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
 
@@ -87,7 +87,7 @@ class BaseMinerNeuron(BaseNeuron):
                 # Sync metagraph and potentially set weights.
                 self.sync()
                 self.step += 1
-                time.sleep(12)
+                await asyncio.sleep(12)
 
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:

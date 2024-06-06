@@ -9,18 +9,18 @@ from typing import Dict, Tuple
 
 import bittensor as bt
 
-from commons.objects import ObjectManager
 from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
+from commons.objects import ObjectManager
 from commons.reward_model.models import RewardModel
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
-    CriteriaType,
     FeedbackRequest,
-    ScoringResult,
+    RankingCriteria,
     ScoringMethod,
+    ScoringResult,
 )
 from template.utils.config import get_config
 from template.utils.uids import is_miner
@@ -149,7 +149,7 @@ class Miner(BaseMinerNeuron):
                             key=lambda x: x[1],
                             reverse=True,
                         )
-                        if criteria == CriteriaType.PREFERENCE_RANKING:
+                        if isinstance(criteria, RankingCriteria):
                             sorted_model_rank_pairs = [
                                 (model_with_score[0], i)
                                 for i, model_with_score in enumerate(
@@ -162,15 +162,6 @@ class Miner(BaseMinerNeuron):
                                         completion.model_rank_pair_id = model_rank_pair[
                                             1
                                         ]
-
-                        elif criteria == CriteriaType.SCORE:
-                            for score_item in scores_response.scores:
-                                for i in range(len(synapse.responses)):
-                                    if (
-                                        score_item.model_id
-                                        == synapse.responses[i].model
-                                    ):
-                                        synapse.responses[i].score = score_item.score
 
             elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
                 # send off to MTurk workers in a non-blocking way
@@ -209,7 +200,7 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
-        bt.logging.warning(f"Got request from {caller_hotkey}")
+        bt.logging.debug(f"Got request from {caller_hotkey}")
 
         # TODO @dev remember to remove these when going live
         if caller_hotkey.lower() in [
@@ -256,7 +247,6 @@ class Miner(BaseMinerNeuron):
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
-            bt.logging.info("Metagraph unchanged")
             return
 
         bt.logging.info("Metagraph updated")
