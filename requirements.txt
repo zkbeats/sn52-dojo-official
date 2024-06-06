@@ -79,6 +79,7 @@ pandas==2.2.1
 password-strength==0.0.3.post2
 pathspec==0.12.1
 pillow==10.2.0
+pingouin==0.5.4
 platformdirs==4.2.0
 pluggy==1.4.0
 prompt_toolkit==3.0.44

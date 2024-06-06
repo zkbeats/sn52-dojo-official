@@ -729,43 +729,33 @@ class Validator(BaseNeuron):
         return result
 
     def resync_metagraph(self):
-        """Sync the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
-        # create a copy to freeze it in time
 
         # Check if the metagraph axon info has changed.
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        # check for preserved hotkeys based on prev metagraph...
-        preserved_uids = [
-            uid
-            for uid, hotkey in enumerate(previous_metagraph.hotkeys)
-            if hotkey == self.metagraph.hotkeys[uid]
-        ]
-
-        new_uids = list(range(previous_metagraph.n.item(), self.metagraph.n.item()))
-        new_axons = [
-            axon
-            for axon in self.metagraph.axons
-            if axon not in previous_metagraph.axons
-        ]
         bt.logging.info(
-            f"Metagraph updated, new uids: {new_uids}, new axons: {new_axons}"
+            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
+        # Zero out all hotkeys that have been replaced.
+        for uid, hotkey in enumerate(previous_metagraph.hotkeys):
+            if hotkey != self.metagraph.hotkeys[uid]:
+                self.scores[uid] = 0  # hotkey has been replaced
 
-        # create a new score tensor since metagraph size is different
-        updated_scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
-
-        for uid in preserved_uids:
-            updated_scores[uid] = self.scores[uid]
-
-        # Update our states
-        self.scores = updated_scores
+        # Check to see if the metagraph has changed size.
+        # If so, we need to add new hotkeys and moving averages.
+        if len(previous_metagraph.hotkeys) < len(self.metagraph.hotkeys):
+            # Update the size of the moving average scores.
+            new_moving_average = np.zeros((self.metagraph.n))
+            min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
+            new_moving_average[:min_len] = self.scores[:min_len]
+            self.scores = new_moving_average
 
     def update_scores(self, hotkey_to_scores):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
