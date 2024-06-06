@@ -21,7 +21,7 @@ from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time
+from commons.utils import get_epoch_time, get_new_uuid
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     AWSCredentials,
@@ -553,16 +553,23 @@ class Validator(BaseNeuron):
         start = get_epoch_time()
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
+
         if synapse is None:
             if not data:
                 logger.error("Failed to generate data from synthetic gen API")
                 return
 
+            obfuscated_model_to_model = {}
+            for completion in data.responses:
+                new_uuid = get_new_uuid()
+                obfuscated_model_to_model[new_uuid] = completion.model
+                completion.model = new_uuid
+
             synapse = FeedbackRequest(
                 task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[
                     MultiScoreCriteria(
-                        options=[completion.model for completion in data.responses],
+                        options=list(obfuscated_model_to_model.keys()),
                         min=1.0,
                         max=100.0,
                     ),
@@ -572,7 +579,7 @@ class Validator(BaseNeuron):
             )
 
         all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-        sel_miner_uids = MinerUidSelector(all_miner_uids).get_target_uids(
+        sel_miner_uids = MinerUidSelector(nodes=all_miner_uids).get_target_uids(
             key=synapse.request_id, k=get_config().neuron.sample_size
         )
         logger.info(
@@ -588,15 +595,37 @@ class Validator(BaseNeuron):
             bt.logging.warning("No axons to query ... skipping")
             return
 
-        responses: List[FeedbackRequest] = await self.dendrite.forward(
+        miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
 
-        dojo_responses = DojoTaskTracker.filter_dojo_responses(responses)
+        # map obfuscated model names back to the original model names
+        logger.debug(f"Obfuscated model map: {obfuscated_model_to_model}")
+        valid_miner_responses = []
+        try:
+            for miner_response in miner_responses:
+                completions = [
+                    obfuscated_model_to_model.get(completion.model, None)
+                    for completion in miner_response.responses
+                ]
+                if any([c is None for c in completions]):
+                    logger.warning("Failed to map obfuscated model to original model")
+                    continue
+
+                logger.success(
+                    f"Successfully mapped obfuscated model names for {miner_response.axon.hotkey}"
+                )
+
+                valid_miner_responses.append(miner_response)
+        except Exception as e:
+            logger.error(f"Failed to map obfuscated model to original model: {e}")
+            pass
+
+        dojo_responses = DojoTaskTracker.filter_dojo_responses(miner_responses)
         await DojoTaskTracker.update_task_map(dojo_responses)
         response_data = DendriteQueryResponse(
             request=synapse,
-            miner_responses=responses,
+            miner_responses=miner_responses,
         )
         # saving response
         success = await DataManager.save_dendrite_response(response=response_data)
