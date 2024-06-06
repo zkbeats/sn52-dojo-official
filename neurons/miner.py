@@ -7,9 +7,6 @@ import traceback
 from datetime import datetime
 from typing import Dict, Tuple
 
-import bittensor as bt
-
-from commons.human_feedback.aws_mturk import MTurkUtils, STSUtils
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.reward_model.models import RewardModel
@@ -24,6 +21,8 @@ from template.protocol import (
 )
 from template.utils.config import get_config
 from template.utils.uids import is_miner
+
+import bittensor as bt
 
 
 class Miner(BaseMinerNeuron):

@@ -1,5 +1,4 @@
 import asyncio
-import signal
 
 import bittensor as bt
 from dotenv import load_dotenv

@@ -7,21 +7,17 @@ from collections import defaultdict
 from traceback import print_exception
 from typing import Dict, List, Tuple
 
-import bittensor as bt
 import numpy as np
 import torch
-from fastapi.encoders import jsonable_encoder
-from loguru import logger
-from torch.nn import functional as F
-
 import wandb
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
-from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid
+from fastapi.encoders import jsonable_encoder
+from loguru import logger
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     AWSCredentials,
@@ -42,6 +38,9 @@ from template.utils.uids import (
     extract_miner_uids,
     is_miner,
 )
+from torch.nn import functional as F
+
+import bittensor as bt
 
 
 class DojoTaskTracker:

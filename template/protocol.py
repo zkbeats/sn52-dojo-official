@@ -169,12 +169,6 @@ class ScoringResult(bt.Synapse):
     )
 
 
-class MTurkResponse(bt.Synapse):
-    mturk_hit_id: str
-    aws_credentials: Optional[AWSCredentials]
-    completion_id_to_score: Dict[str, float]
-
-
 class DendriteQueryResponse(BaseModel):
     class Config:
         allow_mutation = True

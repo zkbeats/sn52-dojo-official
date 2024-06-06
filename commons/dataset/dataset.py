@@ -1,12 +1,12 @@
-from strenum import StrEnum
-from typing import Dict, Iterable, List, Tuple
 import random
-import bittensor as bt
+from typing import Dict, Iterable, List, Tuple
 
-from datasets import load_dataset
 from commons.dataset.hf_utils import HF_REPO_ID
 from commons.objects import ObjectManager
+from datasets import load_dataset
+from strenum import StrEnum
 
+import bittensor as bt
 
 seed = 42
 
