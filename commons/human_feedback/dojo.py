@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from loguru import logger
 from requests_toolbelt import MultipartEncoder
 
-from template import utils
+from commons.utils import loaddotenv
 from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
@@ -111,7 +111,7 @@ class DojoAPI:
         }
 
         mp = MultipartEncoder(fields=body)
-        DOJO_API_KEY = utils.loaddotenv("DOJO_API_KEY")
+        DOJO_API_KEY = loaddotenv("DOJO_API_KEY")
         response = await cls._http_client.post(
             path,
             data=mp.to_string(),
