@@ -147,12 +147,16 @@ class DataManager:
             assert isinstance(data, list)
 
             if data is None:
+                logger.info("No data found to remove responses...")
                 return
 
             new_data = []
 
             for d in data:
                 if d in responses:
+                    logger.debug(
+                        f"Found response to remove with request id: {d.request.request_id}"
+                    )
                     continue
                 new_data.append(d)
 

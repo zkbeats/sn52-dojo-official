@@ -526,7 +526,7 @@ class Validator(BaseNeuron):
                         await loop.run_in_executor(None, log_wandb, wandb_data)
 
                     # once we have scored a response, just remove it
-                    await DataManager.remove_responses(d)
+                    await DataManager.remove_responses([d])
 
             except Exception:
                 traceback.print_exc()
