@@ -1,7 +1,7 @@
 requests-toolbelt
 scikit-learn
 aiohttp
-bittensor==7.0.2
+bittensor==7.0.1
 boto3
 fastapi
 httpx
@@ -17,3 +17,7 @@ StrEnum
 tenacity
 uvicorn
 wandb
+-f https://download.pytorch.org/whl/cpu
+torch==2.3.0
+torchvision==0.18.0
+torchaudio==2.3.0
