@@ -2,16 +2,21 @@ import argparse
 import os
 from pathlib import Path
 
+from loguru import logger
+
 import bittensor as bt
+
+base_path = Path.cwd()
 
 
 def check_config(config: bt.config):
     """Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+    # logger.check_config(config)
 
+    log_dir = str(base_path / "logs")
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+            log_dir,
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
@@ -31,6 +36,28 @@ def add_args(parser):
     """
     # Netuid Arg: The netuid of the subnet to connect to.
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+
+    import sys
+
+    parser.add_argument(
+        "--log.level",
+        type=str,
+        choices=[
+            "trace",
+            "debug",
+            "info",
+        ],
+        help="Set the log level for loguru.",
+        default="info",
+    )
+    args, _ = parser.parse_known_args()
+    logging_level: str = vars(args).get("log.level", "info")
+    # configure logger to the right level
+    logger.remove()
+    logger.add(sys.stderr, level=logging_level.upper())
+
+    if logging_level in ["TRACE", "DEBUG", "INFO"]:
+        logger.debug(f"Logging level set to {logging_level}")
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
@@ -82,7 +109,7 @@ def add_args(parser):
             "--data_manager.base_path",
             type=str,
             help="Base path to store data to.",
-            default=Path.cwd(),
+            default=base_path,
         )
 
         parser.add_argument(
@@ -125,39 +152,12 @@ def add_args(parser):
         if known_args := vars(args):
             scoring_method = known_args["scoring_method"]
 
-        default_model_name = (
-            ModelZoo.DEBERTA_V3_LARGE_V2
-            if scoring_method == ScoringMethod.HF_MODEL
-            else "mistralai/Mixtral-8x7B-Instruct-v0.1"
-        )
-        parser.add_argument(
-            "--model_name",
-            type=str,
-            help="Name of the reward model to use, either from Huggingface or LLM API provider such as TogetherAI.",
-            default=default_model_name,
-        )
-
-        parser.add_argument(
-            "--llm_provider",
-            type=str,
-            help="LLM provider to use for scoring completions.",
-            default="togetherai",
-        )
-
-        parser.add_argument(
-            "--aws_mturk_environment",
-            choices=["sandbox", "production"],
-            type=str,
-            help="AWS MTurk environment to use",
-        )
-
 
 def get_config():
     """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
     bt.subtensor.add_args(parser)
-    bt.logging.add_args(parser)
     bt.axon.add_args(parser)
     add_args(parser)
     _config = bt.config(parser)

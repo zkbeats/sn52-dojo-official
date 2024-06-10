@@ -8,6 +8,7 @@ from typing import Dict, Tuple
 
 from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
+from loguru import logger
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
@@ -29,7 +30,7 @@ class Miner(BaseMinerNeuron):
         self.dendrite = bt.dendrite(wallet=self.wallet)
 
         # Attach determiners which functions are called when servicing a request.
-        bt.logging.info("Attaching forward function to miner axon.")
+        logger.info("Attaching forward function to miner axon.")
         self.axon.attach(
             forward_fn=self.forward_feedback_request,
             blacklist_fn=self.blacklist_feedback_request,
@@ -45,23 +46,23 @@ class Miner(BaseMinerNeuron):
         self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
-        bt.logging.info("Received scoring result from validators")
+        logger.info("Received scoring result from validators")
 
         found_miner_score = synapse.hotkey_to_scores.get(
             self.wallet.hotkey.ss58_address, None
         )
         if found_miner_score is None:
-            bt.logging.error(
+            logger.error(
                 f"Miner hotkey {self.wallet.hotkey.ss58_address} not found in scoring result but yet was send the result"
             )
             return
-        bt.logging.info(f"Miner received score: {found_miner_score}")
+        logger.info(f"Miner received score: {found_miner_score}")
         return
 
     async def forward_feedback_request(
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
-        bt.logging.info(f"Miner received request id: {synapse.request_id}")
+        logger.info(f"Miner received request id: {synapse.request_id}")
         try:
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
@@ -73,9 +74,9 @@ class Miner(BaseMinerNeuron):
                 synapse.dojo_task_id = task_ids[0]
 
             else:
-                bt.logging.error("Unrecognized scoring method!")
+                logger.error("Unrecognized scoring method!")
         except Exception:
-            bt.logging.error(
+            logger.error(
                 f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
             )
 
@@ -84,15 +85,15 @@ class Miner(BaseMinerNeuron):
     async def blacklist_feedback_request(
         self, synapse: FeedbackRequest
     ) -> Tuple[bool, str]:
-        bt.logging.info("checking blacklist function")
+        logger.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
         if caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
-            bt.logging.warning(
+            logger.warning(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
-        bt.logging.debug(f"Got request from {caller_hotkey}")
+        logger.debug(f"Got request from {caller_hotkey}")
 
         # TODO @dev remember to remove these when going live
         if caller_hotkey.lower() in [
@@ -107,7 +108,7 @@ class Miner(BaseMinerNeuron):
             return True, "Not a validator"
 
         if validator_neuron.stake.tao < float(VALIDATOR_MIN_STAKE):
-            bt.logging.warning(
+            logger.warning(
                 f"Blacklisting hotkey: {caller_hotkey} with insufficient stake, minimum stake required: {VALIDATOR_MIN_STAKE}, current stake: {validator_neuron.stake.tao}"
             )
             return True, "Insufficient validator stake"
@@ -125,9 +126,7 @@ class Miner(BaseMinerNeuron):
         current_timestamp = datetime.fromtimestamp(get_epoch_time())
         dt = current_timestamp - datetime.fromtimestamp(synapse.epoch_timestamp)
         priority = float(dt.total_seconds())
-        bt.logging.debug(
-            f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}"
-        )
+        logger.debug(f"Prioritizing {synapse.dendrite.hotkey} with value: {priority}")
         return priority
 
     def resync_metagraph(self):
@@ -141,10 +140,10 @@ class Miner(BaseMinerNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info("Metagraph updated")
+        logger.info("Metagraph updated")
 
     @classmethod
     async def log_miner_status(cls):
         while not cls._should_exit:
-            bt.logging.info(f"Miner running... {time.time()}")
+            logger.info(f"Miner running... {time.time()}")
             await asyncio.sleep(20)

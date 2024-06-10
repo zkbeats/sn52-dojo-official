@@ -3,11 +3,10 @@ import json
 from typing import Dict, List, Optional
 
 import httpx
+from commons.utils import loaddotenv
 from dotenv import load_dotenv
 from loguru import logger
 from requests_toolbelt import MultipartEncoder
-
-from commons.utils import loaddotenv
 from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
@@ -78,16 +77,9 @@ class DojoAPI:
             "criteria": [],
         }
         for criteria_type in ranking_request.criteria_types:
-            if isinstance(criteria_type, RankingCriteria):
-                taskData["criteria"].append(
-                    {
-                        **criteria_type.dict(),
-                        "options": [
-                            option for option in criteria_type.dict().get("options", [])
-                        ],
-                    }
-                )
-            elif isinstance(criteria_type, MultiScoreCriteria):
+            if isinstance(criteria_type, RankingCriteria) or isinstance(
+                criteria_type, MultiScoreCriteria
+            ):
                 taskData["criteria"].append(
                     {
                         **criteria_type.dict(),

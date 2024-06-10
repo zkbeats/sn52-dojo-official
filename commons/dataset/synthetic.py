@@ -5,10 +5,9 @@ from typing import List
 import aiohttp
 from commons.utils import log_retry_info
 from dotenv import load_dotenv
+from loguru import logger
 from template.protocol import SyntheticQA
 from tenacity import AsyncRetrying, RetryError, stop_after_attempt
-
-import bittensor as bt
 
 load_dotenv()
 
@@ -25,7 +24,7 @@ class SyntheticAPI:
     @classmethod
     async def get_qa(cls) -> List[SyntheticQA]:
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
-        bt.logging.debug(f"Generating synthetic QA from {path}.")
+        logger.debug(f"Generating synthetic QA from {path}.")
         # Instantiate the aiohttp ClientSession outside the loop
 
         session = get_client_session()
@@ -41,10 +40,8 @@ class SyntheticAPI:
                         if "body" not in response_json:
                             raise ValueError("Invalid response from the server.")
                         synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
-                        bt.logging.info(
-                            "Synthetic QA generated and parsed successfully."
-                        )
+                        logger.info("Synthetic QA generated and parsed successfully.")
                         return synthetic_qa
         except RetryError:
-            bt.logging.error("Failed to generate synthetic QA after retries.")
+            logger.error("Failed to generate synthetic QA after retries.")
             return None

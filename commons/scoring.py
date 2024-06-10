@@ -18,8 +18,6 @@ from template.protocol import (
 )
 from torch.nn import functional as F
 
-import bittensor as bt
-
 
 @define(kw_only=True, frozen=True, slots=True)
 class Result:
@@ -291,9 +289,9 @@ class Scoring:
         diff_gt = torch.tensor(
             -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
         )
-        bt.logging.trace(f"{diff_gt=}")
+        logger.trace(f"{diff_gt=}")
         diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
-        bt.logging.trace(f"{diff_gt_sm=}")
+        logger.trace(f"{diff_gt_sm=}")
 
         return GroundTruthScore(
             score=diff_gt_sm,

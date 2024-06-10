@@ -1,12 +1,14 @@
+import bisect
+import random
+import uuid
 from collections import defaultdict
 from typing import List, Optional
-import uuid
-import torch
-import random
-import bittensor as bt
-import bisect
 
+import torch
 from commons.utils import keccak256_hash
+from loguru import logger
+
+import bittensor as bt
 
 
 def get_all_serving_uids(metagraph: bt.metagraph):
@@ -39,7 +41,7 @@ def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
             avail_uids.append(uid)
 
     # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
-    bt.logging.info(f"available uids: {avail_uids}")
+    logger.info(f"available uids: {avail_uids}")
     if not len(avail_uids):
         return torch.tensor([])
 

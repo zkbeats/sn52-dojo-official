@@ -63,7 +63,7 @@ class DojoTaskTracker:
     @classmethod
     async def update_task_map(cls, dojo_responses: List[FeedbackRequest]):
         if not dojo_responses:
-            bt.logging.warning("No Dojo responses found")
+            logger.warning("No Dojo responses found")
             return
 
         async with cls._lock:
@@ -73,7 +73,7 @@ class DojoTaskTracker:
                     dojo_responses,
                 )
             )
-            bt.logging.info(
+            logger.info(
                 f"Got {len(valid_responses)} valid Dojo responses to update task tracker"
             )
 
@@ -106,7 +106,7 @@ class DojoTaskTracker:
 
                         for miner_hotkey, task_id in miner_to_task_id.items():
                             if not task_id:
-                                bt.logging.warning(
+                                logger.warning(
                                     f"No task ID found for miner hotkey: {miner_hotkey}"
                                 )
                                 continue
@@ -115,14 +115,14 @@ class DojoTaskTracker:
                                 task_id
                             )
                             if not task_results:
-                                bt.logging.warning(
+                                logger.warning(
                                     f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
                                 )
                                 continue
 
                             data = await DataManager.get_by_request_id(request_id)
                             if not data or not data.request:
-                                bt.logging.error(
+                                logger.error(
                                     f"No request on disk found for request id: {request_id}"
                                 )
                                 continue
@@ -250,7 +250,7 @@ class Validator(BaseNeuron):
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
-        bt.logging.info(f"Dendrite: {self.dendrite}")
+        logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
         self.load_state()
@@ -264,9 +264,9 @@ class Validator(BaseNeuron):
         """Send consensus score back to miners who participated in the request."""
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
         if not axons:
-            bt.logging.warning("No axons to send consensus to... skipping")
+            logger.warning("No axons to send consensus to... skipping")
         else:
-            bt.logging.debug(
+            logger.debug(
                 f"Sending back consensus to miners for request id: {synapse.request_id}"
             )
 
@@ -281,14 +281,15 @@ class Validator(BaseNeuron):
         await asyncio.sleep(60)
         while True:
             try:
-                bt.logging.debug(
+                logger.debug(
                     f"Scheduled update score and send feedback triggered at time: {time.time()}"
                 )
                 data = await DataManager.load(path=DataManager.get_requests_data_path())
                 if not data:
-                    bt.logging.debug(
+                    logger.debug(
                         "Skipping scoring as no feedback data found, this means either all have been processed or you are running the validator for the first time."
                     )
+                    await asyncio.sleep(60)
                     continue
 
                 current_time = get_epoch_time()
@@ -300,12 +301,12 @@ class Validator(BaseNeuron):
                     if (current_time - d.request.epoch_timestamp) >= TASK_DEADLINE
                 ]
                 if not filtered_data:
-                    bt.logging.warning(
+                    logger.warning(
                         "Skipping scoring as no feedback data is due for scoring."
                     )
                     continue
 
-                bt.logging.info(
+                logger.info(
                     f"Got {len(filtered_data)} requests past deadline and ready to score"
                 )
                 for d in filtered_data:
@@ -355,7 +356,7 @@ class Validator(BaseNeuron):
                             .tolist()
                         )
 
-                        bt.logging.info(
+                        logger.info(
                             f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
                         )
 
@@ -445,7 +446,7 @@ class Validator(BaseNeuron):
             != self.wallet.hotkey.ss58_address.casefold()
         ]
         if not len(axons):
-            bt.logging.warning("No axons to query ... skipping")
+            logger.warning("No axons to query ... skipping")
             return
 
         miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
@@ -485,17 +486,17 @@ class Validator(BaseNeuron):
         logger.info(
             f"Saved dendrite response for request id: {response_data.request.request_id}, success: {success}"
         )
-        bt.logging.info(
+        logger.info(
             f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
         return
 
     async def run(self):
-        bt.logging.info(
+        logger.info(
             f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
 
-        bt.logging.info(f"Validator starting at block: {self.block}")
+        logger.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
@@ -505,7 +506,7 @@ class Validator(BaseNeuron):
 
                 # # Check if we should exit.
                 if self._should_exit:
-                    bt.logging.info("Validator should stop...")
+                    logger.info("Validator should stop...")
                     break
 
                 # Sync metagraph and potentially set weights.
@@ -517,13 +518,13 @@ class Validator(BaseNeuron):
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Validator killed by keyboard interrupt.")
+            logger.success("Validator killed by keyboard interrupt.")
             exit()
 
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
-            bt.logging.error("Error during validation", str(err))
-            bt.logging.debug(print_exception(type(err), err, err.__traceback__))
+            logger.error("Error during validation", str(err))
+            logger.debug(print_exception(type(err), err, err.__traceback__))
 
     def set_weights(self):
         """
@@ -533,7 +534,7 @@ class Validator(BaseNeuron):
 
         # Check if self.scores contains any NaN values and log a warning if it does.
         if torch.isnan(self.scores).any():
-            bt.logging.warning(
+            logger.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
@@ -541,15 +542,15 @@ class Validator(BaseNeuron):
         # Replace any NaN values with 0.
         normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
 
-        bt.logging.debug(f"Raw scores: {self.scores}")
-        bt.logging.debug(f"normalized weights: {normalized_weights}")
-        bt.logging.debug(f"normalized weights uids: {self.metagraph.uids}")
+        logger.debug(f"Raw scores: {self.scores}")
+        logger.debug(f"normalized weights: {normalized_weights}")
+        logger.debug(f"normalized weights uids: {self.metagraph.uids}")
 
         if torch.count_nonzero(normalized_weights).item() == 0:
-            bt.logging.warning("All weights are zero, skipping...")
+            logger.warning("All weights are zero, skipping...")
             return
 
-        bt.logging.info("Attempting to set weights")
+        logger.info("Attempting to set weights")
 
         # Process the raw weights to final_weights via subtensor limitations.
         (
@@ -562,8 +563,8 @@ class Validator(BaseNeuron):
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug(f"processed weights {processed_weights}")
-        bt.logging.debug(f"processed weights uids {processed_weight_uids}")
+        logger.debug(f"processed weights {processed_weights}")
+        logger.debug(f"processed weights uids {processed_weight_uids}")
 
         # Set the weights on chain via our subtensor connection.
         result = self.subtensor.set_weights(
@@ -576,9 +577,9 @@ class Validator(BaseNeuron):
             version_key=self.spec_version,
         )
         if result is True:
-            bt.logging.success("Validator set weights on chain successfully!")
+            logger.success("Validator set weights on chain successfully!")
         else:
-            bt.logging.error("set_weights failed")
+            logger.error("set_weights failed")
         return result
 
     def resync_metagraph(self):
@@ -593,7 +594,7 @@ class Validator(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info(
+        logger.info(
             "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
         # Zero out all hotkeys that have been replaced.
@@ -616,7 +617,7 @@ class Validator(BaseNeuron):
 
         nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
         if nan_value_indices.any():
-            bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
+            logger.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
             return
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
@@ -631,20 +632,20 @@ class Validator(BaseNeuron):
             try:
                 uid = neuron_hotkeys.index(key)
             except ValueError:
-                bt.logging.warning(
+                logger.warning(
                     "Old hotkey found from previous metagraph, skip setting weights"
                 )
                 continue
 
-            bt.logging.trace(f"Score for hotkey {key} is {value}")
+            logger.trace(f"Score for hotkey {key} is {value}")
             rewards[uid] = value
 
-        bt.logging.debug(f"Rewards: {rewards}")
+        logger.debug(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
         self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores
-        bt.logging.debug(f"Updated scores: {self.scores}")
+        logger.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
@@ -681,5 +682,5 @@ class Validator(BaseNeuron):
     @classmethod
     async def log_validator_status(cls):
         while not cls._should_exit:
-            bt.logging.info(f"Validator running... {time.time()}")
+            logger.info(f"Validator running... {time.time()}")
             await asyncio.sleep(20)

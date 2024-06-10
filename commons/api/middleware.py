@@ -3,10 +3,9 @@ from ipaddress import ip_address, ip_network
 
 import httpx
 from fastapi import Request
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-
-import bittensor as bt
 
 MAX_CONTENT_LENGTH = 1 * 1024 * 1024
 
@@ -42,7 +41,7 @@ class AWSIPFilterMiddleware(BaseHTTPMiddleware):
             response = await client.get(cls._aws_ips_url)
             cls._last_checked = time.time()
             elapsed_time = cls._last_checked - start_time
-            bt.logging.debug(
+            logger.debug(
                 f"Sent request to {cls._aws_ips_url}, took {elapsed_time:.2f} seconds"
             )
             data = response.json()

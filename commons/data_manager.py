@@ -4,12 +4,10 @@ import pickle
 from pathlib import Path
 from typing import Any, List, Optional
 
-import bittensor as bt
 import torch
+from commons.objects import ObjectManager
 from loguru import logger
 from strenum import StrEnum
-
-from commons.objects import ObjectManager
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
@@ -52,13 +50,13 @@ class DataManager:
             with open(str(path), "rb") as file:
                 return pickle.load(file)
         except FileNotFoundError as e:
-            bt.logging.error(f"File not found at {path}... , exception:{e}")
+            logger.error(f"File not found at {path}... , exception:{e}")
             return None
         except pickle.PickleError as e:
-            bt.logging.error(f"Pickle error: {e}")
+            logger.error(f"Pickle error: {e}")
             return None
         except Exception:
-            bt.logging.error("Failed to load existing ranking data from file.")
+            logger.error("Failed to load existing ranking data from file.")
             return None
 
     @classmethod
@@ -72,10 +70,10 @@ class DataManager:
         try:
             with open(str(path), "wb") as file:
                 pickle.dump(data, file)
-                bt.logging.success(f"Saved data to {path}")
+                logger.success(f"Saved data to {path}")
                 return True
         except Exception as e:
-            bt.logging.error(f"Failed to save data to file: {e}")
+            logger.error(f"Failed to save data to file: {e}")
             return False
 
     @classmethod
@@ -84,10 +82,10 @@ class DataManager:
             async with cls._lock:
                 with open(str(path), "wb") as file:
                     pickle.dump(data, file)
-                    bt.logging.success(f"Saved data to {path}")
+                    logger.success(f"Saved data to {path}")
                     return True
         except Exception as e:
-            bt.logging.error(f"Failed to save data to file: {e}")
+            logger.error(f"Failed to save data to file: {e}")
             return False
 
     @classmethod
@@ -165,7 +163,7 @@ class DataManager:
     @classmethod
     async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Attempting to save validator state.")
+        logger.info("Attempting to save validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
@@ -188,14 +186,14 @@ class DataManager:
     @classmethod
     async def validator_load(cls):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
+        logger.info("Loading validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             try:
                 state = torch.load(cls.get_validator_state_filepath())
                 return state
             except FileNotFoundError:
-                bt.logging.error("Validator state file not found.")
+                logger.error("Validator state file not found.")
                 return None
             except Exception as e:
                 logger.error(f"Unexpected error: {e}")

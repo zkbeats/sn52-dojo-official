@@ -5,10 +5,9 @@ from commons.utils import get_new_uuid
 from dotenv import load_dotenv
 from fastapi import APIRouter, responses
 from fastapi.encoders import jsonable_encoder
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 from template.protocol import FeedbackRequest, Response
-
-import bittensor as bt
 
 load_dotenv()
 
@@ -48,4 +47,4 @@ async def reward_request_handler(request: ExternalRequest):
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)
     except Exception as e:
-        bt.logging.error(f"Encountered exception: {e}")
+        logger.error(f"Encountered exception: {e}")

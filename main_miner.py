@@ -1,10 +1,10 @@
 import asyncio
+from loguru import logger
 
-import bittensor as bt
-from dotenv import load_dotenv
 
 import wandb
 from commons.objects import ObjectManager
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -13,7 +13,7 @@ miner = ObjectManager.get_miner()
 
 async def shutdown():
     """Asynchronously cleanup tasks tied to the service's shutdown."""
-    bt.logging.info("Received exit signal, shutting down asynchronously...")
+    logger.info("Received exit signal, shutting down asynchronously...")
     miner._should_exit = True
     await asyncio.sleep(1)  # Simulate some async cleanup
     wandb.finish()
@@ -24,7 +24,7 @@ async def main():
     run_task = asyncio.create_task(miner.run())
 
     await asyncio.gather(log_task, run_task)
-    bt.logging.info("Exiting main function.")
+    logger.info("Exiting main function.")
 
 
 if __name__ == "__main__":

@@ -10,9 +10,8 @@ from commons.objects import ObjectManager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 from neurons.validator import DojoTaskTracker
-
-import bittensor as bt
 
 load_dotenv()
 
@@ -22,9 +21,9 @@ validator = ObjectManager.get_validator()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    bt.logging.info("Performing startup tasks...")
+    logger.info("Performing startup tasks...")
     yield
-    bt.logging.info("Performing shutdown tasks...")
+    logger.info("Performing shutdown tasks...")
     validator._should_exit = True
     DojoTaskTracker()._should_exit = True
     wandb.finish()
@@ -64,12 +63,12 @@ async def main():
         try:
             await task
         except asyncio.CancelledError:
-            bt.logging.info(f"Cancelled task {task.get_name()}")
+            logger.info(f"Cancelled task {task.get_name()}")
         except Exception as e:
-            bt.logging.error(f"Task {task.get_name()} raised an exception: {e}")
+            logger.error(f"Task {task.get_name()} raised an exception: {e}")
             pass
 
-    bt.logging.info("Exiting main function.")
+    logger.info("Exiting main function.")
 
 
 if __name__ == "__main__":
