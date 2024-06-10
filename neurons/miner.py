@@ -1,6 +1,5 @@
 import asyncio
 import copy
-import functools
 import threading
 import time
 import traceback
@@ -8,18 +7,14 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 from commons.human_feedback.dojo import DojoAPI
-from commons.objects import ObjectManager
-from commons.reward_model.models import RewardModel
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     FeedbackRequest,
-    RankingCriteria,
     ScoringMethod,
     ScoringResult,
 )
-from template.utils.config import get_config
 from template.utils.uids import is_miner
 
 import bittensor as bt
@@ -77,110 +72,6 @@ class Miner(BaseMinerNeuron):
                 assert len(task_ids) == 1
                 synapse.dojo_task_id = task_ids[0]
 
-            elif scoring_method.casefold() == ScoringMethod.HF_MODEL:
-                synapse.scoring_method = ScoringMethod.HF_MODEL
-                loop = asyncio.get_event_loop()
-                tasks = [
-                    loop.run_in_executor(
-                        None,
-                        RewardModel.hf_score_text,
-                        get_config().model_name,
-                        synapse.prompt,
-                        completion.text,
-                    )
-                    for completion in synapse.responses
-                ]
-                scores = await asyncio.gather(*tasks)
-                sorted_model_scores = sorted(
-                    (
-                        (completion.model, score)
-                        for completion, score in zip(synapse.responses, scores)
-                    ),
-                    key=lambda x: x[1],
-                    reverse=True,
-                )
-
-                for i in range(len(synapse.responses)):
-                    key = synapse.responses[i].model
-                    index = next(
-                        (
-                            i
-                            for i, pair in enumerate(sorted_model_scores)
-                            if pair[0] == key
-                        ),
-                        None,
-                    )
-                    if index is None:
-                        bt.logging.error(
-                            "You fucked up and placed the wrong item in the list"
-                        )
-                        continue
-                    synapse.responses[i].rank_id = index
-
-            elif scoring_method.casefold() == ScoringMethod.LLM_API:
-                synapse.scoring_method = ScoringMethod.LLM_API
-                scores_response = await RewardModel.llm_api_score_text(
-                    provider=get_config().llm_provider,
-                    model_name=get_config().model_name,
-                    prompt=synapse.prompt,
-                    completions=synapse.responses,
-                )
-
-                for i in range(len(synapse.responses)):
-                    matching_score_item = next(
-                        (
-                            item
-                            for item in scores_response.scores
-                            if item.model_id == synapse.responses[i].model
-                        ),
-                        None,
-                    )
-                    if not matching_score_item:
-                        continue
-                    synapse.responses[i].rank_id = matching_score_item.rank_id
-
-                    for criteria in synapse.criteria_types:
-                        sorted_model_score_pairs = sorted(
-                            [
-                                (item.model_id, item.score)
-                                for item in scores_response.scores
-                            ],
-                            key=lambda x: x[1],
-                            reverse=True,
-                        )
-                        if isinstance(criteria, RankingCriteria):
-                            sorted_model_rank_pairs = [
-                                (model_with_score[0], i)
-                                for i, model_with_score in enumerate(
-                                    sorted_model_score_pairs, start=1
-                                )
-                            ]
-                            for model_rank_pair in sorted_model_rank_pairs:
-                                for completion in synapse.responses:
-                                    if completion.model == model_rank_pair[0]:
-                                        completion.model_rank_pair_id = model_rank_pair[
-                                            1
-                                        ]
-
-            elif scoring_method.casefold() == ScoringMethod.AWS_MTURK:
-                # send off to MTurk workers in a non-blocking way
-                loop = asyncio.get_event_loop()
-                task = functools.partial(
-                    MTurkUtils.create_mturk_task,
-                    prompt=synapse.prompt,
-                    completions=synapse.responses,
-                    reward_in_dollars=0.10,
-                )
-                synapse.scoring_method = ScoringMethod.AWS_MTURK
-                success, hit_id = await loop.run_in_executor(None, task)
-                if success:
-                    synapse.mturk_hit_id = hit_id
-
-                credentials = STSUtils.assume_role()
-                credentials.environment = (
-                    ObjectManager.get_config().aws_mturk_environment
-                )
-                synapse.aws_credentials = credentials
             else:
                 bt.logging.error("Unrecognized scoring method!")
         except:
