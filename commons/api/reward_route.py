@@ -21,7 +21,7 @@ class ExternalRequest(BaseModel):
     prompt: str = Field(..., description="Prompt that generated the completions")
     completions: List[str] = Field(..., description="List of completions")
     media_type: str = Field(
-        ..., description="Media type of the request", regex="^(text|image)$"
+        ..., description="Media type of the request", pattern="^(text|image)$"
     )
     # scoring_methods: List[ScoringMethod] = Field(
     #     ..., description="List of scoring methods to use"
