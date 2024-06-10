@@ -1,18 +1,18 @@
 import asyncio
 from contextlib import asynccontextmanager
 
-import bittensor as bt
 import uvicorn
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
 import wandb
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from neurons.validator import DojoTaskTracker
+
+import bittensor as bt
 
 load_dotenv()
 
@@ -35,9 +35,6 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 app.add_middleware(LimitContentLengthMiddleware)
 app.include_router(reward_router)
