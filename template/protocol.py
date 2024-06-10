@@ -1,13 +1,10 @@
-from datetime import datetime
 from typing import Dict, List, Optional, Union
 
-import bittensor as bt
+from commons.utils import get_epoch_time, get_new_uuid
 from pydantic import BaseModel, Field
 from strenum import StrEnum
 
-# from commons.dataset.synthetic import CodeAnswer
-from commons.llm.openai_proxy import Provider
-from commons.utils import get_epoch_time, get_new_uuid
+import bittensor as bt
 
 
 class TaskType(StrEnum):
@@ -53,30 +50,6 @@ class ScoringMethod(StrEnum):
     DOJO = "dojo"
 
 
-# higher value in this map are priortised and allowed to override data on the miner side
-SCORING_METHOD_PRIORITY: Dict[ScoringMethod, int] = {
-    ScoringMethod.HF_MODEL: 1,
-    ScoringMethod.LLM_API: 0,
-    ScoringMethod.AWS_MTURK: 2,
-    ScoringMethod.DOJO: 3,
-}
-
-
-# # NOTE refactored and p[laced into]
-# class Completion(CodeAnswer):
-#     class Config:
-#         allow_mutation = False
-
-#     cid: str = Field(
-#         default_factory=get_new_uuid,
-#         description="Unique identifier for the completion",
-#     )
-#     model_id: str = Field(description="Model that generated the completion")
-#     text: str = Field(description="Text of the completion")
-#     rank_id: int = Field(description="Rank of the completion", examples=[1, 2, 3, 4])
-#     score: float = Field("Score of the completion")
-
-
 class FileObject(BaseModel):
     filename: str = Field(description="Name of the file")
     content: str = Field(description="Content of the file which can be code or json")
@@ -112,19 +85,6 @@ class SyntheticQA(BaseModel):
     responses: List[Response]
 
 
-class ModelConfig(BaseModel):
-    provider: Optional[Provider]
-    model_name: str
-
-
-class AWSCredentials(BaseModel):
-    access_key_id: str
-    secret_access_key: str
-    session_token: str
-    access_expiration: datetime
-    environment: str
-
-
 class FeedbackRequest(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
@@ -152,11 +112,7 @@ class FeedbackRequest(bt.Synapse):
     scoring_method: Optional[str] = Field(
         decscription="Method to use for scoring completions"
     )
-    mturk_hit_id: Optional[str] = Field(description="MTurk HIT ID for the request")
     dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
-    aws_credentials: Optional[AWSCredentials] = Field(
-        description="Temporary AWS credentials from the miner that validator can use to verify task completions"
-    )
 
 
 class ScoringResult(bt.Synapse):
@@ -175,17 +131,3 @@ class DendriteQueryResponse(BaseModel):
 
     request: FeedbackRequest
     miner_responses: List[FeedbackRequest]
-
-
-class ScoreItem(BaseModel):
-    model_id: str
-    score: float
-
-
-# meant to be used with JSON mode
-class ScoresResponse(BaseModel):
-    scores: List[ScoreItem]
-
-
-class PreferenceResponse(BaseModel):
-    preference_text: int
