@@ -5,7 +5,7 @@ import time
 import traceback
 from collections import defaultdict
 from traceback import print_exception
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -23,7 +23,6 @@ from template.protocol import (
     CriteriaTypeEnum,
     DendriteQueryResponse,
     FeedbackRequest,
-    MTurkResponse,
     MultiScoreCriteria,
     RankingCriteria,
     ScoringMethod,
@@ -35,7 +34,6 @@ from template.utils.config import get_config
 from template.utils.uids import (
     MinerUidSelector,
     extract_miner_uids,
-    is_miner,
 )
 from torch.nn import functional as F
 
@@ -261,25 +259,6 @@ class Validator(BaseNeuron):
         self.check_registered()
         self.resync_metagraph()
         # init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
-
-    async def blacklist_mturk_response(
-        self, synapse: MTurkResponse
-    ) -> Tuple[bool, str]:
-        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
-            # Ignore requests from unrecognized entities.
-            bt.logging.warning(
-                f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
-            )
-            return True, "Unrecognized hotkey"
-
-        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        if not is_miner(self.metagraph, caller_uid):
-            bt.logging.warning(
-                f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
-            )
-            return True, "Validators not allowed"
-
-        return False, "Valid request received from miner"
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
