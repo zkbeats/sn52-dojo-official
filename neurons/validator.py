@@ -20,7 +20,6 @@ from fastapi.encoders import jsonable_encoder
 from loguru import logger
 from template.base.neuron import BaseNeuron
 from template.protocol import (
-    AWSCredentials,
     CriteriaTypeEnum,
     DendriteQueryResponse,
     FeedbackRequest,
@@ -281,130 +280,6 @@ class Validator(BaseNeuron):
             return True, "Validators not allowed"
 
         return False, "Valid request received from miner"
-
-    @staticmethod
-    def verify_mturk_task(
-        aws_credentials: AWSCredentials,
-        hit_id: str,
-        completion_id_to_score: Dict[str, float],
-    ):
-        temp_client = MTurkUtils.get_client(
-            access_key_id=aws_credentials.access_key_id,
-            secret_access_key=aws_credentials.secret_access_key,
-            session_token=aws_credentials.session_token,
-            environment=aws_credentials.environment,
-        )
-        res = temp_client.list_assignments_for_hit(HITId=hit_id)
-        answers = [parse_assignment(assignment) for assignment in res["Assignments"]]
-        if not answers:
-            return False, "No assignments found for HIT"
-
-        cids_to_check = set(completion_id_to_score.keys())
-        # example of answers variable
-        # [{'Answer': [{'taskAnswers': [{'a6f41ad1-d8a8-4bf3-a698-1b431bf2edac': 5.68, 'f95cae4d-38ed-4911-b97a-f92a0c3bad9a': 7.49}]}], 'HITId': '3MG8450X3U3J7MRIYLXCI5SO1CIUPJ'}]
-        for answer in answers:
-            task_answers = answer.get("Answer", [])
-            for task_answer in task_answers:
-                for task_key, score in task_answer.get("taskAnswers", {}).items():
-                    completion_id = MTurkUtils.decode_task_key(task_key)
-                    if completion_id not in cids_to_check:
-                        bt.logging.warning(
-                            f"Completion ID {completion_id} found in MTurk task answers is not in the expected set."
-                        )
-                        return (
-                            False,
-                            f"Unexpected completion ID {completion_id} in MTurk task answers.",
-                        )
-                    elif completion_id_to_score[completion_id] != score:
-                        bt.logging.warning(
-                            f"Score mismatch for completion ID {completion_id}: expected {completion_id_to_score[completion_id]}, got {score} from MTurk task answers."
-                        )
-                        return (
-                            False,
-                            f"Score mismatch for completion ID {completion_id}.",
-                        )
-
-        return True, "All checks passed"
-
-    # async def forward_mturk_response(self, synapse: MTurkResponse):
-    #     """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
-    #     # 1. check request from RankingRequest
-    #     # 2. append completion scores to request
-    #     # 3. persist on disk via DataManager
-
-    #     path = DataManager.get_ranking_data_filepath()
-    #     data = await DataManager.load(path=path)
-    #     miner_hotkey = synapse.dendrite.hotkey
-    #     if not data:
-    #         bt.logging.error(
-    #             f"Received MTurk response from miner {miner_hotkey} but no requests persisted on disk."
-    #         )
-    #         return
-
-    #     mturk_cids = set(synapse.completion_id_to_score.keys())
-
-    #     for d in data:
-    #         request_cids = set([completion.cid for completion in d.request.completions])
-
-    #         if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
-    #             bt.logging.warning(
-    #                 f"Received mturk response with {mturk_cids=}, but no found requests with those matching CIDs."
-    #             )
-    #             continue
-
-    #         bt.logging.info(
-    #             f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
-    #         )
-
-    #         existing_responses = {r.axon.hotkey: r for r in d.responses}
-    #         if miner_hotkey in existing_responses:
-    #             existing_method = ScoringMethod(
-    #                 existing_responses[miner_hotkey].scoring_method
-    #             )
-    #             new_method = ScoringMethod.AWS_MTURK
-    #             if (
-    #                 SCORING_METHOD_PRIORITY[new_method]
-    #                 > SCORING_METHOD_PRIORITY[existing_method]
-    #             ):
-    #                 bt.logging.info(
-    #                     f"Replacing {existing_method} with higher priority {new_method} for request id: {d.request.request_id}"
-    #                 )
-    #                 d.responses.remove(existing_responses[miner_hotkey])
-    #             else:
-    #                 bt.logging.warning(
-    #                     f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
-    #                 )
-    #                 continue
-
-    #         is_verified, reason = self.verify_mturk_task(
-    #             synapse.aws_credentials,
-    #             synapse.mturk_hit_id,
-    #             synapse.completion_id_to_score,
-    #         )
-    #         if not is_verified:
-    #             bt.logging.error(
-    #                 f"MTurk task verification failed due to reason:{reason}"
-    #             )
-    #             return
-
-    #         request_copy = copy.deepcopy(d.request)
-    #         for cid in found_cids:
-    #             # similar to scoring method in Miner.forward(...)
-    #             request_copy.ranks.append(
-    #                 Rank(
-    #                     cid=cid,
-    #                     score=synapse.completion_id_to_score[cid],
-    #                     scoring_method=ScoringMethod.AWS_MTURK,
-    #                 )
-    #             )
-    #             # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
-    #             # function expects axon.hotkey to be the miner's hotkey
-    #             request_copy.axon.hotkey = miner_hotkey
-    #             d.responses.append(request_copy)
-
-    #         d.responses = _filter_valid_responses(d.responses)
-    #     await DataManager.save(path, data)
-    #     return
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""

@@ -1,12 +1,13 @@
 from typing import List
+
+from commons.objects import ObjectManager
+from commons.utils import get_new_uuid
 from dotenv import load_dotenv
 from fastapi import APIRouter, responses
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field
-from commons.objects import ObjectManager
+from template.protocol import FeedbackRequest, Response
 
-from commons.utils import get_new_uuid
-from template.protocol import Response, FeedbackRequest
 import bittensor as bt
 
 load_dotenv()

@@ -1,16 +1,14 @@
-import asyncio
 import functools
 import os
-import time
 from typing import List
 
 import aiohttp
-import bittensor as bt
+from commons.utils import log_retry_info
 from dotenv import load_dotenv
+from template.protocol import SyntheticQA
 from tenacity import AsyncRetrying, RetryError, stop_after_attempt
 
-from commons.utils import log_retry_info
-from template.protocol import SyntheticQA
+import bittensor as bt
 
 load_dotenv()
 
@@ -50,18 +48,3 @@ class SyntheticAPI:
         except RetryError:
             bt.logging.error("Failed to generate synthetic QA after retries.")
             return None
-
-
-if __name__ == "__main__":
-
-    async def simulate_vali():
-        while True:
-            start_time = time.perf_counter()
-            synthetic_qa = await SyntheticAPI.get_qa()
-            elapsed_time = time.perf_counter() - start_time
-            print(f"Time taken to get QA: {elapsed_time:.2f} seconds")
-
-    async def main():
-        await asyncio.gather(*[simulate_vali()])
-
-    asyncio.run(main())

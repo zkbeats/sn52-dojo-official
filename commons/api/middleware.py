@@ -1,11 +1,12 @@
 import time
 from ipaddress import ip_address, ip_network
 
-import bittensor as bt
 import httpx
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
+
+import bittensor as bt
 
 MAX_CONTENT_LENGTH = 1 * 1024 * 1024
 
