@@ -1,8 +1,7 @@
 requests-toolbelt
 scikit-learn
 aiohttp
-bittensor==7.0.1
-boto3
+bittensor==6.9.3
 fastapi
 httpx
 jsonref
@@ -10,7 +9,7 @@ loguru
 numpy
 openai
 pingouin
-pydantic>=2
+pydantic
 python-dotenv
 scipy
 StrEnum
