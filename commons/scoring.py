@@ -1,17 +1,14 @@
 from collections import defaultdict
 from typing import Dict, List, Optional
 
-import bittensor as bt
 import numpy as np
 import pandas as pd
 import pingouin as pg
 import torch
 from attr import define, field
+from commons.dataset.leaderboard import get_leaderboard_scores
 from loguru import logger
 from pydantic import BaseModel, Field
-from torch.nn import functional as F
-
-from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
     CriteriaType,
     FeedbackRequest,
@@ -19,6 +16,9 @@ from template.protocol import (
     RankingCriteria,
     Response,
 )
+from torch.nn import functional as F
+
+import bittensor as bt
 
 
 @define(kw_only=True, frozen=True, slots=True)
@@ -338,7 +338,9 @@ class Scoring:
                 logger.warning(
                     f"Skipping scoring for request id: {request.request_id} as not enough valid responses"
                 )
-                # TODO make the score just zeros
+                for r in valid_miner_responses:
+                    hotkey_to_final_score[r.axon.hotkey] = 0.0
+
                 continue
 
             gt_score = Scoring.cmp_ground_truth(

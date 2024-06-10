@@ -39,7 +39,6 @@ async def reward_request_handler(request: ExternalRequest):
         n_completions=len(request.completions),
         pid=get_new_uuid(),
         prompt=request.prompt,
-        # TODO this needs proper refactoring later on
         responses=[Response() for c in request.completions],
     )
 
