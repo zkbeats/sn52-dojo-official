@@ -74,8 +74,10 @@ class Miner(BaseMinerNeuron):
 
             else:
                 bt.logging.error("Unrecognized scoring method!")
-        except:
-            traceback.print_exc()
+        except Exception:
+            bt.logging.error(
+                f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
+            )
 
         return synapse
 
