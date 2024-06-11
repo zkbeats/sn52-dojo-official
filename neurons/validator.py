@@ -445,7 +445,7 @@ class Validator(BaseNeuron):
             return
 
         miner_responses: List[FeedbackRequest] = []
-        miner_responses: List[FeedbackRequest] = await self.dendrite(
+        miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
         # try:
