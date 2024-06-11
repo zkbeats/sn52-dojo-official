@@ -102,7 +102,6 @@ class FeedbackRequest(bt.Synapse):
     )
     responses: List[Response] = Field(
         description="List of completions for the prompt",
-        allow_mutation=False,
     )
     task_type: str = Field(description="Type of task", allow_mutation=False)
     criteria_types: List[CriteriaType] = Field(

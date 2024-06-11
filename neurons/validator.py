@@ -453,31 +453,45 @@ class Validator(BaseNeuron):
         valid_miner_responses = []
         try:
             for miner_response in miner_responses:
-                completions = [
-                    obfuscated_model_to_model.get(completion.model, None)
-                    for completion in miner_response.responses
-                ]
-                if any(c is None for c in completions):
+                # map obfuscated model names back to the original model names
+                real_model_ids = []
+
+                for i, completion in enumerate(miner_response.responses):
+                    found_model_id = obfuscated_model_to_model.get(
+                        completion.model, None
+                    )
+                    real_model_ids.append(found_model_id)
+                    if found_model_id:
+                        miner_response.responses[i].model = found_model_id
+
+                if any(c is None for c in real_model_ids):
                     logger.warning("Failed to map obfuscated model to original model")
+                    continue
+
+                if (
+                    miner_response.scoring_method == ScoringMethod.DOJO
+                    and miner_response.dojo_task_id is None
+                ):
+                    logger.debug(
+                        "Miner must provide the dojo task id for scoring method dojo"
+                    )
                     continue
 
                 logger.debug(
                     f"Successfully mapped obfuscated model names for {miner_response.axon.hotkey}"
                 )
 
-                miner_response.responses = completions
                 valid_miner_responses.append(miner_response)
         except Exception as e:
             logger.error(f"Failed to map obfuscated model to original model: {e}")
             pass
 
-        dojo_responses = DojoTaskTracker.filter_dojo_responses(miner_responses)
+        dojo_responses = DojoTaskTracker.filter_dojo_responses(valid_miner_responses)
         logger.debug("Attempting to update task map")
-        # TODO FIX DEADLOCK OCCURRING INSIDE HERE
         await DojoTaskTracker.update_task_map(dojo_responses)
         response_data = DendriteQueryResponse(
             request=synapse,
-            miner_responses=miner_responses,
+            miner_responses=valid_miner_responses,
         )
         # saving response
         success = await DataManager.save_dendrite_response(response=response_data)
