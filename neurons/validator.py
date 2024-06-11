@@ -448,18 +448,6 @@ class Validator(BaseNeuron):
         miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
-        # try:
-        #     # let asyncio timeout take priority
-        #     miner_responses = await asyncio.wait_for(
-        #         self.dendrite.forward(
-        #             axons=axons, synapse=synapse, deserialize=False, timeout=24
-        #         ),
-        #         timeout=24,
-        #     )
-        # except asyncio.TimeoutError:
-        #     logger.debug("Timeout deadline reached for miners to respond.")
-        #     return
-
         # map obfuscated model names back to the original model names
         logger.debug(f"Obfuscated model map: {obfuscated_model_to_model}")
         valid_miner_responses = []
@@ -477,6 +465,7 @@ class Validator(BaseNeuron):
                     f"Successfully mapped obfuscated model names for {miner_response.axon.hotkey}"
                 )
 
+                miner_response.responses = completions
                 valid_miner_responses.append(miner_response)
         except Exception as e:
             logger.error(f"Failed to map obfuscated model to original model: {e}")
