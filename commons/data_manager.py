@@ -100,12 +100,18 @@ class DataManager:
             if not data:
                 # store initial data
                 success = await DataManager._save_without_lock(path, [response])
+                logger.debug(
+                    f"Storing initial data for responses from dendrite query, is successful ? {success}"
+                )
                 return success
 
             # append our data, if the existing data exists
             assert isinstance(data, list)
             data.append(response)
             success = await DataManager._save_without_lock(path, data)
+            logger.debug(
+                f"Storing appended data for responses from dendrite query, is successful ? {success}"
+            )
             return success
 
     @classmethod
@@ -163,16 +169,13 @@ class DataManager:
     @classmethod
     async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id):
         """Saves the state of the validator to a file."""
-        logger.info("Attempting to save validator state.")
+        logger.debug("Attempting to save validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
             if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
                 raise ValueError("Dojo task data and scores are empty. Skipping save.")
 
-            logger.info(
-                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
-            )
             torch.save(
                 {
                     ValidatorStateKeys.SCORES: scores,
@@ -181,6 +184,10 @@ class DataManager:
                     ),
                 },
                 cls.get_validator_state_filepath(),
+            )
+
+            logger.success(
+                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
             )
 
     @classmethod

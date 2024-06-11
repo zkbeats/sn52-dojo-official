@@ -326,7 +326,7 @@ class Scoring:
                     ) + criteria.min
                     if all(v == default_value for v in values):
                         logger.error(
-                            f"Detected all values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
+                            f"Detected all default values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
                         )
                         continue
 
