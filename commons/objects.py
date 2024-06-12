@@ -24,21 +24,6 @@ class ObjectManager:
         return cls._validator
 
     @classmethod
-    def get_seed_dataset_iter(cls):
-        from commons.dataset.dataset import get_seed_dataset
-
-        if cls._seed_dataset_iter is None:
-            cls._seed_dataset_iter = iter(get_seed_dataset())
-        return cls._seed_dataset_iter
-
-    @classmethod
-    def new_seed_dataset_iter(cls):
-        from commons.dataset.dataset import get_seed_dataset
-
-        cls._seed_dataset_iter = iter(get_seed_dataset())
-        return cls._seed_dataset_iter
-
-    @classmethod
     def get_config(cls):
         if cls._config is None:
             cls._config = get_config()

@@ -4,18 +4,17 @@ import pickle
 from pathlib import Path
 from typing import Any, List, Optional
 
-import bittensor as bt
 import torch
+from commons.objects import ObjectManager
 from loguru import logger
 from strenum import StrEnum
-
-from commons.objects import ObjectManager
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
 class ValidatorStateKeys(StrEnum):
     SCORES = "scores"
     DOJO_TASKS_TO_TRACK = "dojo_tasks_to_track"
+    MODEL_MAP = "model_map"
 
 
 class DataManager:
@@ -52,13 +51,13 @@ class DataManager:
             with open(str(path), "rb") as file:
                 return pickle.load(file)
         except FileNotFoundError as e:
-            bt.logging.error(f"File not found at {path}... , exception:{e}")
+            logger.error(f"File not found at {path}... , exception:{e}")
             return None
         except pickle.PickleError as e:
-            bt.logging.error(f"Pickle error: {e}")
+            logger.error(f"Pickle error: {e}")
             return None
         except Exception:
-            bt.logging.error("Failed to load existing ranking data from file.")
+            logger.error("Failed to load existing ranking data from file.")
             return None
 
     @classmethod
@@ -72,10 +71,10 @@ class DataManager:
         try:
             with open(str(path), "wb") as file:
                 pickle.dump(data, file)
-                bt.logging.success(f"Saved data to {path}")
+                logger.success(f"Saved data to {path}")
                 return True
         except Exception as e:
-            bt.logging.error(f"Failed to save data to file: {e}")
+            logger.error(f"Failed to save data to file: {e}")
             return False
 
     @classmethod
@@ -84,10 +83,10 @@ class DataManager:
             async with cls._lock:
                 with open(str(path), "wb") as file:
                     pickle.dump(data, file)
-                    bt.logging.success(f"Saved data to {path}")
+                    logger.success(f"Saved data to {path}")
                     return True
         except Exception as e:
-            bt.logging.error(f"Failed to save data to file: {e}")
+            logger.error(f"Failed to save data to file: {e}")
             return False
 
     @classmethod
@@ -102,12 +101,18 @@ class DataManager:
             if not data:
                 # store initial data
                 success = await DataManager._save_without_lock(path, [response])
+                logger.debug(
+                    f"Storing initial data for responses from dendrite query, is successful ? {success}"
+                )
                 return success
 
             # append our data, if the existing data exists
             assert isinstance(data, list)
             data.append(response)
             success = await DataManager._save_without_lock(path, data)
+            logger.debug(
+                f"Storing appended data for responses from dendrite query, is successful ? {success}"
+            )
             return success
 
     @classmethod
@@ -163,39 +168,41 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id):
+    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id, model_map):
         """Saves the state of the validator to a file."""
-        bt.logging.info("Attempting to save validator state.")
+        logger.debug("Attempting to save validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
             if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
                 raise ValueError("Dojo task data and scores are empty. Skipping save.")
 
-            logger.info(
-                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
-            )
             torch.save(
                 {
                     ValidatorStateKeys.SCORES: scores,
                     ValidatorStateKeys.DOJO_TASKS_TO_TRACK: json.loads(
                         json.dumps(requestid_to_mhotkey_to_task_id)
                     ),
+                    ValidatorStateKeys.MODEL_MAP: json.loads(json.dumps(model_map)),
                 },
                 cls.get_validator_state_filepath(),
+            )
+
+            logger.success(
+                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
             )
 
     @classmethod
     async def validator_load(cls):
         """Loads the state of the validator from a file."""
-        bt.logging.info("Loading validator state.")
+        logger.info("Loading validator state.")
         async with cls._validator_lock:
             cls._ensure_paths_exist()
             try:
                 state = torch.load(cls.get_validator_state_filepath())
                 return state
             except FileNotFoundError:
-                bt.logging.error("Validator state file not found.")
+                logger.error("Validator state file not found.")
                 return None
             except Exception as e:
                 logger.error(f"Unexpected error: {e}")

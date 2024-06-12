@@ -3,21 +3,18 @@ import json
 from typing import Dict, List, Optional
 
 import httpx
+import template
+from commons.utils import loaddotenv
 from dotenv import load_dotenv
 from loguru import logger
 from requests_toolbelt import MultipartEncoder
-
-from commons.utils import loaddotenv
 from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
 )
 
-load_dotenv()
-
-
-DOJO_API_BASE_URL = "***REMOVED***"
+from template import DOJO_API_BASE_URL
 
 
 class DojoAPI:
@@ -78,16 +75,9 @@ class DojoAPI:
             "criteria": [],
         }
         for criteria_type in ranking_request.criteria_types:
-            if isinstance(criteria_type, RankingCriteria):
-                taskData["criteria"].append(
-                    {
-                        **criteria_type.dict(),
-                        "options": [
-                            option for option in criteria_type.dict().get("options", [])
-                        ],
-                    }
-                )
-            elif isinstance(criteria_type, MultiScoreCriteria):
+            if isinstance(criteria_type, RankingCriteria) or isinstance(
+                criteria_type, MultiScoreCriteria
+            ):
                 taskData["criteria"].append(
                     {
                         **criteria_type.dict(),
@@ -102,7 +92,10 @@ class DojoAPI:
         body = {
             "title": "LLM Code Generation Task",
             "body": ranking_request.prompt,
-            "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
+            "expireAt": (
+                datetime.datetime.utcnow()
+                + datetime.timedelta(seconds=template.TASK_DEADLINE)
+            )
             .replace(microsecond=0, tzinfo=datetime.timezone.utc)
             .isoformat()
             .replace("+00:00", "Z"),

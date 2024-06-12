@@ -1,37 +1,35 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 Opentensor Foundation
-
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
 import argparse
 import os
 from pathlib import Path
-
 import bittensor as bt
 
-from commons.reward_model.models import ModelZoo
+
+logger_name = "named_logger"
+
+
+def monkeypatch():
+    """Monkeypatches the logger to add a name attribute."""
+    import loguru
+
+    patched_logger = loguru.logger.bind(name=logger_name)
+    loguru.logger = patched_logger
+
+
+monkeypatch()
+
+from loguru import logger
+
+base_path = Path.cwd()
 
 
 def check_config(config: bt.config):
     """Checks/validates the config namespace object."""
-    bt.logging.check_config(config)
+    # logger.check_config(config)
 
+    log_dir = str(base_path / "logs")
     full_path = os.path.expanduser(
         "{}/{}/{}/netuid{}/{}".format(
-            config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+            log_dir,
             config.wallet.name,
             config.wallet.hotkey,
             config.netuid,
@@ -42,6 +40,8 @@ def check_config(config: bt.config):
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
 
+    bt.logging.enable_third_party_loggers()
+
 
 def add_args(parser):
     from template.protocol import ScoringMethod
@@ -51,6 +51,26 @@ def add_args(parser):
     """
     # Netuid Arg: The netuid of the subnet to connect to.
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+
+    import sys
+
+    args, _ = parser.parse_known_args()
+    debug: str = vars(args).get("logging.debug")
+    trace: str = vars(args).get("logging.trace")
+    info: str = vars(args).get("logging.info")
+
+    if trace:
+        logger.remove()
+        logger.add(sys.stderr, level="TRACE")
+    elif debug:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+    elif info:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    else:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
@@ -102,7 +122,7 @@ def add_args(parser):
             "--data_manager.base_path",
             type=str,
             help="Base path to store data to.",
-            default=Path.cwd(),
+            default=base_path,
         )
 
         parser.add_argument(
@@ -145,39 +165,13 @@ def add_args(parser):
         if known_args := vars(args):
             scoring_method = known_args["scoring_method"]
 
-        default_model_name = (
-            ModelZoo.DEBERTA_V3_LARGE_V2
-            if scoring_method == ScoringMethod.HF_MODEL
-            else "mistralai/Mixtral-8x7B-Instruct-v0.1"
-        )
-        parser.add_argument(
-            "--model_name",
-            type=str,
-            help="Name of the reward model to use, either from Huggingface or LLM API provider such as TogetherAI.",
-            default=default_model_name,
-        )
-
-        parser.add_argument(
-            "--llm_provider",
-            type=str,
-            help="LLM provider to use for scoring completions.",
-            default="togetherai",
-        )
-
-        parser.add_argument(
-            "--aws_mturk_environment",
-            choices=["sandbox", "production"],
-            type=str,
-            help="AWS MTurk environment to use",
-        )
-
 
 def get_config():
     """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
     bt.logging.add_args(parser)
+    bt.subtensor.add_args(parser)
     bt.axon.add_args(parser)
     add_args(parser)
     _config = bt.config(parser)

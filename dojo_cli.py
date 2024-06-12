@@ -1,15 +1,16 @@
 import argparse
-from typing import Callable, Dict
-import bittensor
-import requests
-from rich.console import Console
-from prompt_toolkit import PromptSession, prompt
-from prompt_toolkit.completion import WordCompleter, FuzzyCompleter
 from pathlib import Path
+from typing import Callable, Dict
+
+import requests
+from prompt_toolkit import PromptSession, prompt
+from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
+from rich.console import Console
+
+import bittensor
+from template import DOJO_API_BASE_URL
 
 console = Console()
-
-DOJO_API_BASE_URL = "***REMOVED***"
 
 
 def success(message: str, emoji: str = ":white_check_mark:"):

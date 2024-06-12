@@ -2,12 +2,11 @@ import copy
 import random
 from typing import List, Tuple
 
-import bittensor as bt
 import numpy as np
 import requests
-from strenum import StrEnum
-
 from commons.utils import keccak256_hash, ttl_cache
+from loguru import logger
+from strenum import StrEnum
 
 
 class Leaderboard(StrEnum):
@@ -65,19 +64,19 @@ def get_leaderboard_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
     for i, model_name in enumerate(models):
         mapped_model_name = MODEL_MAPPING.get(model_name, {}).get(leaderboard, None)
         if not mapped_model_name:
-            bt.logging.error(
+            logger.error(
                 f"Model mapping on Leaderboard: {leaderboard} for model: {model_name} not found."
             )
             continue
         if mapped_model_name not in leaderboard_data:
-            bt.logging.warning(
+            logger.warning(
                 f"Model: {mapped_model_name} not found in EvalPlus leaderboard."
             )
             continue
 
         score = leaderboard_data[mapped_model_name].get("pass@1", {}).get("humaneval+")
         if not score:
-            bt.logging.error(f"Scores data for model: {mapped_model_name} not found.")
+            logger.error(f"Scores data for model: {mapped_model_name} not found.")
             continue
 
         scores[i] = score
@@ -99,7 +98,7 @@ def get_gt_ranks(models_with_scores: Tuple[str, float]):
             None,
         )
         if found_idx is None:
-            bt.logging.error(f"Model: {model} not found")
+            logger.error(f"Model: {model} not found")
             continue
         gt_ranks.append(found_idx + 1)
 

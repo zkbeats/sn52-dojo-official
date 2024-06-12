@@ -1,24 +1,23 @@
 import copy
+import os
 import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
-from typing import Tuple, Type, get_origin
 from functools import lru_cache, update_wrapper
 from math import floor
-from typing import Any, Callable
+from typing import Any, Callable, Tuple, Type, get_origin
 
-import bittensor as bt
 import jsonref
 import requests
 import torch
+import wandb
 from Crypto.Hash import keccak
+from loguru import logger
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
-import wandb
-import os
-from dotenv import load_dotenv
+import bittensor as bt
 
 
 def get_new_uuid():
@@ -68,13 +67,13 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     config.signature = signature
     wandb.config.update(config, allow_val_change=True)
 
-    bt.logging.success(f"Started wandb run with {kwargs=}")
+    logger.success(f"Started wandb run with {kwargs=}")
     return run
 
 
 def log_retry_info(retry_state):
     """Meant to be used with tenacity's before_sleep callback"""
-    bt.logging.warning(
+    logger.warning(
         f"Retry attempt {retry_state.attempt_number} failed with exception: {retry_state.outcome.exception()}",
     )
 
@@ -98,7 +97,7 @@ def serve_axon(
                     "Failed to serve axon, probaby due to many miners/validators trying to serve in this period."
                 )
     except RetryError:
-        bt.logging.error(f"Failed to serve axon after {max_attempts} attempts.")
+        logger.error(f"Failed to serve axon after {max_attempts} attempts.")
         pass
     return False
 
@@ -108,19 +107,19 @@ def initialise(
 ) -> Tuple[bt.wallet, bt.subtensor, bt.metagraph, bt.axon]:
     # Build Bittensor objects
     # These are core Bittensor classes to interact with the network.
-    bt.logging.info("Setting up bittensor objects....")
+    logger.info("Setting up bittensor objects....")
     # The wallet holds the cryptographic key pairs for the miner.
     wallet = bt.wallet(config=config)
-    bt.logging.info(f"Wallet: {wallet}")
+    logger.info(f"Wallet: {wallet}")
     # The subtensor is our connection to the Bittensor blockchain.
     subtensor = bt.subtensor(config=config)
-    bt.logging.info(f"Subtensor: {subtensor}")
+    logger.info(f"Subtensor: {subtensor}")
     # The metagraph holds the state of the network, letting us know about other validators and miners.
     metagraph = subtensor.metagraph(config.netuid)
-    bt.logging.info(f"Metagraph: {metagraph}")
+    logger.info(f"Metagraph: {metagraph}")
     # The axon handles request processing, allowing validators to send this miner requests.
     axon = bt.axon(wallet=wallet, port=config.axon.port)
-    bt.logging.info(f"Axon: {axon}")
+    logger.info(f"Axon: {axon}")
     return wallet, subtensor, metagraph, axon
 
 
@@ -130,7 +129,7 @@ def check_registered(subtensor, wallet, config):
         netuid=config.netuid,
         hotkey_ss58=wallet.hotkey.ss58_address,
     ):
-        bt.logging.error(
+        logger.error(
             f"Wallet: {wallet} is not registered on netuid {config.netuid}."
             f" Please register the hotkey using `btcli s register` before trying again"
         )

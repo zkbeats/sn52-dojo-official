@@ -5,30 +5,24 @@ import time
 import traceback
 from collections import defaultdict
 from traceback import print_exception
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
-import bittensor as bt
 import numpy as np
 import torch
-from fastapi.encoders import jsonable_encoder
-from loguru import logger
-from torch.nn import functional as F
-
 import wandb
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
-from commons.human_feedback.aws_mturk import MTurkUtils, parse_assignment
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid
+from fastapi.encoders import jsonable_encoder
+from loguru import logger
 from template.base.neuron import BaseNeuron
 from template.protocol import (
-    AWSCredentials,
     CriteriaTypeEnum,
     DendriteQueryResponse,
     FeedbackRequest,
-    MTurkResponse,
     MultiScoreCriteria,
     RankingCriteria,
     ScoringMethod,
@@ -36,12 +30,17 @@ from template.protocol import (
     SyntheticQA,
     TaskType,
 )
+
+import template
+
 from template.utils.config import get_config
 from template.utils.uids import (
     MinerUidSelector,
     extract_miner_uids,
-    is_miner,
 )
+from torch.nn import functional as F
+
+import bittensor as bt
 
 
 class DojoTaskTracker:
@@ -50,6 +49,7 @@ class DojoTaskTracker:
     _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
         lambda: defaultdict(str)
     )
+    _rid_to_model_map: Dict[str, Dict[str, str]] = defaultdict(lambda: defaultdict(str))
     _lock = asyncio.Lock()
     _should_exit: bool = False
 
@@ -65,29 +65,39 @@ class DojoTaskTracker:
         return list(filter(lambda r: r.scoring_method == ScoringMethod.DOJO, responses))
 
     @classmethod
-    async def update_task_map(cls, dojo_responses: List[FeedbackRequest]):
+    async def update_task_map(
+        cls,
+        request_id: str,
+        dojo_responses: List[FeedbackRequest],
+        obfuscated_model_to_model: Dict,
+    ):
         if not dojo_responses:
-            bt.logging.warning("No Dojo responses found")
+            logger.warning("No Dojo responses found")
             return
 
+        logger.debug("update_task_map attempting to acquire lock")
         async with cls._lock:
             valid_responses = list(
                 filter(
-                    lambda r: r.request_id and r.axon.hotkey and r.dojo_task_id,
+                    lambda r: r.request_id == request_id
+                    and r.axon.hotkey
+                    and r.dojo_task_id,
                     dojo_responses,
                 )
             )
-            bt.logging.info(
+            logger.info(
                 f"Got {len(valid_responses)} valid Dojo responses to update task tracker"
             )
 
-            for r in valid_responses:
-                if r.request_id not in cls._rid_to_mhotkey_to_task_id:
-                    cls._rid_to_mhotkey_to_task_id[r.request_id] = {}
+            if request_id not in cls._rid_to_mhotkey_to_task_id:
+                cls._rid_to_mhotkey_to_task_id[request_id] = {}
 
-                cls._rid_to_mhotkey_to_task_id[r.request_id][r.axon.hotkey] = (
+            for r in valid_responses:
+                cls._rid_to_mhotkey_to_task_id[request_id][r.axon.hotkey] = (
                     r.dojo_task_id
                 )
+            cls._rid_to_model_map[request_id] = obfuscated_model_to_model
+        logger.debug("released lock for task tracker")
         return
 
     @classmethod
@@ -99,148 +109,142 @@ class DojoTaskTracker:
                 logger.info(
                     f"Monitoring Dojo Task completions... {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id)} requests"
                 )
-                async with cls._lock:
-                    if not cls._rid_to_mhotkey_to_task_id:
-                        await asyncio.sleep(SLEEP_SECONDS)
+                if not cls._rid_to_mhotkey_to_task_id:
+                    await asyncio.sleep(SLEEP_SECONDS)
+                    continue
+
+                for request_id in list(cls._rid_to_mhotkey_to_task_id.keys()):
+                    miner_to_task_id = cls._rid_to_mhotkey_to_task_id[request_id]
+                    processed_hotkeys = set()
+
+                    data = await DataManager.get_by_request_id(request_id)
+                    if not data or not data.request:
+                        logger.error(
+                            f"No request on disk found for request id: {request_id}"
+                        )
                         continue
 
-                    for request_id in list(cls._rid_to_mhotkey_to_task_id.keys()):
-                        miner_to_task_id = cls._rid_to_mhotkey_to_task_id[request_id]
-                        processed_hotkeys = set()
-
-                        for miner_hotkey, task_id in miner_to_task_id.items():
-                            if not task_id:
-                                bt.logging.warning(
-                                    f"No task ID found for miner hotkey: {miner_hotkey}"
-                                )
-                                continue
-
-                            task_results = await DojoAPI.get_task_results_by_task_id(
-                                task_id
+                    for miner_hotkey, task_id in miner_to_task_id.items():
+                        if not task_id:
+                            logger.warning(
+                                f"No task ID found for miner hotkey: {miner_hotkey}"
                             )
-                            if not task_results:
-                                bt.logging.warning(
-                                    f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
-                                )
-                                continue
+                            continue
 
-                            data = await DataManager.get_by_request_id(request_id)
-                            if not data or not data.request:
-                                bt.logging.error(
-                                    f"No request on disk found for request id: {request_id}"
-                                )
-                                continue
+                        task_results = await DojoAPI.get_task_results_by_task_id(
+                            task_id
+                        )
+                        if not task_results:
+                            logger.warning(
+                                f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
+                            )
+                            continue
 
+                        logger.info(
+                            f"Request id: {request_id}, miner hotkey: {miner_hotkey}, task id: {task_id}"
+                        )
+
+                        # calculate average rank/scores across a single miner's workers
+                        model_id_to_avg_rank = defaultdict(float)
+                        model_id_to_avg_score = defaultdict(float)
+                        # keep track so we average across the miner's worker pool
+                        num_ranks_by_workers, num_scores_by_workers = 0, 0
+                        for result in task_results:
+                            for result_data in result["result_data"]:
+                                type = result_data["type"]
+                                value = result_data["value"]
+                                if type == CriteriaTypeEnum.RANKING_CRITERIA:
+                                    for rank, model_id in value.items():
+                                        real_model_id = cls._rid_to_model_map.get(
+                                            request_id
+                                        ).get(model_id)
+                                        model_id_to_avg_rank[real_model_id] += rank
+                                    num_ranks_by_workers += 1
+                                elif type == CriteriaTypeEnum.MULTI_SCORE:
+                                    for model_id, score in value.items():
+                                        real_model_id = cls._rid_to_model_map.get(
+                                            request_id
+                                        ).get(model_id)
+                                        model_id_to_avg_score[real_model_id] += score
+                                    num_scores_by_workers += 1
+
+                        # dvide all sums by the number of ranks and scores
+                        for model_id in model_id_to_avg_rank:
+                            model_id_to_avg_rank[model_id] /= num_ranks_by_workers
+                        for model_id in model_id_to_avg_score:
+                            model_id_to_avg_score[model_id] /= num_scores_by_workers
+
+                        # mimic miners responding to the dendrite call
+                        miner_response = copy.deepcopy(data.request)
+                        miner_response.axon = bt.TerminalInfo(
+                            hotkey=miner_hotkey,
+                        )
+                        for completion in miner_response.responses:
+                            model_id = completion.model
+
+                            for criteria in miner_response.criteria_types:
+                                if isinstance(criteria, RankingCriteria):
+                                    completion.rank_id = model_id_to_avg_rank[model_id]
+                                elif isinstance(criteria, MultiScoreCriteria):
+                                    completion.score = model_id_to_avg_score[model_id]
+
+                        if model_id_to_avg_rank:
                             logger.info(
-                                f"Request id: {request_id}, miner hotkey: {miner_hotkey}, task id: {task_id}"
+                                f"Parsed request with ranks data: {model_id_to_avg_rank}"
+                            )
+                        if model_id_to_avg_score:
+                            logger.info(
+                                f"Parsed request with scores data: {model_id_to_avg_score}"
                             )
 
-                            # calculate average rank/scores across a single miner's workers
-                            model_id_to_avg_rank = defaultdict(float)
-                            model_id_to_avg_score = defaultdict(float)
-                            # keep track so we average across the miner's worker pool
-                            num_ranks_by_workers, num_scores_by_workers = 0, 0
-                            for result in task_results:
-                                for result_data in result["result_data"]:
-                                    type = result_data["type"]
-                                    value = result_data["value"]
-                                    if type == CriteriaTypeEnum.RANKING_CRITERIA:
-                                        for rank, model_id in value.items():
-                                            model_id_to_avg_rank[model_id] += rank
-                                        num_ranks_by_workers += 1
-                                    elif type == CriteriaTypeEnum.MULTI_SCORE:
-                                        for model_id, score in value.items():
-                                            model_id_to_avg_score[model_id] += score
-                                        num_scores_by_workers += 1
-
-                            # dvide all sums by the number of ranks and scores
-                            for model_id in model_id_to_avg_rank:
-                                model_id_to_avg_rank[model_id] /= num_ranks_by_workers
-                            for model_id in model_id_to_avg_score:
-                                model_id_to_avg_score[model_id] /= num_scores_by_workers
-
-                            # mimic miners responding to the dendrite call
-                            miner_response = copy.deepcopy(data.request)
-                            miner_response.axon = bt.TerminalInfo(
-                                hotkey=miner_hotkey,
+                        # miner would have originally responded with the right task id
+                        found_response = next(
+                            (
+                                r
+                                for r in data.miner_responses
+                                if r.axon.hotkey == miner_hotkey
+                            ),
+                            None,
+                        )
+                        if not found_response:
+                            logger.warning(
+                                "Miner response not found in data, this should never happen"
                             )
-                            for completion in miner_response.responses:
-                                model_id = completion.model
+                            data.miner_responses.append(miner_response)
+                        else:
+                            data.miner_responses.remove(found_response)
+                            data.miner_responses.append(miner_response)
 
-                                for criteria in miner_response.criteria_types:
-                                    if isinstance(criteria, RankingCriteria):
-                                        completion.rank_id = model_id_to_avg_rank[
-                                            model_id
-                                        ]
-                                    elif isinstance(criteria, MultiScoreCriteria):
-                                        completion.score = model_id_to_avg_score[
-                                            model_id
-                                        ]
-
-                            if model_id_to_avg_rank:
-                                logger.info(
-                                    f"Parsed request with ranks data: {model_id_to_avg_rank}"
-                                )
-                            if model_id_to_avg_score:
-                                logger.info(
-                                    f"Parsed request with scores data: {model_id_to_avg_score}"
-                                )
-
-                            # miner would have originally responded with the right task id
-                            found_response = next(
-                                (
-                                    r
-                                    for r in data.miner_responses
-                                    if r.axon.hotkey == miner_hotkey
-                                ),
-                                None,
-                            )
-                            if not found_response:
-                                logger.warning(
-                                    "Miner response not found in data, this should never happen"
-                                )
-                                data.miner_responses.append(miner_response)
-                            else:
-                                data.miner_responses.remove(found_response)
-                                data.miner_responses.append(miner_response)
-
-                            status = await DataManager.overwrite_miner_responses_by_request_id(
+                        status = (
+                            await DataManager.overwrite_miner_responses_by_request_id(
                                 request_id, data.miner_responses
                             )
+                        )
+                        logger.info(
+                            f"Appending Dojo task results for request id: {request_id}, was successful? {status}"
+                        )
+                        if status:
+                            processed_hotkeys.add(miner_hotkey)
+
+                    # determine if we should completely remove the request from the tracker
+                    async with cls._lock:
+                        if processed_hotkeys == set(miner_to_task_id.keys()):
                             logger.info(
-                                f"Appending Dojo task results for request id: {request_id}, was successful? {status}"
+                                f"All hotkeys processed for request id {request_id}, removing from tracker"
                             )
-                            if status:
-                                processed_hotkeys.add(miner_hotkey)
+                            del cls._rid_to_mhotkey_to_task_id[request_id]
+                            del cls._rid_to_model_map[request_id]
+                        else:
+                            for hotkey in processed_hotkeys:
+                                del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
 
-                        # determine if we should completely remove the request from the tracker
-                        async with cls._lock:
-                            if processed_hotkeys == set(miner_to_task_id.keys()):
-                                logger.info(
-                                    f"All hotkeys processed for request id {request_id}, removing from tracker"
-                                )
-                                del cls._rid_to_mhotkey_to_task_id[request_id]
-                            else:
-                                for hotkey in processed_hotkeys:
-                                    del cls._rid_to_mhotkey_to_task_id[request_id][
-                                        hotkey
-                                    ]
-
-                        ObjectManager.get_validator().save_state()
+                    ObjectManager.get_validator().save_state()
 
             except Exception as e:
                 traceback.print_exc()
                 logger.error(f"Error during Dojo task monitoring {str(e)}")
                 pass
             await asyncio.sleep(SLEEP_SECONDS)
-
-    @classmethod
-    async def remove_by_request_id(cls, request_id: str):
-        if cls._rid_to_mhotkey_to_task_id.get(request_id, None) is None:
-            return
-        async with cls._lock:
-            del cls._rid_to_mhotkey_to_task_id[request_id]
-        return
 
 
 class Validator(BaseNeuron):
@@ -254,7 +258,7 @@ class Validator(BaseNeuron):
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
-        bt.logging.info(f"Dendrite: {self.dendrite}")
+        logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
         self.load_state()
@@ -264,156 +268,13 @@ class Validator(BaseNeuron):
         self.resync_metagraph()
         # init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
-    async def blacklist_mturk_response(
-        self, synapse: MTurkResponse
-    ) -> Tuple[bool, str]:
-        if synapse.dendrite.hotkey not in self.metagraph.hotkeys:
-            # Ignore requests from unrecognized entities.
-            bt.logging.warning(
-                f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
-            )
-            return True, "Unrecognized hotkey"
-
-        caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        if not is_miner(self.metagraph, caller_uid):
-            bt.logging.warning(
-                f"Blacklisting hotkey {synapse.dendrite.hotkey} who is a validator"
-            )
-            return True, "Validators not allowed"
-
-        return False, "Valid request received from miner"
-
-    @staticmethod
-    def verify_mturk_task(
-        aws_credentials: AWSCredentials,
-        hit_id: str,
-        completion_id_to_score: Dict[str, float],
-    ):
-        temp_client = MTurkUtils.get_client(
-            access_key_id=aws_credentials.access_key_id,
-            secret_access_key=aws_credentials.secret_access_key,
-            session_token=aws_credentials.session_token,
-            environment=aws_credentials.environment,
-        )
-        res = temp_client.list_assignments_for_hit(HITId=hit_id)
-        answers = [parse_assignment(assignment) for assignment in res["Assignments"]]
-        if not answers:
-            return False, "No assignments found for HIT"
-
-        cids_to_check = set(completion_id_to_score.keys())
-        # example of answers variable
-        # [{'Answer': [{'taskAnswers': [{'a6f41ad1-d8a8-4bf3-a698-1b431bf2edac': 5.68, 'f95cae4d-38ed-4911-b97a-f92a0c3bad9a': 7.49}]}], 'HITId': '3MG8450X3U3J7MRIYLXCI5SO1CIUPJ'}]
-        for answer in answers:
-            task_answers = answer.get("Answer", [])
-            for task_answer in task_answers:
-                for task_key, score in task_answer.get("taskAnswers", {}).items():
-                    completion_id = MTurkUtils.decode_task_key(task_key)
-                    if completion_id not in cids_to_check:
-                        bt.logging.warning(
-                            f"Completion ID {completion_id} found in MTurk task answers is not in the expected set."
-                        )
-                        return (
-                            False,
-                            f"Unexpected completion ID {completion_id} in MTurk task answers.",
-                        )
-                    elif completion_id_to_score[completion_id] != score:
-                        bt.logging.warning(
-                            f"Score mismatch for completion ID {completion_id}: expected {completion_id_to_score[completion_id]}, got {score} from MTurk task answers."
-                        )
-                        return (
-                            False,
-                            f"Score mismatch for completion ID {completion_id}.",
-                        )
-
-        return True, "All checks passed"
-
-    # async def forward_mturk_response(self, synapse: MTurkResponse):
-    #     """Receives MTurk responses from miners after delayed response to allow for human feedback loop"""
-    #     # 1. check request from RankingRequest
-    #     # 2. append completion scores to request
-    #     # 3. persist on disk via DataManager
-
-    #     path = DataManager.get_ranking_data_filepath()
-    #     data = await DataManager.load(path=path)
-    #     miner_hotkey = synapse.dendrite.hotkey
-    #     if not data:
-    #         bt.logging.error(
-    #             f"Received MTurk response from miner {miner_hotkey} but no requests persisted on disk."
-    #         )
-    #         return
-
-    #     mturk_cids = set(synapse.completion_id_to_score.keys())
-
-    #     for d in data:
-    #         request_cids = set([completion.cid for completion in d.request.completions])
-
-    #         if (found_cids := request_cids.intersection(mturk_cids)) and not found_cids:
-    #             bt.logging.warning(
-    #                 f"Received mturk response with {mturk_cids=}, but no found requests with those matching CIDs."
-    #             )
-    #             continue
-
-    #         bt.logging.info(
-    #             f"Miner {miner_hotkey} sent human feedback for {d.request.request_id}"
-    #         )
-
-    #         existing_responses = {r.axon.hotkey: r for r in d.responses}
-    #         if miner_hotkey in existing_responses:
-    #             existing_method = ScoringMethod(
-    #                 existing_responses[miner_hotkey].scoring_method
-    #             )
-    #             new_method = ScoringMethod.AWS_MTURK
-    #             if (
-    #                 SCORING_METHOD_PRIORITY[new_method]
-    #                 > SCORING_METHOD_PRIORITY[existing_method]
-    #             ):
-    #                 bt.logging.info(
-    #                     f"Replacing {existing_method} with higher priority {new_method} for request id: {d.request.request_id}"
-    #                 )
-    #                 d.responses.remove(existing_responses[miner_hotkey])
-    #             else:
-    #                 bt.logging.warning(
-    #                     f"Miner {miner_hotkey} already sent response with equal or higher priority for request id: {d.request.request_id}, skipping..."
-    #                 )
-    #                 continue
-
-    #         is_verified, reason = self.verify_mturk_task(
-    #             synapse.aws_credentials,
-    #             synapse.mturk_hit_id,
-    #             synapse.completion_id_to_score,
-    #         )
-    #         if not is_verified:
-    #             bt.logging.error(
-    #                 f"MTurk task verification failed due to reason:{reason}"
-    #             )
-    #             return
-
-    #         request_copy = copy.deepcopy(d.request)
-    #         for cid in found_cids:
-    #             # similar to scoring method in Miner.forward(...)
-    #             request_copy.ranks.append(
-    #                 Rank(
-    #                     cid=cid,
-    #                     score=synapse.completion_id_to_score[cid],
-    #                     scoring_method=ScoringMethod.AWS_MTURK,
-    #                 )
-    #             )
-    #             # ensure axon.hotkey has miner's hotkey because our Consensus._spearman_correlation
-    #             # function expects axon.hotkey to be the miner's hotkey
-    #             request_copy.axon.hotkey = miner_hotkey
-    #             d.responses.append(request_copy)
-
-    #         d.responses = _filter_valid_responses(d.responses)
-    #     await DataManager.save(path, data)
-    #     return
-
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
         axons = [axon for axon in self.metagraph.axons if axon.hotkey in hotkeys]
         if not axons:
-            bt.logging.warning("No axons to send consensus to... skipping")
+            logger.warning("No axons to send consensus to... skipping")
         else:
-            bt.logging.debug(
+            logger.debug(
                 f"Sending back consensus to miners for request id: {synapse.request_id}"
             )
 
@@ -425,34 +286,34 @@ class Validator(BaseNeuron):
         """While this function is triggered every X time period in AsyncIOScheduler,
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
-        await asyncio.sleep(60)
         while True:
+            await asyncio.sleep(60)
             try:
-                bt.logging.debug(
+                logger.debug(
                     f"Scheduled update score and send feedback triggered at time: {time.time()}"
                 )
                 data = await DataManager.load(path=DataManager.get_requests_data_path())
                 if not data:
-                    bt.logging.debug(
+                    logger.debug(
                         "Skipping scoring as no feedback data found, this means either all have been processed or you are running the validator for the first time."
                     )
                     continue
 
                 current_time = get_epoch_time()
                 # allow enough time for human feedback
-                TASK_DEADLINE = 30 * 60
                 filtered_data = [
                     d
                     for d in data
-                    if (current_time - d.request.epoch_timestamp) >= TASK_DEADLINE
+                    if (current_time - d.request.epoch_timestamp)
+                    >= template.TASK_DEADLINE
                 ]
                 if not filtered_data:
-                    bt.logging.warning(
+                    logger.warning(
                         "Skipping scoring as no feedback data is due for scoring."
                     )
                     continue
 
-                bt.logging.info(
+                logger.info(
                     f"Got {len(filtered_data)} requests past deadline and ready to score"
                 )
                 for d in filtered_data:
@@ -461,9 +322,12 @@ class Validator(BaseNeuron):
                         request=d.request,
                         miner_responses=d.miner_responses,
                     )
-                    logger.info(f"Got hotkey to score: {hotkey_to_score}")
+                    logger.debug(f"Got hotkey to score: {hotkey_to_score}")
 
                     if not hotkey_to_score:
+                        request_id = d.request.request_id
+                        del DojoTaskTracker._rid_to_mhotkey_to_task_id[request_id]
+                        await DataManager.remove_responses([d])
                         continue
 
                     logger.debug(
@@ -479,7 +343,8 @@ class Validator(BaseNeuron):
                         hotkeys=list(hotkey_to_score.keys()),
                     )
 
-                    async def _log_wandb(wandb_data: Dict):
+                    # TODO fix why after 5 mins this halts validator.run()
+                    async def log_wandb():
                         # calculate mean across all criteria
                         mean_weighted_consensus_scores = (
                             torch.stack(
@@ -502,7 +367,7 @@ class Validator(BaseNeuron):
                             .tolist()
                         )
 
-                        bt.logging.info(
+                        logger.info(
                             f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
                         )
 
@@ -529,12 +394,10 @@ class Validator(BaseNeuron):
                             }
                         )
 
-                        loop = asyncio.get_running_loop()
+                        wandb.log(wandb_data, commit=True)
 
-                        def log_wandb(data: dict):
-                            wandb.log(data, commit=True, sync=False)
-
-                        await loop.run_in_executor(None, log_wandb, wandb_data)
+                    # loop = asyncio.get_running_loop()
+                    # await loop.run_in_executor(None, log_wandb)
 
                     # once we have scored a response, just remove it
                     await DataManager.remove_responses([d])
@@ -542,8 +405,6 @@ class Validator(BaseNeuron):
             except Exception:
                 traceback.print_exc()
                 pass
-
-            await asyncio.sleep(60)
 
     async def send_request(
         self,
@@ -592,85 +453,109 @@ class Validator(BaseNeuron):
             != self.wallet.hotkey.ss58_address.casefold()
         ]
         if not len(axons):
-            bt.logging.warning("No axons to query ... skipping")
+            logger.warning("No axons to query ... skipping")
             return
 
+        miner_responses: List[FeedbackRequest] = []
         miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
-
         # map obfuscated model names back to the original model names
         logger.debug(f"Obfuscated model map: {obfuscated_model_to_model}")
         valid_miner_responses = []
         try:
             for miner_response in miner_responses:
-                completions = [
-                    obfuscated_model_to_model.get(completion.model, None)
-                    for completion in miner_response.responses
-                ]
-                if any([c is None for c in completions]):
+                # map obfuscated model names back to the original model names
+                real_model_ids = []
+
+                for i, completion in enumerate(miner_response.responses):
+                    found_model_id = obfuscated_model_to_model.get(
+                        completion.model, None
+                    )
+                    real_model_ids.append(found_model_id)
+                    if found_model_id:
+                        miner_response.responses[i].model = found_model_id
+
+                if any(c is None for c in real_model_ids):
                     logger.warning("Failed to map obfuscated model to original model")
                     continue
 
-                logger.success(
+                if (
+                    miner_response.scoring_method == ScoringMethod.DOJO
+                    and miner_response.dojo_task_id is None
+                ):
+                    logger.debug(
+                        "Miner must provide the dojo task id for scoring method dojo"
+                    )
+                    continue
+
+                logger.debug(
                     f"Successfully mapped obfuscated model names for {miner_response.axon.hotkey}"
                 )
 
+                # update the miner response with the real model ids
                 valid_miner_responses.append(miner_response)
         except Exception as e:
             logger.error(f"Failed to map obfuscated model to original model: {e}")
             pass
 
-        dojo_responses = DojoTaskTracker.filter_dojo_responses(miner_responses)
-        await DojoTaskTracker.update_task_map(dojo_responses)
+        dojo_responses = DojoTaskTracker.filter_dojo_responses(valid_miner_responses)
+        logger.debug("Attempting to update task map")
+        await DojoTaskTracker.update_task_map(
+            synapse.request_id, dojo_responses, obfuscated_model_to_model
+        )
         response_data = DendriteQueryResponse(
             request=synapse,
-            miner_responses=miner_responses,
+            miner_responses=valid_miner_responses,
         )
         # saving response
         success = await DataManager.save_dendrite_response(response=response_data)
         logger.info(
             f"Saved dendrite response for request id: {response_data.request.request_id}, success: {success}"
         )
-        bt.logging.info(
+        logger.info(
             f"Sending request to miners & processing took {get_epoch_time() - start}"
         )
         return
 
     async def run(self):
-        bt.logging.info(
+        logger.info(
             f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
 
-        bt.logging.info(f"Validator starting at block: {self.block}")
+        logger.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
-                synthetic_data = await SyntheticAPI.get_qa()
-                await self.send_request(data=synthetic_data)
+                try:
+                    synthetic_data = await SyntheticAPI.get_qa()
+                    await self.send_request(data=synthetic_data)
 
-                # # Check if we should exit.
-                if self._should_exit:
-                    bt.logging.info("Validator should stop...")
-                    break
+                    # # Check if we should exit.
+                    if self._should_exit:
+                        logger.info("Validator should stop...")
+                        break
 
-                # Sync metagraph and potentially set weights.
-                self.sync()
+                    # Sync metagraph and potentially set weights.
+                    self.sync()
 
-                self.step += 1
+                    self.step += 1
+                except Exception as e:
+                    logger.error(f"Error during validator run: {e}")
+                    pass
                 await asyncio.sleep(60)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Validator killed by keyboard interrupt.")
+            logger.success("Validator killed by keyboard interrupt.")
             exit()
 
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
-            bt.logging.error("Error during validation", str(err))
-            bt.logging.debug(print_exception(type(err), err, err.__traceback__))
+            logger.error("Error during validation", str(err))
+            logger.debug(print_exception(type(err), err, err.__traceback__))
 
     def set_weights(self):
         """
@@ -680,7 +565,7 @@ class Validator(BaseNeuron):
 
         # Check if self.scores contains any NaN values and log a warning if it does.
         if torch.isnan(self.scores).any():
-            bt.logging.warning(
+            logger.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
@@ -688,15 +573,15 @@ class Validator(BaseNeuron):
         # Replace any NaN values with 0.
         normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
 
-        bt.logging.debug(f"Raw scores: {self.scores}")
-        bt.logging.debug(f"normalized weights: {normalized_weights}")
-        bt.logging.debug(f"normalized weights uids: {self.metagraph.uids}")
+        logger.debug(f"Raw scores: {self.scores}")
+        logger.debug(f"normalized weights: {normalized_weights}")
+        logger.debug(f"normalized weights uids: {self.metagraph.uids}")
 
         if torch.count_nonzero(normalized_weights).item() == 0:
-            bt.logging.warning("All weights are zero, skipping...")
+            logger.warning("All weights are zero, skipping...")
             return
 
-        bt.logging.info("Attempting to set weights")
+        logger.info("Attempting to set weights")
 
         # Process the raw weights to final_weights via subtensor limitations.
         (
@@ -709,8 +594,8 @@ class Validator(BaseNeuron):
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug(f"processed weights {processed_weights}")
-        bt.logging.debug(f"processed weights uids {processed_weight_uids}")
+        logger.debug(f"processed weights {processed_weights}")
+        logger.debug(f"processed weights uids {processed_weight_uids}")
 
         # Set the weights on chain via our subtensor connection.
         result = self.subtensor.set_weights(
@@ -723,9 +608,9 @@ class Validator(BaseNeuron):
             version_key=self.spec_version,
         )
         if result is True:
-            bt.logging.success("Validator set weights on chain successfully!")
+            logger.success("Validator set weights on chain successfully!")
         else:
-            bt.logging.error("set_weights failed")
+            logger.error("set_weights failed")
         return result
 
     def resync_metagraph(self):
@@ -740,7 +625,7 @@ class Validator(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info(
+        logger.info(
             "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
         )
         # Zero out all hotkeys that have been replaced.
@@ -763,7 +648,7 @@ class Validator(BaseNeuron):
 
         nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
         if nan_value_indices.any():
-            bt.logging.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
+            logger.warning(f"NaN values detected in rewards: {hotkey_to_scores}")
             return
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
@@ -778,20 +663,20 @@ class Validator(BaseNeuron):
             try:
                 uid = neuron_hotkeys.index(key)
             except ValueError:
-                bt.logging.warning(
+                logger.warning(
                     "Old hotkey found from previous metagraph, skip setting weights"
                 )
                 continue
 
-            bt.logging.trace(f"Score for hotkey {key} is {value}")
+            logger.trace(f"Score for hotkey {key} is {value}")
             rewards[uid] = value
 
-        bt.logging.debug(f"Rewards: {rewards}")
+        logger.debug(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
         self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores
-        bt.logging.debug(f"Updated scores: {self.scores}")
+        logger.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):
         """Saves the state of the validator to a file."""
@@ -799,7 +684,9 @@ class Validator(BaseNeuron):
             loop = asyncio.get_event_loop()
             loop.run_until_complete(
                 DataManager.validator_save(
-                    self.scores, DojoTaskTracker._rid_to_mhotkey_to_task_id
+                    self.scores,
+                    DojoTaskTracker._rid_to_mhotkey_to_task_id,
+                    DojoTaskTracker._rid_to_model_map,
                 )
             )
         except Exception as e:
@@ -819,6 +706,7 @@ class Validator(BaseNeuron):
         DojoTaskTracker._rid_to_mhotkey_to_task_id = state_data[
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
         ]
+        DojoTaskTracker._rid_to_model_map = state_data[ValidatorStateKeys.MODEL_MAP]
 
         logger.info(f"Scores state: {self.scores}")
         logger.info(
@@ -828,5 +716,5 @@ class Validator(BaseNeuron):
     @classmethod
     async def log_validator_status(cls):
         while not cls._should_exit:
-            bt.logging.info(f"Validator running... {time.time()}")
+            logger.info(f"Validator running... {time.time()}")
             await asyncio.sleep(20)

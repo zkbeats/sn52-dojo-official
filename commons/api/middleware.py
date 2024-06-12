@@ -1,13 +1,11 @@
 import time
 from ipaddress import ip_address, ip_network
 
-import bittensor as bt
 import httpx
 from fastapi import Request
+from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-
-from commons.human_feedback.aws_mturk import US_EAST_REGION
 
 MAX_CONTENT_LENGTH = 1 * 1024 * 1024
 
@@ -27,7 +25,7 @@ class AWSIPFilterMiddleware(BaseHTTPMiddleware):
     _allowed_ip_ranges = []
     _last_checked: float = 0
     _allowed_networks = []
-    _allowed_regions = {US_EAST_REGION}
+    _allowed_regions = {"us-east-1"}
 
     @classmethod
     async def _get_allowed_networks(cls):
@@ -43,14 +41,14 @@ class AWSIPFilterMiddleware(BaseHTTPMiddleware):
             response = await client.get(cls._aws_ips_url)
             cls._last_checked = time.time()
             elapsed_time = cls._last_checked - start_time
-            bt.logging.debug(
+            logger.debug(
                 f"Sent request to {cls._aws_ips_url}, took {elapsed_time:.2f} seconds"
             )
             data = response.json()
             cls._allowed_ip_ranges = [
                 ip_range["ip_prefix"]
                 for ip_range in data["prefixes"]
-                if ip_range["region"] in [US_EAST_REGION]
+                if ip_range["region"] in cls._allowed_regions
             ]
         return cls._allowed_ip_ranges
 

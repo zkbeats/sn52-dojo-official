@@ -1,13 +1,13 @@
 from typing import List
+
+from commons.objects import ObjectManager
+from commons.utils import get_new_uuid
 from dotenv import load_dotenv
 from fastapi import APIRouter, responses
 from fastapi.encoders import jsonable_encoder
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
-from commons.objects import ObjectManager
-
-from commons.utils import get_new_uuid
-from template.protocol import Response, FeedbackRequest, ScoringMethod
-import bittensor as bt
+from template.protocol import FeedbackRequest, Response
 
 load_dotenv()
 
@@ -20,7 +20,7 @@ class ExternalRequest(BaseModel):
     prompt: str = Field(..., description="Prompt that generated the completions")
     completions: List[str] = Field(..., description="List of completions")
     media_type: str = Field(
-        ..., description="Media type of the request", regex="^(text|image)$"
+        ..., description="Media type of the request", pattern="^(text|image)$"
     )
     # scoring_methods: List[ScoringMethod] = Field(
     #     ..., description="List of scoring methods to use"
@@ -38,7 +38,6 @@ async def reward_request_handler(request: ExternalRequest):
         n_completions=len(request.completions),
         pid=get_new_uuid(),
         prompt=request.prompt,
-        # TODO this needs proper refactoring later on
         responses=[Response() for c in request.completions],
     )
 
@@ -48,4 +47,4 @@ async def reward_request_handler(request: ExternalRequest):
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)
     except Exception as e:
-        bt.logging.error(f"Encountered exception: {e}")
+        logger.error(f"Encountered exception: {e}")
