@@ -1,10 +1,23 @@
 import argparse
 import os
 from pathlib import Path
+import bittensor as bt
+
+
+logger_name = "named_logger"
+
+
+def monkeypatch():
+    """Monkeypatches the logger to add a name attribute."""
+    import loguru
+
+    patched_logger = loguru.logger.bind(name=logger_name)
+    loguru.logger = patched_logger
+
+
+monkeypatch()
 
 from loguru import logger
-
-import bittensor as bt
 
 base_path = Path.cwd()
 
@@ -27,6 +40,8 @@ def check_config(config: bt.config):
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
 
+    bt.logging.enable_third_party_loggers()
+
 
 def add_args(parser):
     from template.protocol import ScoringMethod
@@ -39,25 +54,23 @@ def add_args(parser):
 
     import sys
 
-    parser.add_argument(
-        "--log.level",
-        type=str,
-        choices=[
-            "trace",
-            "debug",
-            "info",
-        ],
-        help="Set the log level for loguru.",
-        default="info",
-    )
     args, _ = parser.parse_known_args()
-    logging_level: str = vars(args).get("log.level", "info")
-    # configure logger to the right level
-    logger.remove()
-    logger.add(sys.stderr, level=logging_level.upper())
+    debug: str = vars(args).get("logging.debug")
+    trace: str = vars(args).get("logging.trace")
+    info: str = vars(args).get("logging.info")
 
-    if logging_level in ["TRACE", "DEBUG", "INFO"]:
-        logger.debug(f"Logging level set to {logging_level}")
+    if trace:
+        logger.remove()
+        logger.add(sys.stderr, level="TRACE")
+    elif debug:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+    elif info:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    else:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
@@ -157,6 +170,7 @@ def get_config():
     """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
+    bt.logging.add_args(parser)
     bt.subtensor.add_args(parser)
     bt.axon.add_args(parser)
     add_args(parser)
