@@ -46,6 +46,7 @@ class DojoTaskTracker:
     _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
         lambda: defaultdict(str)
     )
+    _rid_to_model_map: Dict[str, Dict[str, str]] = defaultdict(lambda: defaultdict(str))
     _lock = asyncio.Lock()
     _should_exit: bool = False
 
@@ -61,7 +62,12 @@ class DojoTaskTracker:
         return list(filter(lambda r: r.scoring_method == ScoringMethod.DOJO, responses))
 
     @classmethod
-    async def update_task_map(cls, dojo_responses: List[FeedbackRequest]):
+    async def update_task_map(
+        cls,
+        request_id: str,
+        dojo_responses: List[FeedbackRequest],
+        obfuscated_model_to_model: Dict,
+    ):
         if not dojo_responses:
             logger.warning("No Dojo responses found")
             return
@@ -70,7 +76,9 @@ class DojoTaskTracker:
         async with cls._lock:
             valid_responses = list(
                 filter(
-                    lambda r: r.request_id and r.axon.hotkey and r.dojo_task_id,
+                    lambda r: r.request_id == request_id
+                    and r.axon.hotkey
+                    and r.dojo_task_id,
                     dojo_responses,
                 )
             )
@@ -78,13 +86,14 @@ class DojoTaskTracker:
                 f"Got {len(valid_responses)} valid Dojo responses to update task tracker"
             )
 
-            for r in valid_responses:
-                if r.request_id not in cls._rid_to_mhotkey_to_task_id:
-                    cls._rid_to_mhotkey_to_task_id[r.request_id] = {}
+            if request_id not in cls._rid_to_mhotkey_to_task_id:
+                cls._rid_to_mhotkey_to_task_id[request_id] = {}
 
-                cls._rid_to_mhotkey_to_task_id[r.request_id][r.axon.hotkey] = (
+            for r in valid_responses:
+                cls._rid_to_mhotkey_to_task_id[request_id][r.axon.hotkey] = (
                     r.dojo_task_id
                 )
+            cls._rid_to_model_map[request_id] = obfuscated_model_to_model
         logger.debug("released lock for task tracker")
         return
 
@@ -110,7 +119,6 @@ class DojoTaskTracker:
                         logger.error(
                             f"No request on disk found for request id: {request_id}"
                         )
-                        # del cls._rid_to_mhotkey_to_task_id[request_id]
                         continue
 
                     for miner_hotkey, task_id in miner_to_task_id.items():
@@ -144,11 +152,17 @@ class DojoTaskTracker:
                                 value = result_data["value"]
                                 if type == CriteriaTypeEnum.RANKING_CRITERIA:
                                     for rank, model_id in value.items():
-                                        model_id_to_avg_rank[model_id] += rank
+                                        real_model_id = cls._rid_to_model_map.get(
+                                            request_id
+                                        ).get(model_id)
+                                        model_id_to_avg_rank[real_model_id] += rank
                                     num_ranks_by_workers += 1
                                 elif type == CriteriaTypeEnum.MULTI_SCORE:
                                     for model_id, score in value.items():
-                                        model_id_to_avg_score[model_id] += score
+                                        real_model_id = cls._rid_to_model_map.get(
+                                            request_id
+                                        ).get(model_id)
+                                        model_id_to_avg_score[real_model_id] += score
                                     num_scores_by_workers += 1
 
                         # dvide all sums by the number of ranks and scores
@@ -216,6 +230,7 @@ class DojoTaskTracker:
                                 f"All hotkeys processed for request id {request_id}, removing from tracker"
                             )
                             del cls._rid_to_mhotkey_to_task_id[request_id]
+                            del cls._rid_to_model_map[request_id]
                         else:
                             for hotkey in processed_hotkeys:
                                 del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
@@ -227,14 +242,6 @@ class DojoTaskTracker:
                 logger.error(f"Error during Dojo task monitoring {str(e)}")
                 pass
             await asyncio.sleep(SLEEP_SECONDS)
-
-    @classmethod
-    async def remove_by_request_id(cls, request_id: str):
-        if cls._rid_to_mhotkey_to_task_id.get(request_id, None) is None:
-            return
-        async with cls._lock:
-            del cls._rid_to_mhotkey_to_task_id[request_id]
-        return
 
 
 class Validator(BaseNeuron):
@@ -481,6 +488,7 @@ class Validator(BaseNeuron):
                     f"Successfully mapped obfuscated model names for {miner_response.axon.hotkey}"
                 )
 
+                # update the miner response with the real model ids
                 valid_miner_responses.append(miner_response)
         except Exception as e:
             logger.error(f"Failed to map obfuscated model to original model: {e}")
@@ -488,7 +496,9 @@ class Validator(BaseNeuron):
 
         dojo_responses = DojoTaskTracker.filter_dojo_responses(valid_miner_responses)
         logger.debug("Attempting to update task map")
-        await DojoTaskTracker.update_task_map(dojo_responses)
+        await DojoTaskTracker.update_task_map(
+            synapse.request_id, dojo_responses, obfuscated_model_to_model
+        )
         response_data = DendriteQueryResponse(
             request=synapse,
             miner_responses=valid_miner_responses,
@@ -669,7 +679,9 @@ class Validator(BaseNeuron):
             loop = asyncio.get_event_loop()
             loop.run_until_complete(
                 DataManager.validator_save(
-                    self.scores, DojoTaskTracker._rid_to_mhotkey_to_task_id
+                    self.scores,
+                    DojoTaskTracker._rid_to_mhotkey_to_task_id,
+                    DojoTaskTracker._rid_to_model_map,
                 )
             )
         except Exception as e:
@@ -689,6 +701,7 @@ class Validator(BaseNeuron):
         DojoTaskTracker._rid_to_mhotkey_to_task_id = state_data[
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
         ]
+        DojoTaskTracker._rid_to_model_map = state_data[ValidatorStateKeys.MODEL_MAP]
 
         logger.info(f"Scores state: {self.scores}")
         logger.info(

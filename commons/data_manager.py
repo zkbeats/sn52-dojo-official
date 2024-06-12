@@ -14,6 +14,7 @@ from template.protocol import DendriteQueryResponse, FeedbackRequest
 class ValidatorStateKeys(StrEnum):
     SCORES = "scores"
     DOJO_TASKS_TO_TRACK = "dojo_tasks_to_track"
+    MODEL_MAP = "model_map"
 
 
 class DataManager:
@@ -167,7 +168,7 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id):
+    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id, model_map):
         """Saves the state of the validator to a file."""
         logger.debug("Attempting to save validator state.")
         async with cls._validator_lock:
@@ -182,6 +183,7 @@ class DataManager:
                     ValidatorStateKeys.DOJO_TASKS_TO_TRACK: json.loads(
                         json.dumps(requestid_to_mhotkey_to_task_id)
                     ),
+                    ValidatorStateKeys.MODEL_MAP: json.loads(json.dumps(model_map)),
                 },
                 cls.get_validator_state_filepath(),
             )
