@@ -3,6 +3,7 @@ import json
 from typing import Dict, List, Optional
 
 import httpx
+import template
 from commons.utils import loaddotenv
 from dotenv import load_dotenv
 from loguru import logger
@@ -94,7 +95,10 @@ class DojoAPI:
         body = {
             "title": "LLM Code Generation Task",
             "body": ranking_request.prompt,
-            "expireAt": (datetime.datetime.utcnow() + datetime.timedelta(hours=24))
+            "expireAt": (
+                datetime.datetime.utcnow()
+                + datetime.timedelta(seconds=template.TASK_DEADLINE)
+            )
             .replace(microsecond=0, tzinfo=datetime.timezone.utc)
             .isoformat()
             .replace("+00:00", "Z"),

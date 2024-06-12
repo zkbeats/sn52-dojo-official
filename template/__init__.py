@@ -66,3 +66,5 @@ ANSWER_MODELS = [
     "google/gemini-pro-1.0",
     "meta-llama/llama-3-8b-instruct",
 ]
+
+TASK_DEADLINE = 8 * 60 * 60

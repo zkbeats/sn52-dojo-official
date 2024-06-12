@@ -30,6 +30,9 @@ from template.protocol import (
     SyntheticQA,
     TaskType,
 )
+
+import template
+
 from template.utils.config import get_config
 from template.utils.uids import (
     MinerUidSelector,
@@ -298,11 +301,11 @@ class Validator(BaseNeuron):
 
                 current_time = get_epoch_time()
                 # allow enough time for human feedback
-                TASK_DEADLINE = 5 * 60
                 filtered_data = [
                     d
                     for d in data
-                    if (current_time - d.request.epoch_timestamp) >= TASK_DEADLINE
+                    if (current_time - d.request.epoch_timestamp)
+                    >= template.TASK_DEADLINE
                 ]
                 if not filtered_data:
                     logger.warning(
@@ -322,6 +325,8 @@ class Validator(BaseNeuron):
                     logger.debug(f"Got hotkey to score: {hotkey_to_score}")
 
                     if not hotkey_to_score:
+                        request_id = d.request.request_id
+                        del DojoTaskTracker._rid_to_mhotkey_to_task_id[request_id]
                         await DataManager.remove_responses([d])
                         continue
 
