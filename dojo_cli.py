@@ -8,10 +8,9 @@ from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
 from rich.console import Console
 
 import bittensor
+from template import DOJO_API_BASE_URL
 
 console = Console()
-
-DOJO_API_BASE_URL = "***REMOVED***"
 
 
 def success(message: str, emoji: str = ":white_check_mark:"):

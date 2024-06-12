@@ -14,10 +14,7 @@ from template.protocol import (
     RankingCriteria,
 )
 
-load_dotenv()
-
-
-DOJO_API_BASE_URL = "***REMOVED***"
+from template import DOJO_API_BASE_URL
 
 
 class DojoAPI:

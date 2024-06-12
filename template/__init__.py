@@ -1,20 +1,7 @@
-# The MIT License (MIT)
-# Copyright © 2023 Yuma Rao
-# Copyright © 2023 Tensorplex Labs
+import os
+from dotenv import load_dotenv
 
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
-# the Software.
-
-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
+load_dotenv()
 
 # Define the version of the template module.
 __version__ = "0.0.1"
@@ -68,3 +55,7 @@ ANSWER_MODELS = [
 ]
 
 TASK_DEADLINE = 8 * 60 * 60
+
+DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
+if DOJO_API_BASE_URL is None:
+    raise ValueError("DOJO_API_BASE_URL is not set in the environment")
