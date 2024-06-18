@@ -31,14 +31,22 @@
 <summary>Table of Contents</summary>
 
 - [Introduction](#introduction)
-- [Minimum Requirements](#minimum-requirements)
-  - [Miner](#miner)
+  - [Benefits to participants contributing through Dojo](#benefits-to-participants-contributing-through-dojo)
+- [Prerequisites](#prerequisites)
   - [Validator](#validator)
+  - [Miner](#miner)
+- [System Requirements](#system-requirements)
+  - [Miner](#miner-1)
+  - [Validator](#validator-1)
 - [Getting Started](#getting-started)
   - [Mining](#mining)
+    - [Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-miners-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
+    - [Requirements for running a validator](#requirements-for-running-a-validator)
+    - [Setup the Synthetic QA API Server](#setup-the-synthetic-qa-api-server)
+    - [Start Validating](#start-validating)
 - [Subnet Mechanisms](#subnet-mechanisms)
-  - [Responsibiltiies of Miners](#responsibilities-of-miners)
+  - [Responsibilties of Miners](#responsibilties-of-miners)
   - [Responsibilities of Validators](#responsibilities-of-validators)
   - [Task Lifecycle, User Journey and Data Flow](#task-lifecycle-user-journey-and-data-flow)
 - [Scoring Mechanism](#scoring-mechanism)
@@ -49,13 +57,10 @@
 
 </details>
 
-
-
-
-
 ---
 
 # Introduction
+
 The development of open-source AI models is often hindered by the lack of high-quality human-generated datasets. Closed-source AI developers, aiming to reduce data collection costs, have created significant social and economic equity challenges, with workers being paid less than $2 per hour for mentally and emotionally taxing tasks. The benefits of these models have been concentrated among a select few, exacerbating inequalities among contributors.
 
 The solution lies in creating an open platform to gather human-generated datasets, allowing anyone to earn by contributing their intelligence. This approach, however, introduces new challenges, such as performing quality control, verifying that contributions are genuinely human and preventing sybil attacks.
@@ -72,7 +77,7 @@ The Dojo Subnet offers multiple use cases:
 
 By democratising the collection of human preference data, the Dojo Subnet not only addresses existing equity issues but also paves the way for more inclusive and ethical AI development.
 
-## Benefits to participants contributing through Dojo:
+## Benefits to participants contributing through Dojo
 
 - Open platform: Anyone capable can contribute, ensuring broad participation and diverse data collection.
 
@@ -83,24 +88,34 @@ By democratising the collection of human preference data, the Dojo Subnet not on
 <br>
 
 # Prerequisites
-- Python 3.11 and above
+
+## Validator
+
+- Python 3.10 and above
 - PM2
 - Docker
-- Third party API Keys __(Validators Only)__
+- Third party API Keys **(Validators Only)**
   - OpenRouter
-  - WanDB
-  - Together __(Optional)__
-  - OpenAI
-  - Hugging Face
+  - wandb
+  - Together **(Optional)**
+  - OpenAI **(Optional)**
+
+## Miner
+
+- Python 3.10 and above
+- PM2
+- Docker
 
 # System Requirements
 
-### Miner
+## Miner
+
 - 4 cores
 - 8 GB RAM
 - 32GB SSD
 
-### Validator
+## Validator
+
 - 8 cores
 - 32 GB RAM
 - 1 TB SSD
@@ -108,11 +123,13 @@ By democratising the collection of human preference data, the Dojo Subnet not on
 # Getting Started
 
 To get started as a miner or validator, these are the common steps both a miner and validator have to go through.
+
 > The following guide is tailored for distributions utilizing APT as the package manager. Adjust the installation steps as per the requirements of your system.
-> 
+>
 > We will utilize /opt directory as our preferred location in this guide.
 
-Install PM2 (__If not already installed__)
+Install PM2 (**If not already installed**)
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl gnupg
@@ -127,7 +144,8 @@ sudo npm install -g pm2
 sudo pm2 install pm2-logrotate
 ```
 
-Install Docker CE (__If not already installed__)
+Install Docker CE (**If not already installed**)
+
 ```bash
 sudo apt-get install \
     ca-certificates \
@@ -144,6 +162,7 @@ sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plug
 ```
 
 Clone the project, set up and configure python virtual environment
+
 ```bash
 # In this guide, we will utilize the /opt directory as our preferred location.
 cd /opt
@@ -154,18 +173,21 @@ cd dojo-subnet/
 
 # Set up python virtual environment and pip packages
 python -m venv env
-env/bin/pip install -r requirements.txt --no-cache-dir
-env/bin/pip install -e . --no-cache-dir
+source env/bin/activate
+pip install -r requirements.txt --no-cache-dir
+pip install -e . --no-cache-dir
 ```
 
-# Miners
+## Mining
 
 Activate the python virtual environment
+
 ```bash
 source env/bin/activate
 ```
 
 Create your wallets and register them to our subnet
+
 ```bash
 # create your wallets
 btcli wallet new_coldkey
@@ -177,17 +199,18 @@ btcli wallet new_hotkey
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 1 --subtensor.network ***REMOVED***
 
 # Testnet
-btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test 
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
 
 Retrieve the API Key and Subscription Key with Dojo CLI
+
 ```bash
 # Start the dojo cli tool
 # Upon starting the CLI it will ask if you wanna use the default path for bittensor wallets, which is `~/.bittensor/wallets/`.
 # If you want to use a different path, please enter 'n' and then specify the path when prompted.
 dojo
 
-# TIP: During the whole process, you could actually use tab-completion to display the options, so you don't have to remember them all. Please TAB your way guys! :bowing_man:
+# TIP: During the whole process, you could actually use tab-completion to display the options, so you don't have to remember them all. Please TAB your way guys! 🙇‍♂️
 # It should be prompting you to enter you coldkey and hotkey
 # After entering the coldkey and hotkey, you should be in the command line interface for dojo, please authenticate by running the following command.
 # You should see a message saying "✅ Wallet coldkey name and hotkey name set successfully."
@@ -208,23 +231,25 @@ subscription_key generate
 api_key list
 subscription_key list
 
-# WIP :construction_worker:
 # You can also delete your keys with the following command.
 api_key delete
 subscription_key delete
 ```
 
 Create .env file
+
 ```bash
-# copy .env.example
-cp .env.example .env
+# copy .env.miner.example
+cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
-DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***" # Please select one
 DOJO_API_KEY="sk-<KEY>"
+# Please select one
+DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***"
 ```
 
 Start the miner by running the following commands:
+
 ```bash
 # For Devnet
 pm2 start main_miner.py \
@@ -253,33 +278,39 @@ pm2 start main_miner.py \
 --subtensor.network test
 ```
 
-## Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
+### Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
+
 Note: URLs are different for devnet, testnet and mainnet.  
 Devnet: ***REMOVED***  
 Testnet: ***REMOVED***  
-Mainnet: https://dojo.tensorplex.ai  
+Mainnet: https://dojo.tensorplex.ai
 
 1. Head to ***REMOVED*** | ***REMOVED*** | https://dojo.tensorplex.ai and login and sign with your Metamask wallet.
+
 - You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
 - Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.png)
 - Click "Next" and "Continue", then finally it will be requesting a signature from your wallet, please sign and it will be connected. ![image](./assets/ui/wallet_sign.png)
 - Once connected, the top navigation bar should display your wallet address. ![image](./assets/ui/wallet_connected.png)
 
 2. Once connected, please stay connected to your wallet and click on "Enter Subscription Key". ![image](./assets/subscription/enter_subscription.png)
-- Give your subscription a name, and enter your subscription key generated earlier before running the miner. *_Refer to step 4 of "Getting Started" if you need to retrieve your key_* ![image](./assets/subscription/enter_details.png)
+
+- Give your subscription a name, and enter your subscription key generated earlier before running the miner. _*Refer to step 4 of "Getting Started" if you need to retrieve your key*_ ![image](./assets/subscription/enter_details.png)
 - Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
 - Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
 
-Congratulations, you magnificent mining maestro🧙! Grab your virtual pickaxe and let the digital gold rush begin! 🚀🔥 
+Congratulations, you magnificent mining maestro🧙! Grab your virtual pickaxe and let the digital gold rush begin! 🚀🔥
 
 ## Validating
 
 ### Requirements for running a validator
+
 - Openrouter API Key
 - Deploy the synthetic QA API on the same server as the validator
 
 ### Setup the Synthetic QA API Server
+
 Start a redis server
+
 ```bash
 # You can use the template provided in this project to start a redis server, feel free to modify the commands below and the docker-compose file to suit your needs
 mkdir /opt/redis
@@ -291,6 +322,7 @@ cd /opt/redis && docker compose up -d
 ```
 
 Clone the Synthetic QA API Server project
+
 ```bash
 cd /opt
 
@@ -304,6 +336,7 @@ env/bin/pip install -r requirements.txt --no-cache-dir
 ```
 
 Setup .env file
+
 ```bash
 # copy .env.example
 cp .env.example .env
@@ -320,6 +353,7 @@ OPENAI_API_KEY=
 ```
 
 Deploy the synthetic QA API Server
+
 ```bash
 # start the api server with pm2
 pm2 start "uvicorn main:app --host 127.0.0.1 --port 5003 --workers 4" --name dojo-synthetic-api
@@ -328,14 +362,16 @@ pm2 start "uvicorn main:app --host 127.0.0.1 --port 5003 --workers 4" --name doj
 ### Start Validating
 
 Head back to dojo-subnet project and set up the .env file
-```bash
-cd /opt/dojo-subnet
 
-# copy .env.example
-cp .env.example .env
+```bash
+cd dojo-subnet
+
+# copy .env.validator.example
+cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
-DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***" # Please select one
+# Please select one
+DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
@@ -344,15 +380,15 @@ WANDB_API_KEY="<wandb_key>"
 # Optional or if you've chosen it
 TOGETHER_API_KEY=
 OPENAI_API_KEY=
-HF_TOKEN=
 ```
 
 Start the validator
+
 ```bash
 # start the validator
 # Devnet
 pm2 start main_validator.py \
---name dojo-test-validator \
+--name dojo-validator \
 --interpreter env/bin/python3 \
 -- --netuid 1 \
 --wallet.name coldkey \
@@ -365,7 +401,7 @@ pm2 start main_validator.py \
 
 # Testnet
 pm2 start main_validator.py \
---name dojo-test-validator \
+--name dojo-validator \
 --interpreter env/bin/python3 \
 -- --netuid 98 \
 --wallet.name coldkey \
@@ -377,7 +413,8 @@ pm2 start main_validator.py \
 --subtensor.network test
 ```
 
-To start with autoupdate for validators (__optional__)
+To start with autoupdate for validators (**optional**)
+
 ```bash
 # Devnet
 pm2 start run.sh \
@@ -406,36 +443,43 @@ pm2 start run.sh \
 
 # Subnet Mechanisms
 
-## Responsibiltiies of Miners
-Miners are required to gather Participants to complete tasks. Miners are expected to build and curate their Participant pools to strategically complete Tasks based on domain expertise in order to succeed in the Dojo subnet. 
+## Responsibilties of Miners
+
+Miners are required to gather Participants to complete tasks. Miners are expected to build and curate their Participant pools to strategically complete Tasks based on domain expertise in order to succeed in the Dojo subnet.
 
 ## Responsibilities of Validators
+
 Validators are responsible to play the role of Instructor, Augmenter, Output Generator and Obfuscator in the Task generation phase, as well as to calculate the scoring, set reward and miner trust. The terms will be described in the next section.
 
 ## Task Lifecycle, User Journey and Data Flow
+
 ![image](./assets/doc/task_lifecycle.png)
+
 <center> Figure 1: High-level Task Lifecycle Diagram</center>
 
 Important terms:
-- Task: A task consists of an instruction that is accompanied by multiple responses to be ranked by human contributors. The task is considered complete only when sufficient and high quality preference data points are collected for the task. 
-- Worker: The entity used to describe human contributors regardless of the associated miner. Miners are expected to curate their pool of workers in terms of quality and domain expertise to specialize, and workers are free to be associated with different miners’ organisations (hotkeys). 
+
+- Task: A task consists of an instruction that is accompanied by multiple responses to be ranked by human contributors. The task is considered complete only when sufficient and high quality preference data points are collected for the task.
+- Worker: The entity used to describe human contributors regardless of the associated miner. Miners are expected to curate their pool of workers in terms of quality and domain expertise to specialize, and workers are free to be associated with different miners’ organisations (hotkeys).
 - Instructor: The object class that generates the instruction of the task.
 
-Task generation begins with the Instructor creating instructions for Tasks based on randomly sampled combinations of Task Seeds. The list of Task Seeds is initially defined by Tensorplex, and will incorporate more diverse task seeds based on organic requests / future collaborations with interested parties. Inspired by the [Self Instruct framework](https://arxiv.org/pdf/2212.10560),  a few-shot prompting technique will be employed on a sample of existing task seeds for SOTA LLMs to generate Tasks with new instructions. A filter will also be applied to check against the Global Task Database which stores completed and rejected Tasks by running a series of semantic filters and comparators.
+Task generation begins with the Instructor creating instructions for Tasks based on randomly sampled combinations of Task Seeds. The list of Task Seeds is initially defined by Tensorplex, and will incorporate more diverse task seeds based on organic requests / future collaborations with interested parties. Inspired by the [Self Instruct framework](https://arxiv.org/pdf/2212.10560), a few-shot prompting technique will be employed on a sample of existing task seeds for SOTA LLMs to generate Tasks with new instructions. A filter will also be applied to check against the Global Task Database which stores completed and rejected Tasks by running a series of semantic filters and comparators.
 
 ![image](./assets/doc/synthetic_ground_truth_generation_process.png)
+
 <center> Figure 2: Synthetic Ground Truth Generation Process </center>
 <br>
 
 For the Task instructions that are generated successfully, the Augmenter will perform several iterations of augmentation on the initial Task instruction to produce n-set of different Task instructions that deviates from the original Task instruction progressively. The goal of such augmentation is for LLMs to follow the augmented prompts and produce objectively subpar responses in order to build the synthetic ground truth for human preference ranking scoring. This is critical in assessing and assigning Miner trust to the worker pool to build a reliable Dojo participant community.
 
-The original Task instructions, along with the augmented Task instructions will be sent to the Output Generator, where LLM is used to generate the responses to the corresponding instructions. Depending on the domain, various prompting techniques such as CoT and execution feedback may be applied to ensure reasonable and compilable responses are produced for workers’ ranking. 
+The original Task instructions, along with the augmented Task instructions will be sent to the Output Generator, where LLM is used to generate the responses to the corresponding instructions. Depending on the domain, various prompting techniques such as CoT and execution feedback may be applied to ensure reasonable and compilable responses are produced for workers’ ranking.
 
 Next, the Obfuscator will apply data obfuscation of various layers/forms on the responses which prevents the participants from performing lookup attacks. The obfuscation process will not affect the functionality or quality of the response.
 
 Finally, after applying data obfuscation, the task which contains the original instruction and the responses generated from the original and augmented instructions will be compiled and managed by Task Manager, which the Miners obtain the tasks from.
 
 ![image](./assets/doc/subnet_entities.png)
+
 <center> Figure 3. Task Dissemination from Validators to Participants </center>
 <br>
 Once the task is assigned to the Miner, the Miners can decide how to pass this task to the Participant, who may be a separate entity. The Participant’s outputs are associated with the respective Miner's hotkey for scoring and reward calculations. These are the various methods for task assignment and completion:
@@ -447,78 +491,92 @@ Once the task is assigned to the Miner, the Miners can decide how to pass this t
 - External Platforms: Miners can also choose to distribute these tasks to an external service provider such as scale.ai, AWS mTurk, Prolific, Appen or Web3 data labeling platforms. However, these miners will need to be responsible for quality control and ensuring tasks are completed within the stipulated deadlines. (Coming soon)
 
 ![image](./assets/doc/dojo_interface.png)
+
 <center> Figure 4: Dojo interface for measuring prompt similarity of different UI outputs </center>
 <br>
 
-Finally, the completed task will be logged in the Global Task Database, marking the end of the lifecycle of a Task. 
+Finally, the completed task will be logged in the Global Task Database, marking the end of the lifecycle of a Task.
 
 # Scoring Mechanism
 
-## Miner Scoring 
+## Miner Scoring
+
 The scoring formula for Miners is the summation of the score of the tasks computed in the past few epochs. The individual task score is a weighted function of the following metrics:
+
 - Weighted Cohen’s Kappa: Calculates the agreement between Miners while controlling for the probability of chance agreement, providing a more robust measure of reliability compared to simple percent agreement. A weighted variant of Cohen’s kappa will be used as we are concerned with the relative ranking of the responses generated by LLMs.
-- Spearman’s Correlation: Measures the strength and direction of a monotonic relationship between two continuous or ordinal variables, robust to non-normal distributions and outliers, helps to assess the agreement among Miners and as well as against ground truth. 
+- Spearman’s Correlation: Measures the strength and direction of a monotonic relationship between two continuous or ordinal variables, robust to non-normal distributions and outliers, helps to assess the agreement among Miners and as well as against ground truth.
 - Distance against synthetic ground truth: To address the loss of fidelity of Spearman’s correlation.
 
-While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth. 
+While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth.
 
 ![image](./assets/doc/scoring_mechanism.png)
+
 <center> Figure 5: Augmented Prompt Deviation as Synthetic Ground Truth </center>
 <br>
 
 While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth.
 
 ![image](./assets/doc/inconsistent_results.png)
+
 <center> Figure 6: Inconsistent Participants Results </center>
 <br>
 
 The Cohen’s Kappa metric can also be used to monitor data quality, i.e. do not assign miner trust if Weighted Cohen’s Kappa is not above a certain threshold (no consensus between Miners is achieved).
 
 ![image](./assets/doc/attack.png)
+
 <center> Figure 7: Various failure modes and the corresponding reaction of the scoring mehchanism </center>
 <br>
 
 The scoring mechanism is designed to handle various attack vectors and failure modes, and will be continually improved on to ensure a fair, productive and collaborative environment for all participants.
 
 ![image](./assets/doc/llm_as_synthetic_truth.png)
+
 <center> Figure 8: LLM Leaderboard as Synthetic Ground Truth </center>
 <br>
 
 The Synthetic Ground Truth could be derived from other sources such as a publicly available LLM leaderboard, where the rank of the leaderboard in specific domain can be used as a proxy for the accuracy score.
 
 ![image](./assets/doc/partial_ground_truth.png)
+
 <center> Figure 9: Task with Partial Ground Truths </center>
 <br>
 
-Participants can also determine accuracy scores of responses that do not have ground truth. For example, a*, b*, c* can be processed in different manners with the intention to improve the outputs like using various experimental prompt engineering frameworks, or using new LLMs that are not yet benchmarked.
-
+Participants can also determine accuracy scores of responses that do not have ground truth. For example, a*, b*, c\* can be processed in different manners with the intention to improve the outputs like using various experimental prompt engineering frameworks, or using new LLMs that are not yet benchmarked.
 
 ## Validator Scoring
+
 Due to the need to provide ample time for human feedback, the deadline for each `RankingRequest` is currently set to 4 hours. Only after the deadline has been passed, validators will score all participants responses. This deadline is generous and provides plenty of time for the feedback loop.
 
-
 # Roadmap
+
 - V0 (Tensorplex Devnet)
-    - Subnet Validator and Miner Code
-    - Dojo Worker API
-    - Dojo User Interface
+
+  - Subnet Validator and Miner Code
+  - Dojo Worker API
+  - Dojo User Interface
 
 - V1 (Bittensor Testnet)
-    - Multiple Modality Support
-    - Scoring Mechanism
+
+  - Multiple Modality Support
+  - Scoring Mechanism
 
 - V2 (Bittensor Mainnet)
-    - Cross-Subnet Integration
+
+  - Cross-Subnet Integration
 
 - V3 (Bittensor Mainnet + Dojo Mainnet)
-    - On-chain Execution of Task Completions
-    - Proof-of-stake Consensus Mechanism
+
+  - On-chain Execution of Task Completions
+  - Proof-of-stake Consensus Mechanism
 
 - V4 (Bittensor Mainnet + Dojo Mainnet)
-    - External Reputation Staking Mechanism
+  - External Reputation Staking Mechanism
 
 # License
+
 This repository is licensed under the MIT License.
+
 ```text
 # The MIT License (MIT)
 # Copyright © 2023 Yuma Rao
