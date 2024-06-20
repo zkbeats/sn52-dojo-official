@@ -112,7 +112,7 @@ class DojoAPI:
                 "x-api-key": DOJO_API_KEY,
                 "content-type": mp.content_type,
             },
-            timeout=10.0,
+            timeout=15.0,
         )
 
         if response.status_code == 200:
