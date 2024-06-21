@@ -26,3 +26,12 @@ repos:
       - id: ruff-format
         types_or: [python, pyi, jupyter]
         stages: [push]
+  # TODO @dev fix why prompt not showing
+  # - repo: local
+  #   hooks:
+  #     - id: check identities
+  #       verbose: true
+  #       name: check identities
+  #       entry: .githooks/check_identities.sh
+  #       stages: [commit, push]
+  #       language: script
