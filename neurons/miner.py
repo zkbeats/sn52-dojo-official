@@ -6,19 +6,15 @@ import traceback
 from datetime import datetime
 from typing import Dict, Tuple
 
+import bittensor as bt
+from loguru import logger
+
 from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
-from loguru import logger
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
-from template.protocol import (
-    FeedbackRequest,
-    ScoringMethod,
-    ScoringResult,
-)
+from template.protocol import FeedbackRequest, ScoringMethod, ScoringResult
 from template.utils.uids import is_miner
-
-import bittensor as bt
 
 
 class Miner(BaseMinerNeuron):
