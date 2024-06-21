@@ -1,3 +1,4 @@
+pre-commit.pyz
 .idea/
 wandb/
 bin/
