@@ -21,13 +21,14 @@ def get_client_session():
 
 
 class SyntheticAPI:
+    _session = get_client_session()
+
     @classmethod
     async def get_qa(cls) -> List[SyntheticQA]:
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
         logger.debug(f"Generating synthetic QA from {path}.")
         # Instantiate the aiohttp ClientSession outside the loop
 
-        session = get_client_session()
         MAX_RETRIES = 3
         try:
             async for attempt in AsyncRetrying(

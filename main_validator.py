@@ -5,6 +5,7 @@ import uvicorn
 import wandb
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
+from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from dotenv import load_dotenv
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     DojoTaskTracker()._should_exit = True
     wandb.finish()
     validator.save_state()
+    await SyntheticAPI._session.close()
     await DojoAPI._http_client.aclose()
 
 
