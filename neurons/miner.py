@@ -4,7 +4,6 @@ import threading
 import time
 import traceback
 from datetime import datetime
-from typing import Dict, Tuple
 
 import bittensor as bt
 from loguru import logger
@@ -21,7 +20,7 @@ class Miner(BaseMinerNeuron):
     _should_exit = False
 
     def __init__(self):
-        super(Miner, self).__init__()
+        super().__init__()
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
 
@@ -39,7 +38,7 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         # log all incoming requests
-        self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
+        self.hotkey_to_request: dict[str, FeedbackRequest] = {}
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
         logger.info("Received scoring result from validators")
@@ -80,7 +79,7 @@ class Miner(BaseMinerNeuron):
 
     async def blacklist_feedback_request(
         self, synapse: FeedbackRequest
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         logger.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
         if caller_hotkey not in self.metagraph.hotkeys:

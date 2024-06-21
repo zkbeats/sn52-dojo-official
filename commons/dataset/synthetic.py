@@ -1,13 +1,13 @@
 import functools
 import os
-from typing import List
 
 import aiohttp
-from commons.utils import log_retry_info
 from dotenv import load_dotenv
 from loguru import logger
-from template.protocol import SyntheticQA
 from tenacity import AsyncRetrying, RetryError, stop_after_attempt
+
+from commons.utils import log_retry_info
+from template.protocol import SyntheticQA
 
 load_dotenv()
 
@@ -24,7 +24,7 @@ class SyntheticAPI:
     _session = get_client_session()
 
     @classmethod
-    async def get_qa(cls) -> List[SyntheticQA]:
+    async def get_qa(cls) -> list[SyntheticQA]:
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
         logger.debug(f"Generating synthetic QA from {path}.")
         # Instantiate the aiohttp ClientSession outside the loop
@@ -35,7 +35,7 @@ class SyntheticAPI:
                 stop=stop_after_attempt(MAX_RETRIES), before_sleep=log_retry_info
             ):
                 with attempt:
-                    async with session.get(path) as response:
+                    async with cls._session.get(path) as response:
                         response.raise_for_status()
                         response_json = await response.json()
                         if "body" not in response_json:
