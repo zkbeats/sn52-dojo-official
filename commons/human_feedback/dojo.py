@@ -5,16 +5,14 @@ from typing import Dict, List, Optional
 import httpx
 import template
 from commons.utils import loaddotenv
-from dotenv import load_dotenv
 from loguru import logger
 from requests_toolbelt import MultipartEncoder
+from template import DOJO_API_BASE_URL
 from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
 )
-
-from template import DOJO_API_BASE_URL
 
 
 class DojoAPI:
@@ -105,6 +103,7 @@ class DojoAPI:
 
         mp = MultipartEncoder(fields=body)
         DOJO_API_KEY = loaddotenv("DOJO_API_KEY")
+        print("DOJO API KEY: ", DOJO_API_KEY)
         response = await cls._http_client.post(
             path,
             data=mp.to_string(),
@@ -114,6 +113,17 @@ class DojoAPI:
             },
             timeout=15.0,
         )
+        try:
+            from curlify2 import Curlify
+
+            curl_req = Curlify(response.request)
+            print("CURL REQUEST >>> ")
+            print(curl_req.to_curl())
+        except ImportError:
+            print("Curlify not installed")
+        except Exception as e:
+            print("Tried to export create task request as curl, but failed.")
+            print(f"Exception: {e}")
 
         if response.status_code == 200:
             task_ids = response.json()["body"]
