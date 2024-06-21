@@ -3,10 +3,15 @@ repos:
     rev: v3.2.0
     hooks:
       - id: trailing-whitespace
+        stages: [push]
       - id: end-of-file-fixer
+        stages: [push]
       - id: check-yaml
+        stages: [push]
       - id: check-added-large-files
+        stages: [push]
       - id: check-toml
+        stages: [push]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
