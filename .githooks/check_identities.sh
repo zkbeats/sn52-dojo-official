@@ -1,41 +1,51 @@
 #!/usr/bin/env bash
 
-# exec < /dev/tty
+_echo() {
+    echo "$@" > /dev/tty
+}
 
-# Check for a current list of identities using git shortlog -sne --all, ignoring any staged commits
+
+_echo
+_echo "Checking identities..."
+
+# read user input, assign stdin to keyboard
+exec < /dev/tty
+
 GIT_BRANCH=$(git branch --show-current)
 remote_identities=$(git log origin/$GIT_BRANCH --pretty=format:"%an <%ae>" | sort | uniq)
-echo "Current Git Branch: $GIT_BRANCH"
-echo "Identities on remote:"
-echo "$remote_identities"
-echo
-# local_identities=$(git log $GIT_BRANCH --pretty=format:"%an <%ae>" | sort | uniq)
+_echo "Current Git Branch: $GIT_BRANCH"
+_echo "Identities on remote:"
+_echo "$remote_identities"
+_echo
+
+local_identities=$(git log $GIT_BRANCH --pretty=format:"%an <%ae>" | sort | uniq)
 current_author="$(git config user.name) <$(git config user.email)>"
-local_identities=$(echo -e "$local_identities$current_author" | sort | uniq)
-echo "Identities on local:"
-echo "$local_identities"
-echo
+local_identities=$(echo -e "$local_identities\n$current_author" | sort | uniq)
+_echo "Identities on local:"
+_echo "$local_identities"
+_echo
 
 # Find all identities in local_identities that are not in remote_identities
 new_identities=$(comm -23 <(echo "$local_identities") <(echo "$remote_identities"))
 
-if [ -n "$new_identities" ]; then
-    echo "You are introducing the new identities:"
-    echo "$new_identities"
-    echo
+if [ -z "$new_identities" ]; then
+    _echo "No new identities found."
+    exit 0
+else
+    _echo "New identities found:"
+    _echo "$new_identities"
     while true; do
-        # prompt for user input
-        read -p "Is this intentional? (Y/n)" yn < /dev/tty
-        if [ "$yn" = "" ]; then
-            yn='n'
-        fi
+        _echo -n "Did you intend to use this identity? (Y/N) "
+        read yn < /dev/tty
         case $yn in
-          [Y] ) echo "Identity checks passed"; exit 0;;
-          [Nn] ) echo "Aborting due to identity leak";exit 1;;
-          * ) echo "Please answer Y for yes or n for no.";;
+            [Yy] ) exit 0; break;;
+            [Nn] ) _echo "Aborting"; exit 1;;
+            * ) _echo "Please answer y (yes) or n (no):" && continue;;
         esac
     done
-else
-    echo "No new identities found"
-    exit 0
 fi
+
+
+exit 1
+
+exec <&-

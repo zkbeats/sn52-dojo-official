@@ -9,4 +9,5 @@ hooks:
 	fi
 	python3 pre-commit.pyz clean
 	python3 pre-commit.pyz uninstall --hook-type pre-commit --hook-type pre-push
+	python3 pre-commit.pyz gc
 	python3 pre-commit.pyz install --hook-type pre-commit --hook-type pre-push
