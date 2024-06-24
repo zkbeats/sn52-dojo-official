@@ -1,0 +1,3 @@
+[submodule "dojo-synthetic-api"]
+	path = dojo-synthetic-api
+	url = git@github.com:tensorplex-labs/dojo-synthetic-api.git
