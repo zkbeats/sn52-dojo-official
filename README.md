@@ -16,10 +16,10 @@
 <div align="center">
   <a href="https://www.tensorplex.ai/">Website</a>
   ·
-  <a href="https://tensorplex.gitbook.io/tensorplex-docs/tensorplex-rlhf">Docs</a>
+  <a href="https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet">Docs</a>
   ·
   <a href="https://huggingface.co/tensorplex-labs">HuggingFace</a>
-  ·  
+  ·
   <a href="#getting-started">Getting Started</a>
   ·
   <a href="https://twitter.com/TensorplexLabs">Twitter</a>
@@ -43,7 +43,6 @@
     - [Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-miners-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
     - [Requirements for running a validator](#requirements-for-running-a-validator)
-    - [Setup the Synthetic QA API Server](#setup-the-synthetic-qa-api-server)
     - [Start Validating](#start-validating)
 - [Subnet Mechanisms](#subnet-mechanisms)
   - [Responsibilties of Miners](#responsibilties-of-miners)
@@ -91,7 +90,7 @@ By democratising the collection of human preference data, the Dojo Subnet not on
 
 ## Validator
 
-- Python 3.10 and above
+- Python >=3.10
 - PM2
 - Docker
 - Third party API Keys **(Validators Only)**
@@ -102,23 +101,22 @@ By democratising the collection of human preference data, the Dojo Subnet not on
 
 ## Miner
 
-- Python 3.10 and above
+- Python >=3.10
 - PM2
-- Docker
 
 # System Requirements
 
 ## Miner
 
-- 4 cores
-- 8 GB RAM
+- 2 cores
+- 4 GB RAM
 - 32GB SSD
 
 ## Validator
 
-- 8 cores
-- 32 GB RAM
-- 1 TB SSD
+- 4 cores
+- 8 GB RAM
+- 256 SSD
 
 # Getting Started
 
@@ -168,8 +166,8 @@ Clone the project, set up and configure python virtual environment
 cd /opt
 
 # Clone the project
-git clone https://github.com/tensorplex-labs/dojo-subnet.git
-cd dojo-subnet/
+git clone https://github.com/tensorplex-labs/dojo.git
+cd dojo/
 
 # Set up python virtual environment and pip packages
 python -m venv env
@@ -195,9 +193,6 @@ btcli wallet new_coldkey
 btcli wallet new_hotkey
 
 # register your wallet to our subnet
-# Devnet
-btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 1 --subtensor.network ***REMOVED***
-
 # Testnet
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
@@ -231,7 +226,7 @@ subscription_key generate
 api_key list
 subscription_key list
 
-# You can also delete your keys with the following command.
+# You can also delete your keys with the following commands.
 api_key delete
 subscription_key delete
 ```
@@ -244,26 +239,12 @@ cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
 DOJO_API_KEY="sk-<KEY>"
-# Please select one
-DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***"
+DOJO_API_BASE_URL="https://dojo-api-staging.tensorplex.ai"
 ```
 
 Start the miner by running the following commands:
 
 ```bash
-# For Devnet
-pm2 start main_miner.py \
---name dojo-miner \
---interpreter env/bin/python3 \
--- --netuid 1 \
---wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---axon.port 9602 \
---neuron.type miner \
---scoring_method "dojo" \
---subtensor.network ***REMOVED***
-
 # For Testnet
 pm2 start main_miner.py \
 --name dojo-miner \
@@ -280,12 +261,11 @@ pm2 start main_miner.py \
 
 ### Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
 
-Note: URLs are different for devnet, testnet and mainnet.  
-Devnet: ***REMOVED***  
-Testnet: ***REMOVED***  
-Mainnet: https://dojo.tensorplex.ai
+Note: URLs are different for devnet, testnet and mainnet.
+Testnet: https://dojo-api-staging.tensorplex.ai
+Mainnet: ***REMOVED***
 
-1. Head to ***REMOVED*** | ***REMOVED*** | https://dojo.tensorplex.ai and login and sign with your Metamask wallet.
+1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
 
 - You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
 - Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.png)
@@ -307,71 +287,36 @@ Congratulations, you magnificent mining maestro🧙! Grab your virtual pickaxe a
 - Openrouter API Key
 - Deploy the synthetic QA API on the same server as the validator
 
-### Setup the Synthetic QA API Server
-
-Start a redis server
+Pull the synthetic qa api git submodule
 
 ```bash
-# You can use the template provided in this project to start a redis server, feel free to modify the commands below and the docker-compose file to suit your needs
-mkdir /opt/redis
-cp docker-compose.yaml /opt/redis
-echo "--requirepass <change_me>" > /opt/redis/redis.conf
-cd /opt/redis && docker compose up -d
+# pull submodules
+git submodule update init
 
-# TODO: Start with binary etc
 ```
 
-Clone the Synthetic QA API Server project
+Setup the env variables, these are marked with "# CHANGE" in `synthetic-qa-api/docker-compose.yml`
+
+Run the server
 
 ```bash
-cd /opt
-
-# git clone synthetic qa api server
-git clone https://github.com/tensorplex-labs/synthetic-qa-api.git
-cd synthetic-qa-api
-
-# Set up python virtual environment and pip packages
-python -m venv env
-env/bin/pip install -r requirements.txt --no-cache-dir
-```
-
-Setup .env file
-
-```bash
-# copy .env.example
-cp .env.example .env
-
-# edit the .env file with vim, vi or nano
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-REDIS_USERNAME=default
-REDIS_PASSWORD=<PASSWORD>
-OPENROUTER_API_KEY=sk-or-v1-<KEYS>
-# optional, depending on what provider is being used at the moment
-TOGETHER_API_KEY=
-OPENAI_API_KEY=
-```
-
-Deploy the synthetic QA API Server
-
-```bash
-# start the api server with pm2
-pm2 start "uvicorn main:app --host 127.0.0.1 --port 5003 --workers 4" --name dojo-synthetic-api
+cd dojo-synthetic-api
+docker compose up -d
 ```
 
 ### Start Validating
 
-Head back to dojo-subnet project and set up the .env file
+Head back to dojo project and set up the .env file
 
 ```bash
-cd dojo-subnet
+cd dojo
 
 # copy .env.validator.example
 cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
 # Please select one
-DOJO_API_BASE_URL="***REMOVED***" | "***REMOVED***" | "***REMOVED***"
+DOJO_API_BASE_URL="https://dojo-api-staging.tensorplex.ai"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
@@ -386,19 +331,6 @@ Start the validator
 
 ```bash
 # start the validator
-# Devnet
-pm2 start main_validator.py \
---name dojo-validator \
---interpreter env/bin/python3 \
--- --netuid 1 \
---wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---axon.port 9603 \
---neuron.type validator \
---scoring_method "dojo" \
---subtensor.network ***REMOVED***
-
 # Testnet
 pm2 start main_validator.py \
 --name dojo-validator \
@@ -416,18 +348,6 @@ pm2 start main_validator.py \
 To start with autoupdate for validators (**optional**)
 
 ```bash
-# Devnet
-pm2 start run.sh \
---interpreter bash \
---name dojo-autoupdater \
--- --wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---subtensor.network ***REMOVED*** \
---neuron.type validator \
---scoring_method "dojo" \
---axon.port 9603
-
 # Testnet
 pm2 start run.sh \
 --interpreter bash \
