@@ -1,5 +1,42 @@
 [project]
 requires-python = ">=3.10"
+name = "dojo"
+version = "0.0.1"
+description = "dojo subnet"
+readme = "README.md"
+authors = [
+    {name = "jarvis8x7b"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/tensorplex-labs/dojo"
+Documentation = "https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet"
+Repository = "https://github.com/tensorplex-labs/dojo"
+
+[project.scripts]
+dojo = "dojo_cli:main"
+
+[build-system]
+requires = ["setuptools>=69.4.2", "wheel", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
 
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
@@ -22,6 +59,7 @@ exclude = [
     ".tox",
     ".venv",
     ".vscode",
+    ".idea",
     "__pypackages__",
     "_build",
     "buck-out",
@@ -41,15 +79,19 @@ indent-width = 4
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
-select = ["E4", "E7", "E9", "F", "UP", "I"]
+select = [
+    "E4",  # import-related errors (e.g., unused imports, import order)
+    "E7",  # statement-related errors (e.g., multiple statements on one line)
+    "E9",  # runtime errors (e.g., syntax errors, undefined names)
+    "F",   # pyflakes errors (e.g., unused variables, undefined names)
+    "UP",  # pyupgrade rules (suggests newer python syntax)
+    "I",   # isort rules (sorts and organizes imports)
+]
 ignore = []
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
-
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
@@ -77,3 +119,12 @@ docstring-code-format = false
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
+
+[tool.setuptools]
+packages = {find = {}}
+include-package-data = true
+# allows us to use CLI even though it is a standalone script
+py-modules = ["dojo_cli"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
