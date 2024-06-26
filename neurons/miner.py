@@ -4,6 +4,7 @@ import threading
 import time
 import traceback
 from datetime import datetime
+from typing import Dict, Tuple
 
 import bittensor as bt
 from loguru import logger
@@ -38,7 +39,7 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         # log all incoming requests
-        self.hotkey_to_request: dict[str, FeedbackRequest] = {}
+        self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
         logger.info("Received scoring result from validators")
@@ -100,7 +101,7 @@ class Miner(BaseMinerNeuron):
 
     async def blacklist_feedback_request(
         self, synapse: FeedbackRequest
-    ) -> tuple[bool, str]:
+    ) -> Tuple[bool, str]:
         logger.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
         if caller_hotkey not in self.metagraph.hotkeys:
