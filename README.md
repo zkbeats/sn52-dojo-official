@@ -291,7 +291,7 @@ Pull the synthetic qa api git submodule
 
 ```bash
 # pull submodules
-git submodule update init
+git submodule update --init
 
 ```
 

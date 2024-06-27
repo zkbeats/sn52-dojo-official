@@ -4,6 +4,7 @@ import threading
 import time
 import traceback
 from datetime import datetime
+from typing import Dict, Tuple
 
 import bittensor as bt
 from loguru import logger
@@ -38,27 +39,49 @@ class Miner(BaseMinerNeuron):
         self.thread: threading.Thread = None
         self.lock = asyncio.Lock()
         # log all incoming requests
-        self.hotkey_to_request: dict[str, FeedbackRequest] = {}
+        self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
         logger.info("Received scoring result from validators")
+        try:
+            # Validate that synapse is not None and has the required fields
+            if not synapse or not synapse.hotkey_to_scores:
+                logger.error(
+                    "Invalid synapse object or missing hotkey_to_scores attribute."
+                )
+                return synapse
 
-        found_miner_score = synapse.hotkey_to_scores.get(
-            self.wallet.hotkey.ss58_address, None
-        )
-        if found_miner_score is None:
-            logger.error(
-                f"Miner hotkey {self.wallet.hotkey.ss58_address} not found in scoring result but yet was send the result"
+            found_miner_score = synapse.hotkey_to_scores.get(
+                self.wallet.hotkey.ss58_address, None
             )
-            return
-        logger.info(f"Miner received score: {found_miner_score}")
-        return
+            if found_miner_score is None:
+                logger.error(
+                    f"Miner hotkey {self.wallet.hotkey.ss58_address} not found in scoring result but yet was sent the result"
+                )
+                return synapse
+
+            logger.info(f"Miner received score: {found_miner_score}")
+        except KeyError as e:
+            logger.error(f"KeyError in forward_result: {e}")
+        except Exception as e:
+            logger.error(f"Error in forward_result: {e}")
+
+        return synapse
 
     async def forward_feedback_request(
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
         logger.info(f"Miner received request id: {synapse.request_id}")
         try:
+            # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
+            if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
+                logger.error("Invalid synapse: dendrite or dendrite.hotkey is None.")
+                return synapse
+
+            if not synapse.responses:
+                logger.error("Invalid synapse: response field is None.")
+                return synapse
+
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
             scoring_method = self.config.scoring_method
@@ -67,7 +90,6 @@ class Miner(BaseMinerNeuron):
                 task_ids = await DojoAPI.create_task(synapse)
                 assert len(task_ids) == 1
                 synapse.dojo_task_id = task_ids[0]
-
             else:
                 logger.error("Unrecognized scoring method!")
         except Exception:
@@ -79,7 +101,7 @@ class Miner(BaseMinerNeuron):
 
     async def blacklist_feedback_request(
         self, synapse: FeedbackRequest
-    ) -> tuple[bool, str]:
+    ) -> Tuple[bool, str]:
         logger.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
         if caller_hotkey not in self.metagraph.hotkeys:

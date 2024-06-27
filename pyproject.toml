@@ -87,7 +87,7 @@ select = [
     "UP",  # pyupgrade rules (suggests newer python syntax)
     "I",   # isort rules (sorts and organizes imports)
 ]
-ignore = []
+ignore = ["UP006", "UP035"] # Ignore specific pyupgrade rules that prevent the project from running
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]

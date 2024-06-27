@@ -1,18 +1,23 @@
 import datetime
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import httpx
-import template
-from commons.utils import loaddotenv
 from loguru import logger
 from requests_toolbelt import MultipartEncoder
+
+import template
+from commons.utils import loaddotenv
 from template import DOJO_API_BASE_URL
 from template.protocol import (
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
 )
+
+# Set to True to enable debug mode
+# TODO could possible setup with logger to enable debug mode
+DEBUG = False
 
 
 class DojoAPI:
@@ -35,7 +40,7 @@ class DojoAPI:
         return response.json()
 
     @classmethod
-    async def get_task_results_by_task_id(cls, task_id: str) -> Optional[List[Dict]]:
+    async def get_task_results_by_task_id(cls, task_id: str) -> List[Dict] | None:
         """Gets task results from task id to prepare for scoring later on"""
         task_response = await cls._get_task_by_id(task_id)
         task_status = task_response.get("body", {}).get("status", None)
@@ -113,17 +118,19 @@ class DojoAPI:
             },
             timeout=15.0,
         )
-        try:
-            from curlify2 import Curlify
 
-            curl_req = Curlify(response.request)
-            print("CURL REQUEST >>> ")
-            print(curl_req.to_curl())
-        except ImportError:
-            print("Curlify not installed")
-        except Exception as e:
-            print("Tried to export create task request as curl, but failed.")
-            print(f"Exception: {e}")
+        if DEBUG is True:
+            try:
+                from curlify2 import Curlify
+
+                curl_req = Curlify(response.request)
+                print("CURL REQUEST >>> ")
+                print(curl_req.to_curl())
+            except ImportError:
+                print("Curlify not installed")
+            except Exception as e:
+                print("Tried to export create task request as curl, but failed.")
+                print(f"Exception: {e}")
 
         if response.status_code == 200:
             task_ids = response.json()["body"]
