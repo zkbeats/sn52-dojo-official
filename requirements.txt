@@ -18,3 +18,4 @@ tenacity
 uvicorn
 wandb
 torch==2.3.0
+commitizen

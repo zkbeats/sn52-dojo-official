@@ -70,6 +70,9 @@ exclude = [
     "venv",
 ]
 
+show-fixes = true
+output-format = "full"
+
 # Same as Black.
 line-length = 88
 indent-width = 4
@@ -87,7 +90,13 @@ select = [
     "UP",  # pyupgrade rules (suggests newer python syntax)
     "I",   # isort rules (sorts and organizes imports)
 ]
-ignore = ["UP006", "UP035"] # Ignore specific pyupgrade rules that prevent the project from running
+
+ignore = [
+    "UP006",  # Preserve 'typing.Tuple' instead of 'tuple'
+    "UP035",  # Preserve 'typing.Dict' instead of 'dict'
+    "C901",   # Ignore McCabe complexity (if you use flake8 complexity checks)
+    "E203"    # Ignore whitespace before ':', conflicts with Black] # Ignore specific pyupgrade rules that prevent the project from running
+]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
@@ -128,3 +137,10 @@ py-modules = ["dojo_cli"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+tag_format = "$version"
+version_scheme = "pep440"
+version_provider = "pep621"
+major_version_zero = true
