@@ -7,17 +7,21 @@ from collections import defaultdict
 from traceback import print_exception
 from typing import Dict, List
 
+import bittensor as bt
 import numpy as np
 import torch
 import wandb
+from fastapi.encoders import jsonable_encoder
+from loguru import logger
+from torch.nn import functional as F
+
+import template
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid
-from fastapi.encoders import jsonable_encoder
-from loguru import logger
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     CriteriaTypeEnum,
@@ -30,17 +34,11 @@ from template.protocol import (
     SyntheticQA,
     TaskType,
 )
-
-import template
-
 from template.utils.config import get_config
 from template.utils.uids import (
     MinerUidSelector,
     extract_miner_uids,
 )
-from torch.nn import functional as F
-
-import bittensor as bt
 
 
 class DojoTaskTracker:
@@ -55,7 +53,7 @@ class DojoTaskTracker:
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(DojoTaskTracker, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
         return cls._instance
 
     @staticmethod
@@ -254,7 +252,7 @@ class Validator(BaseNeuron):
     _lock = asyncio.Lock()
 
     def __init__(self):
-        super(Validator, self).__init__()
+        super().__init__()
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
@@ -544,7 +542,7 @@ class Validator(BaseNeuron):
                 except Exception as e:
                     logger.error(f"Error during validator run: {e}")
                     pass
-                await asyncio.sleep(60)
+                await asyncio.sleep(300)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -637,7 +635,7 @@ class Validator(BaseNeuron):
         # If so, we need to add new hotkeys and moving averages.
         if len(previous_metagraph.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = np.zeros((self.metagraph.n))
+            new_moving_average = np.zeros(self.metagraph.n)
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             self.scores = new_moving_average
