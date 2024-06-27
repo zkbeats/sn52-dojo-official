@@ -150,9 +150,10 @@ git clone https://github.com/tensorplex-labs/dojo.git
 cd dojo/
 
 # Set up python virtual environment and pip packages
-python -m venv env
+# Here we use venv for managing python versions
+
+python3 -m venv env
 source env/bin/activate
-pip install -r requirements.txt --no-cache-dir
 pip install -e . --no-cache-dir
 ```
 
@@ -219,7 +220,7 @@ cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
 DOJO_API_KEY="sk-<KEY>"
-DOJO_API_BASE_URL="https://dojo-api-staging.tensorplex.ai"
+DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 ```
 
 Start the miner by running the following commands:
@@ -243,7 +244,7 @@ pm2 start main_miner.py \
 
 Note: URLs are different for devnet, testnet and mainnet.
 Testnet: https://dojo-api-staging.tensorplex.ai
-Mainnet: ***REMOVED***
+Mainnet: **_REMOVED_**
 
 1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
 
