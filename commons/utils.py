@@ -44,6 +44,14 @@ def keccak256_hash(data):
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     import template
 
+    project_name = None
+    if "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL:
+        project_name = "dojo-testnet"
+    elif "dojo-api.tensorplex.ai" in template.DOJO_API_BASE_URL:
+        project_name = "dojo-mainnet"
+    else:
+        raise ValueError("Unable to infer wandb project name")
+
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
@@ -53,7 +61,7 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     # Initialize the wandb run for the single project
     kwargs = {
         "name": run_name,
-        "project": "dojo",
+        "project": project_name,
         "entity": "dojo-subnet",
         "config": config,
         "dir": config.full_path,
