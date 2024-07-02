@@ -21,7 +21,7 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, get_new_uuid
+from commons.utils import get_epoch_time, get_new_uuid, init_wandb
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     CriteriaTypeEnum,
@@ -264,7 +264,7 @@ class Validator(BaseNeuron):
         # manually always register and always sync metagraph when application starts
         self.check_registered()
         self.resync_metagraph()
-        # init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
+        init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
         """Send consensus score back to miners who participated in the request."""
