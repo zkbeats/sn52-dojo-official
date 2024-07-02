@@ -322,7 +322,6 @@ pm2 start main_validator.py \
 --logging.debug \
 --axon.port 9603 \
 --neuron.type validator \
---scoring_method "dojo" \
 --subtensor.network test
 ```
 
@@ -338,7 +337,6 @@ pm2 start run.sh \
 --logging.debug \
 --subtensor.network test \
 --neuron.type validator \
---scoring_method "dojo" \
 --axon.port 9603
 ```
 
