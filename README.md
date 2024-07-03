@@ -129,34 +129,14 @@ To get started as a miner or validator, these are the common steps both a miner 
 Install PM2 (**If not already installed**)
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg
-sudo mkdir -p /etc/apt/keyrings
-sudo curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-NODE_MAJOR=20
-echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-sudo apt-get update
-sudo apt-get install nodejs -y
-
-sudo npm install -g pm2
-sudo pm2 install pm2-logrotate
+cd dojo/scripts/setup/
+./install_pm2.sh
 ```
 
-Install Docker CE (**If not already installed**)
+Install Docker (**If not already installed**)
 
 ```bash
-sudo apt-get install \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release
-sudo mkdir -m 0755 -p /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+./install_docker.sh
 ```
 
 Clone the project, set up and configure python virtual environment
@@ -170,9 +150,14 @@ git clone https://github.com/tensorplex-labs/dojo.git
 cd dojo/
 
 # Set up python virtual environment and pip packages
-python -m venv env
+# Here we use venv for managing python versions
+
+python3 -m venv env
 source env/bin/activate
+<<<<<<< HEAD
 pip install -r requirements.txt --no-cache-dir # for development use requirements-dev.txt
+=======
+>>>>>>> main
 pip install -e . --no-cache-dir
 ```
 
@@ -239,7 +224,7 @@ cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
 DOJO_API_KEY="sk-<KEY>"
-DOJO_API_BASE_URL="https://dojo-api-staging.tensorplex.ai"
+DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 ```
 
 Start the miner by running the following commands:
@@ -263,7 +248,7 @@ pm2 start main_miner.py \
 
 Note: URLs are different for devnet, testnet and mainnet.
 Testnet: https://dojo-api-staging.tensorplex.ai
-Mainnet: ***REMOVED***
+Mainnet: **_REMOVED_**
 
 1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
 
@@ -341,7 +326,6 @@ pm2 start main_validator.py \
 --logging.debug \
 --axon.port 9603 \
 --neuron.type validator \
---scoring_method "dojo" \
 --subtensor.network test
 ```
 
@@ -357,7 +341,6 @@ pm2 start run.sh \
 --logging.debug \
 --subtensor.network test \
 --neuron.type validator \
---scoring_method "dojo" \
 --axon.port 9603
 ```
 

@@ -8,6 +8,7 @@ from functools import lru_cache, update_wrapper
 from math import floor
 from typing import Any, Callable, Tuple, Type, get_origin
 
+import bittensor as bt
 import jsonref
 import requests
 import torch
@@ -16,8 +17,6 @@ from Crypto.Hash import keccak
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
-
-import bittensor as bt
 
 
 def get_new_uuid():
@@ -45,6 +44,14 @@ def keccak256_hash(data):
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     import template
 
+    project_name = None
+    if "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL:
+        project_name = "dojo-testnet"
+    elif "dojo-api.tensorplex.ai" in template.DOJO_API_BASE_URL:
+        project_name = "dojo-mainnet"
+    else:
+        raise ValueError("Unable to infer wandb project name")
+
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
@@ -54,8 +61,8 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     # Initialize the wandb run for the single project
     kwargs = {
         "name": run_name,
-        "project": "subnet",
-        "entity": "tensorplex",
+        "project": project_name,
+        "entity": "dojo-subnet",
         "config": config,
         "dir": config.full_path,
         "reinit": True,
