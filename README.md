@@ -172,7 +172,7 @@ cd dojo/
 # Set up python virtual environment and pip packages
 python -m venv env
 source env/bin/activate
-pip install -r requirements.txt --no-cache-dir
+pip install -r requirements.txt --no-cache-dir # for development use requirements-dev.txt
 pip install -e . --no-cache-dir
 ```
 
