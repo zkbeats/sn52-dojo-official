@@ -154,7 +154,9 @@ cd dojo/
 
 python3 -m venv env
 source env/bin/activate
-pip install -e . --no-cache-dir
+pip install -e .
+# for developers, install the extras
+pip install -e ".[dev]"
 ```
 
 ## Mining

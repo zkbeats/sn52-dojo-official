@@ -21,11 +21,11 @@ repos:
       - id: ruff
         args: [--fix]
         types_or: [python, pyi, jupyter]
-        stages: [push]
+        stages: [commit, push]
       # Run the formatter.
       - id: ruff-format
         types_or: [python, pyi, jupyter]
-        stages: [push]
+        stages: [commit, push]
   - repo: local
     hooks:
       - id: check-identities
@@ -34,3 +34,10 @@ repos:
         entry: .githooks/check_identities.sh
         stages: [commit, push]
         language: script
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.27.0 # This specifies that we are using version 3.27.0 of the commitizen repository
+    hooks:
+      - id: commitizen
+      - id: commitizen-branch
+        stages: [commit-msg]

@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "optional-dependencies"]
 
 [project.urls]
 Homepage = "https://github.com/tensorplex-labs/dojo"
@@ -70,6 +70,9 @@ exclude = [
     "venv",
 ]
 
+show-fixes = true
+output-format = "full"
+
 # Same as Black.
 line-length = 88
 indent-width = 4
@@ -87,7 +90,13 @@ select = [
     "UP",  # pyupgrade rules (suggests newer python syntax)
     "I",   # isort rules (sorts and organizes imports)
 ]
-ignore = ["UP006", "UP035"] # Ignore specific pyupgrade rules that prevent the project from running
+
+ignore = [
+    "UP006",  # Preserve 'typing.Tuple' instead of 'tuple'
+    "UP035",  # Preserve 'typing.Dict' instead of 'dict'
+    "C901",   # Ignore McCabe complexity (if you use flake8 complexity checks)
+    "E203"    # Ignore whitespace before ':', conflicts with Black] # Ignore specific pyupgrade rules that prevent the project from running
+]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
@@ -128,3 +137,7 @@ py-modules = ["dojo_cli"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
+
+[tool.commitizen]
+name = "cz_conventional_commits"

@@ -2,9 +2,9 @@ import asyncio
 import threading
 import traceback
 
-from commons.utils import serve_axon
 from loguru import logger
 
+from commons.utils import serve_axon
 from template.base.neuron import BaseNeuron
 
 
@@ -14,7 +14,7 @@ class BaseMinerNeuron(BaseNeuron):
     """
 
     def __init__(self):
-        super(BaseMinerNeuron, self).__init__()
+        super().__init__()
 
     async def run(self):
         """

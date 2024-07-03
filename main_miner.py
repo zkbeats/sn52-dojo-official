@@ -1,10 +1,10 @@
 import asyncio
-from loguru import logger
-
 
 import wandb
-from commons.objects import ObjectManager
 from dotenv import load_dotenv
+from loguru import logger
+
+from commons.objects import ObjectManager
 
 load_dotenv()
 
