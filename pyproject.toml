@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "optional-dependencies"]
 
 [project.urls]
 Homepage = "https://github.com/tensorplex-labs/dojo"
@@ -137,6 +137,7 @@ py-modules = ["dojo_cli"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
 
 [tool.commitizen]
 name = "cz_conventional_commits"

@@ -154,11 +154,9 @@ cd dojo/
 
 python3 -m venv env
 source env/bin/activate
-<<<<<<< HEAD
-pip install -r requirements.txt --no-cache-dir # for development use requirements-dev.txt
-=======
->>>>>>> main
-pip install -e . --no-cache-dir
+pip install -e .
+# for developers, install the extras
+pip install -e ".[dev]"
 ```
 
 ## Mining
