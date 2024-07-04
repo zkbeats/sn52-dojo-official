@@ -8,7 +8,7 @@ version: 2.1
 workflows:
   release:
     jobs:
-      - release
+      - release:
           filters:
             branches:
               only:
