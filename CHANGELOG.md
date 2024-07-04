@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/tensorplex-labs/dojo/compare/v1.0.0...v1.0.1) (2024-07-04)
+
+
+### Bug Fixes
+
+* circleci ([f53a9f5](https://github.com/tensorplex-labs/dojo/commit/f53a9f51be69e784bdb18e9a03e0310469ad679e))
+
 # 1.0.0 (2024-07-04)
 
 
