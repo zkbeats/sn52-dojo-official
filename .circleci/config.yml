@@ -1,9 +1,9 @@
 version: 2.1
 
-# executors:
-#   docker-executor:
-#     docker:
-#       - image: docker:dind-rootless
+executors:
+  docker-executor:
+    docker:
+      - image: docker:dind-rootless
 
 workflows:
   release:
@@ -23,7 +23,6 @@ jobs:
       - checkout
       - run:
           name: Install Semantic Release plugins and run
-          command: npm install -g -D semantic-release @semantic-release/{git,github}
-      - run:
-          name: Run semantic-release
-          command: npx semantic-release
+          command: |
+            npm install -g -D semantic-release @semantic-release/{git,github}
+            npx semantic-release
