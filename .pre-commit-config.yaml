@@ -39,5 +39,6 @@ repos:
     rev: v3.27.0 # This specifies that we are using version 3.27.0 of the commitizen repository
     hooks:
       - id: commitizen
-      - id: commitizen-branch
         stages: [commit-msg]
+      - id: commitizen-branch
+        stages: [push]
