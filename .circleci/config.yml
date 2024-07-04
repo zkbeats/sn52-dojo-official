@@ -9,6 +9,10 @@ workflows:
   release:
     jobs:
       - release
+          filters:
+            branches:
+              only:
+                - main
   # build:
   #   jobs:
   #     - build
