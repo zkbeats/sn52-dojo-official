@@ -45,7 +45,9 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     import template
 
     project_name = None
-    if "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL:
+    if "tensorplex.dev" in template.DOJO_API_BASE_URL:
+        project_name = "dojo-devnet"
+    elif "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL:
         project_name = "dojo-testnet"
     elif "dojo-api.tensorplex.ai" in template.DOJO_API_BASE_URL:
         project_name = "dojo-mainnet"
