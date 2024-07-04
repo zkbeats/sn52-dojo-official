@@ -2,7 +2,7 @@ prompt_toolkit
 requests-toolbelt
 scikit-learn
 aiohttp
-bittensor==6.12.2
+bittensor @ git+https://github.com/opentensor/bittensor.git@v7.2.0
 fastapi
 httpx
 jsonref
@@ -10,7 +10,7 @@ loguru
 numpy
 openai
 pingouin
-pydantic<2
+pydantic>=2
 python-dotenv
 scipy
 StrEnum
