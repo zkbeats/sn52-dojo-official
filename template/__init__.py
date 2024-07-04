@@ -2,10 +2,12 @@ import os
 
 from dotenv import load_dotenv
 
+from ._version import version
+
 load_dotenv()
 
 # Define the version of the template module.
-__version__ = "0.0.1"
+__version__ = version
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
