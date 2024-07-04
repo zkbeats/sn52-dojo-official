@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/tensorplex-labs/dojo/compare/v1.0.1...v1.0.2) (2024-07-04)
+
+
+### Bug Fixes
+
+* Update circle resource class ([68f3da3](https://github.com/tensorplex-labs/dojo/commit/68f3da3574f0bc2d147a713d74fe6f771c58a8f7))
+
 ## [1.0.1](https://github.com/tensorplex-labs/dojo/compare/v1.0.0...v1.0.1) (2024-07-04)
 
 
