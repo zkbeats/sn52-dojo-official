@@ -7,12 +7,6 @@ repos:
         stages: [push]
       - id: end-of-file-fixer
         stages: [push]
-      - id: check-yaml
-        stages: [push]
-      - id: check-added-large-files
-        stages: [push]
-      - id: check-toml
-        stages: [push]
       - id: check-added-large-files
         stages: [push]
       - id: fix-byte-order-marker
@@ -23,11 +17,7 @@ repos:
         stages: [push]
       - id: check-merge-conflict
         stages: [push]
-      - id: trailing-whitespace
-        stages: [push]
       - id: mixed-line-ending
-        stages: [push]
-      - id: end-of-file-fixer
         stages: [push]
       - id: check-symlinks
         stages: [push]
@@ -36,16 +26,13 @@ repos:
       - id: debug-statements
         stages: [push]
       - id: requirements-txt-fixer
-        stages: [push]
-      - id: check-xml
-        stages: [push]
-      - id: check-yaml
+        types: [file]
+        files: (requirements.txt|requirements-dev.txt)
         stages: [push]
       - id: check-toml
         stages: [push]
       - id: check-json
         stages: [push]
-
       - id: detect-private-key
         stages: [commit, push]
 
@@ -99,8 +86,7 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
-        exclude: |
-          CHANGELOG.md
+        exclude: "CHANGELOG.md"
 
 
   - repo: https://github.com/gitleaks/gitleaks
