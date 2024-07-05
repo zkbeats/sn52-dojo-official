@@ -1,8 +1,5 @@
-prompt_toolkit
-requests-toolbelt
-scikit-learn
 aiohttp
-bittensor==6.12.2
+bittensor @ git+https://github.com/opentensor/bittensor.git@v7.2.0
 fastapi
 httpx
 jsonref
@@ -10,11 +7,14 @@ loguru
 numpy
 openai
 pingouin
-pydantic<2
+prompt_toolkit
+pydantic>=2
 python-dotenv
+requests-toolbelt
+scikit-learn
 scipy
 StrEnum
 tenacity
+torch==2.3.0
 uvicorn
 wandb
-torch==2.3.0

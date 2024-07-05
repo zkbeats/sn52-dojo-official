@@ -1,17 +1,40 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v3.2.0
+    rev: v4.6.0
+    hooks:
     hooks:
       - id: trailing-whitespace
         stages: [push]
       - id: end-of-file-fixer
         stages: [push]
-      - id: check-yaml
-        stages: [push]
       - id: check-added-large-files
+        stages: [push]
+      - id: fix-byte-order-marker
+        stages: [push]
+      - id: check-case-conflict
+        stages: [push]
+      - id: check-shebang-scripts-are-executable
+        stages: [push]
+      - id: check-merge-conflict
+        stages: [push]
+      - id: mixed-line-ending
+        stages: [push]
+      - id: check-symlinks
+        stages: [push]
+      - id: check-ast
+        stages: [push]
+      - id: debug-statements
+        stages: [push]
+      - id: requirements-txt-fixer
+        types: [file]
+        files: (requirements.txt|requirements-dev.txt)
         stages: [push]
       - id: check-toml
         stages: [push]
+      - id: check-json
+        stages: [push]
+      - id: detect-private-key
+        stages: [commit, push]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
@@ -39,5 +62,34 @@ repos:
     rev: v3.27.0 # This specifies that we are using version 3.27.0 of the commitizen repository
     hooks:
       - id: commitizen
-      - id: commitizen-branch
         stages: [commit-msg]
+      - id: commitizen-branch
+        stages: [push]
+
+  - repo: https://github.com/pappasam/toml-sort
+    rev: v0.23.1
+    hooks:
+      - id: toml-sort-fix
+        exclude: ".*poetry.lock|.*_static"
+
+
+  - repo: https://github.com/Lucas-C/pre-commit-hooks
+    rev: v1.5.5
+    hooks:
+      - id: forbid-crlf
+      - id: remove-crlf
+      - id: forbid-tabs
+      - id: remove-tabs
+        args: [--whitespaces-count, '4']
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        exclude: "CHANGELOG.md"
+
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

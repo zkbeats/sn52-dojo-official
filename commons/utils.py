@@ -45,7 +45,9 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     import template
 
     project_name = None
-    if "tensorplex.dev" in template.DOJO_API_BASE_URL:
+    if "localhost" in template.DOJO_API_BASE_URL:
+        project_name = "dojo-devnet"
+    elif "tensorplex.dev" in template.DOJO_API_BASE_URL:
         project_name = "dojo-devnet"
     elif "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL:
         project_name = "dojo-testnet"
@@ -103,7 +105,7 @@ def serve_axon(
                     return True
 
                 raise Exception(
-                    "Failed to serve axon, probaby due to many miners/validators trying to serve in this period."
+                    "Failed to serve axon, probably due to many miners/validators trying to serve in this period."
                 )
     except RetryError:
         logger.error(f"Failed to serve axon after {max_attempts} attempts.")
