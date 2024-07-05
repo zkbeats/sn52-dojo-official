@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/tensorplex-labs/dojo/compare/v1.0.2...v1.0.3) (2024-07-05)
+
+
+### Bug Fixes
+
+* syntax ([09bb29f](https://github.com/tensorplex-labs/dojo/commit/09bb29f8ddad60d3bb0cf8832fb53ebd54e659e4))
+
 ## [1.0.2](https://github.com/tensorplex-labs/dojo/compare/v1.0.1...v1.0.2) (2024-07-04)
 
 
