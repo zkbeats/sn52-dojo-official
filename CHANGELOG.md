@@ -1,3 +1,20 @@
+# [2.0.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.3...v2.0.0) (2024-07-05)
+
+
+### Bug Fixes
+
+* **hooks:** use commitizen-branch as pre-push ([b5be7c8](https://github.com/tensorplex-labs/dojo/commit/b5be7c8681890c578ad1f2fb6a4ce8dbda47839f))
+
+
+### Build System
+
+* **pip:** upgrade bittensor to 7.2.0, upgrade pydantic ([ec8034e](https://github.com/tensorplex-labs/dojo/commit/ec8034ec336a07bbd96a9875f8906488c41e39fd))
+
+
+### BREAKING CHANGES
+
+* **pip:** requires pydantic v2
+
 ## [1.0.3](https://github.com/tensorplex-labs/dojo/compare/v1.0.2...v1.0.3) (2024-07-05)
 
 
