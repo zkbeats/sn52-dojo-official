@@ -2,12 +2,13 @@ import asyncio
 import json
 import pickle
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 import torch
-from commons.objects import ObjectManager
 from loguru import logger
 from strenum import StrEnum
+
+from commons.objects import ObjectManager
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
@@ -15,6 +16,7 @@ class ValidatorStateKeys(StrEnum):
     SCORES = "scores"
     DOJO_TASKS_TO_TRACK = "dojo_tasks_to_track"
     MODEL_MAP = "model_map"
+    Task_TO_EXPIRY = "task_to_expiry"
 
 
 class DataManager:
@@ -24,7 +26,7 @@ class DataManager:
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(DataManager, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._ensure_paths_exist()
         return cls._instance
 
@@ -46,7 +48,7 @@ class DataManager:
         return base_path / "data" / "validator_state.pt"
 
     @classmethod
-    async def _load_without_lock(cls, path) -> Optional[List[DendriteQueryResponse]]:
+    async def _load_without_lock(cls, path) -> List[DendriteQueryResponse] | None:
         try:
             with open(str(path), "rb") as file:
                 return pickle.load(file)
@@ -145,7 +147,7 @@ class DataManager:
     @classmethod
     async def remove_responses(
         cls, responses: List[DendriteQueryResponse]
-    ) -> Optional[DendriteQueryResponse]:
+    ) -> DendriteQueryResponse | None:
         path = DataManager.get_requests_data_path()
         async with cls._lock:
             data = await DataManager._load_without_lock(path=path)
@@ -168,7 +170,9 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id, model_map):
+    async def validator_save(
+        cls, scores, requestid_to_mhotkey_to_task_id, model_map, task_to_expiry
+    ):
         """Saves the state of the validator to a file."""
         logger.debug("Attempting to save validator state.")
         async with cls._validator_lock:
@@ -184,6 +188,9 @@ class DataManager:
                         json.dumps(requestid_to_mhotkey_to_task_id)
                     ),
                     ValidatorStateKeys.MODEL_MAP: json.loads(json.dumps(model_map)),
+                    ValidatorStateKeys.Task_TO_EXPIRY: json.loads(
+                        json.dumps(task_to_expiry)
+                    ),
                 },
                 cls.get_validator_state_filepath(),
             )

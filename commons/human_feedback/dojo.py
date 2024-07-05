@@ -92,16 +92,20 @@ class DojoAPI:
             else:
                 logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
 
-        body = {
-            "title": "LLM Code Generation Task",
-            "body": ranking_request.prompt,
-            "expireAt": (
+        expireAt = (
+            (
                 datetime.datetime.utcnow()
                 + datetime.timedelta(seconds=template.TASK_DEADLINE)
             )
             .replace(microsecond=0, tzinfo=datetime.timezone.utc)
             .isoformat()
-            .replace("+00:00", "Z"),
+            .replace("+00:00", "Z")
+        )
+
+        body = {
+            "title": "LLM Code Generation Task",
+            "body": ranking_request.prompt,
+            "expireAt": expireAt,
             "taskData": json.dumps([taskData]),
             "maxResults": "1",
         }
@@ -140,4 +144,4 @@ class DojoAPI:
                 f"Error occurred when trying to create task\nErr:{response.json()['error']}"
             )
         response.raise_for_status()
-        return task_ids
+        return task_ids, expireAt

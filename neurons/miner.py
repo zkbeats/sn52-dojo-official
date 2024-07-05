@@ -87,9 +87,10 @@ class Miner(BaseMinerNeuron):
             scoring_method = self.config.scoring_method
             if scoring_method.casefold() == ScoringMethod.DOJO:
                 synapse.scoring_method = ScoringMethod.DOJO
-                task_ids = await DojoAPI.create_task(synapse)
+                task_ids, expireAt = await DojoAPI.create_task(synapse)
                 assert len(task_ids) == 1
                 synapse.dojo_task_id = task_ids[0]
+                synapse.expireAt = expireAt
             else:
                 logger.error("Unrecognized scoring method!")
         except Exception:

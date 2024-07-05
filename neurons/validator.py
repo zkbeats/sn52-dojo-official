@@ -10,12 +10,12 @@ from typing import Dict, List
 import bittensor as bt
 import numpy as np
 import torch
-import wandb
 from fastapi.encoders import jsonable_encoder
 from loguru import logger
 from torch.nn import functional as F
 
 import template
+import wandb
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
@@ -48,6 +48,7 @@ class DojoTaskTracker:
         lambda: defaultdict(str)
     )
     _rid_to_model_map: Dict[str, Dict[str, str]] = defaultdict(lambda: defaultdict(str))
+    _task_to_expiry: Dict[str, str] = defaultdict(str)
     _lock = asyncio.Lock()
     _should_exit: bool = False
 
@@ -75,7 +76,7 @@ class DojoTaskTracker:
 
         logger.debug("update_task_map attempting to acquire lock")
         async with cls._lock:
-            valid_responses = list(
+            valid_responses: List[FeedbackRequest] = list(
                 filter(
                     lambda r: r.request_id == request_id
                     and r.axon.hotkey
@@ -94,6 +95,7 @@ class DojoTaskTracker:
                 cls._rid_to_mhotkey_to_task_id[request_id][r.axon.hotkey] = (
                     r.dojo_task_id
                 )
+                cls._task_to_expiry[r.dojo_task_id] = r.expireAt
             cls._rid_to_model_map[request_id] = obfuscated_model_to_model
         logger.debug("released lock for task tracker")
         return
@@ -107,6 +109,7 @@ class DojoTaskTracker:
                 logger.info(
                     f"Monitoring Dojo Task completions... {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id)} requests"
                 )
+                logger.info(f"print task_to_expiry {cls._task_to_expiry}")
                 if not cls._rid_to_mhotkey_to_task_id:
                     await asyncio.sleep(SLEEP_SECONDS)
                     continue
@@ -685,6 +688,7 @@ class Validator(BaseNeuron):
                     self.scores,
                     DojoTaskTracker._rid_to_mhotkey_to_task_id,
                     DojoTaskTracker._rid_to_model_map,
+                    DojoTaskTracker._task_to_expiry,
                 )
             )
         except Exception as e:
@@ -705,11 +709,13 @@ class Validator(BaseNeuron):
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
         ]
         DojoTaskTracker._rid_to_model_map = state_data[ValidatorStateKeys.MODEL_MAP]
+        DojoTaskTracker._task_to_expiry = state_data[ValidatorStateKeys.Task_TO_EXPIRY]
 
         logger.info(f"Scores state: {self.scores}")
         logger.info(
             f"Dojo Tasks to track: {DojoTaskTracker._rid_to_mhotkey_to_task_id}"
         )
+        logger.info(f"Task to expiry {DojoTaskTracker._task_to_expiry}")
 
     @classmethod
     async def log_validator_status(cls):
