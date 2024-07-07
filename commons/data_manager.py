@@ -1,6 +1,7 @@
 import asyncio
 import json
 import pickle
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -16,7 +17,7 @@ class ValidatorStateKeys(StrEnum):
     SCORES = "scores"
     DOJO_TASKS_TO_TRACK = "dojo_tasks_to_track"
     MODEL_MAP = "model_map"
-    Task_TO_EXPIRY = "task_to_expiry"
+    TASK_TO_EXPIRY = "task_to_expiry"
 
 
 class DataManager:
@@ -188,7 +189,7 @@ class DataManager:
                         json.dumps(requestid_to_mhotkey_to_task_id)
                     ),
                     ValidatorStateKeys.MODEL_MAP: json.loads(json.dumps(model_map)),
-                    ValidatorStateKeys.Task_TO_EXPIRY: json.loads(
+                    ValidatorStateKeys.TASK_TO_EXPIRY: json.loads(
                         json.dumps(task_to_expiry)
                     ),
                 },
@@ -214,3 +215,45 @@ class DataManager:
             except Exception as e:
                 logger.error(f"Unexpected error: {e}")
                 return None
+
+    @staticmethod
+    async def remove_expired_tasks_from_storage():
+        # Load the current state
+        state_data = await DataManager.validator_load()
+        if not state_data:
+            logger.error("Failed to load validator state data for cleanup.")
+            return
+
+        # Identify expired tasks
+        current_time = datetime.utcnow().isoformat() + "Z"
+        task_to_expiry = state_data.get(ValidatorStateKeys.TASK_TO_EXPIRY, {})
+        expired_tasks = [
+            task_id
+            for task_id, expiry_time in task_to_expiry.items()
+            if expiry_time < current_time
+        ]
+
+        # Remove expired tasks
+        for task_id in expired_tasks:
+            for request_id, hotkeys in list(
+                state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK].items()
+            ):
+                for hotkey, t_id in list(hotkeys.items()):
+                    if t_id == task_id:
+                        del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][
+                            request_id
+                        ][hotkey]
+                if not state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][request_id]:
+                    del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][request_id]
+            del task_to_expiry[task_id]
+
+        # Save the updated state
+        state_data[ValidatorStateKeys.TASK_TO_EXPIRY] = task_to_expiry
+        await DataManager.validator_save(
+            state_data[ValidatorStateKeys.SCORES],
+            state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK],
+            state_data[ValidatorStateKeys.MODEL_MAP],
+            task_to_expiry,
+        )
+
+        logger.info(f"Removed {len(expired_tasks)} expired tasks from DataManager.")

@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import datetime
 import threading
 import time
 import traceback
@@ -101,15 +102,45 @@ class DojoTaskTracker:
         return
 
     @classmethod
+    async def remove_expired_tasks(cls):
+        # Identify expired tasks
+        current_time = datetime.utcnow().isoformat() + "Z"
+        expired_tasks = [
+            task_id
+            for task_id, expiry_time in cls._task_to_expiry.items()
+            if expiry_time < current_time
+        ]
+
+        async with cls._lock:
+            for task_id in expired_tasks:
+                # Remove from _rid_to_mhotkey_to_task_id
+                for request_id, hotkeys in list(cls._rid_to_mhotkey_to_task_id.items()):
+                    for hotkey, t_id in list(hotkeys.items()):
+                        if t_id == task_id:
+                            del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
+                    if not cls._rid_to_mhotkey_to_task_id[request_id]:
+                        del cls._rid_to_mhotkey_to_task_id[request_id]
+                # Remove from _task_to_expiry
+                del cls._task_to_expiry[task_id]
+
+        logger.info(f"Removed {len(expired_tasks)} expired tasks from DojoTaskTracker.")
+
+    @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
         await asyncio.sleep(60)
+
         while not cls._should_exit:
             try:
                 logger.info(
                     f"Monitoring Dojo Task completions... {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id)} requests"
                 )
                 logger.info(f"print task_to_expiry {cls._task_to_expiry}")
+
+                # Clean up expired tasks before processing
+                await cls.remove_expired_tasks()
+                await DataManager.remove_expired_tasks_from_storage()
+
                 if not cls._rid_to_mhotkey_to_task_id:
                     await asyncio.sleep(SLEEP_SECONDS)
                     continue
@@ -709,7 +740,7 @@ class Validator(BaseNeuron):
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
         ]
         DojoTaskTracker._rid_to_model_map = state_data[ValidatorStateKeys.MODEL_MAP]
-        DojoTaskTracker._task_to_expiry = state_data[ValidatorStateKeys.Task_TO_EXPIRY]
+        DojoTaskTracker._task_to_expiry = state_data[ValidatorStateKeys.TASK_TO_EXPIRY]
 
         logger.info(f"Scores state: {self.scores}")
         logger.info(
