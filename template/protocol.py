@@ -1,10 +1,10 @@
-from typing import Dict, List, Optional, Union
+from typing import Dict, List
 
-from commons.utils import get_epoch_time, get_new_uuid
+import bittensor as bt
 from pydantic import BaseModel, Field
 from strenum import StrEnum
 
-import bittensor as bt
+from commons.utils import get_epoch_time, get_new_uuid
 
 
 class TaskType(StrEnum):
@@ -40,7 +40,7 @@ class MultiScoreCriteria(BaseModel):
     max: float = Field(description="Maximum score for the task")
 
 
-CriteriaType = Union[MultiScoreCriteria, RankingCriteria]
+CriteriaType = MultiScoreCriteria | RankingCriteria
 
 
 class ScoringMethod(StrEnum):
@@ -61,7 +61,7 @@ class CodeAnswer(BaseModel):
     installation_commands: str = Field(
         description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
     )
-    additional_notes: Optional[str] = Field(
+    additional_notes: str | None = Field(
         description="Any additional notes or comments about the code solution"
     )
 
@@ -74,10 +74,10 @@ class Response(BaseModel):
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
-    rank_id: Optional[int] = Field(
+    rank_id: int | None = Field(
         description="Rank of the completion", examples=[1, 2, 3, 4]
     )
-    score: Optional[float] = Field(description="Score of the completion")
+    score: float | None = Field(description="Score of the completion")
 
 
 class SyntheticQA(BaseModel):
@@ -108,10 +108,10 @@ class FeedbackRequest(bt.Synapse):
         description="Types of criteria for the task",
         allow_mutation=False,
     )
-    scoring_method: Optional[str] = Field(
-        decscription="Method to use for scoring completions"
+    scoring_method: str | None = Field(
+        description="Method to use for scoring completions"
     )
-    dojo_task_id: Optional[str] = Field(description="Dojo task ID for the request")
+    dojo_task_id: str | None = Field(description="Dojo task ID for the request")
 
 
 class ScoringResult(bt.Synapse):
@@ -122,6 +122,10 @@ class ScoringResult(bt.Synapse):
     hotkey_to_scores: Dict[str, float] = Field(
         description="Hotkey to score mapping", allow_mutation=False
     )
+
+
+class Heartbeat(bt.Synapse):
+    ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 
 class DendriteQueryResponse(BaseModel):
