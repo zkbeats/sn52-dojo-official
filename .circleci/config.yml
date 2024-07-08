@@ -8,7 +8,11 @@ version: 2.1
 workflows:
   release:
     jobs:
-      - release
+      - release:
+          filters:
+            branches:
+              only:
+                - main
   # build:
   #   jobs:
   #     - build
@@ -18,7 +22,7 @@ jobs:
   release:
     docker:
       - image: hoppr/semantic-release
-    # resource_class: tensorplex/dojo-subnet
+    resource_class: tensorplex/standard
     steps:
       - checkout
       - run:

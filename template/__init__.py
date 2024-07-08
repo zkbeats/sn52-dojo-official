@@ -1,11 +1,27 @@
 import os
+import subprocess
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def get_latest_git_tag():
+    try:
+        # Get the latest git tag
+        latest_tag = (
+            subprocess.check_output(["git", "describe", "--tags", "--abbrev=0"])
+            .strip()
+            .decode("utf-8")
+        )
+        return latest_tag.lstrip("v")
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting the latest Git tag: {e}")
+        raise RuntimeError("Failed to get latest Git tag")
+
+
 # Define the version of the template module.
-__version__ = "0.0.1"
+__version__ = get_latest_git_tag()
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))
