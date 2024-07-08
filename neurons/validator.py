@@ -1,6 +1,5 @@
 import asyncio
 import copy
-import threading
 import time
 import traceback
 from collections import defaultdict
@@ -247,9 +246,8 @@ class DojoTaskTracker:
 
 class Validator(BaseNeuron):
     _should_exit: bool = False
-    _is_running: bool = False
-    _thread: threading.Thread = None
     _lock = asyncio.Lock()
+    _active_miner_uids: set[int] = set()
 
     def __init__(self):
         super().__init__()
@@ -329,7 +327,7 @@ class Validator(BaseNeuron):
                         continue
 
                     logger.debug(
-                        f"Initiailly had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
+                        f"Initially had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
                     )
 
                     self.update_scores(hotkey_to_scores=hotkey_to_score)
