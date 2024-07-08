@@ -26,6 +26,7 @@ from template.protocol import (
     CriteriaTypeEnum,
     DendriteQueryResponse,
     FeedbackRequest,
+    Heartbeat,
     MultiScoreCriteria,
     RankingCriteria,
     ScoringMethod,
@@ -402,6 +403,32 @@ class Validator(BaseNeuron):
                 traceback.print_exc()
                 pass
 
+    async def send_heartbeats(self):
+        """Perform a health check periodically to ensure miners are reachable"""
+        while True:
+            await asyncio.sleep(60)
+            all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
+            axons: List[bt.AxonInfo] = [
+                self.metagraph.axons[uid]
+                for uid in all_miner_uids
+                if self.metagraph.axons[uid].hotkey.casefold()
+                != self.wallet.hotkey.ss58_address.casefold()
+            ]
+
+            # T = TypeVar("T", bound=Heartbeat)
+
+            _synapse = Heartbeat()
+            responses = await self.dendrite.forward(
+                axons=axons, synapse=_synapse, deserialize=False, timeout=12
+            )
+            active_hotkeys = [r.axon.hotkey for r in responses if r.ack]
+            active_uids = [uid for uid, axon in axons if axon.hotkey in active_hotkeys]
+            async with self._lock:
+                self._active_miner_uids = set(active_uids)
+            logger.debug(
+                f"Sent heartbeats at time: {get_epoch_time()}, active miners: {sorted(active_uids)}"
+            )
+
     async def send_request(
         self,
         synapse: FeedbackRequest = None,
@@ -436,7 +463,12 @@ class Validator(BaseNeuron):
             )
 
         all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-        sel_miner_uids = MinerUidSelector(nodes=all_miner_uids).get_target_uids(
+        # ensure we consider only active miners
+        async with self._lock:
+            active_miner_uids = [
+                uid for uid in all_miner_uids if uid in self._active_miner_uids
+            ]
+        sel_miner_uids = MinerUidSelector(nodes=active_miner_uids).get_target_uids(
             key=synapse.request_id, k=get_config().neuron.sample_size
         )
         logger.info(

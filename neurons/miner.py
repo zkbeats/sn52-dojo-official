@@ -13,7 +13,7 @@ from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
-from template.protocol import FeedbackRequest, ScoringMethod, ScoringResult
+from template.protocol import FeedbackRequest, Heartbeat, ScoringMethod, ScoringResult
 from template.utils.uids import is_miner
 
 
@@ -31,7 +31,7 @@ class Miner(BaseMinerNeuron):
             forward_fn=self.forward_feedback_request,
             blacklist_fn=self.blacklist_feedback_request,
             priority_fn=self.priority_ranking,
-        ).attach(forward_fn=self.forward_result)
+        ).attach(forward_fn=self.forward_result).attach(forward_fn=self.ack_heartbeat)
 
         # Instantiate runners
         self.should_exit: bool = False
@@ -40,6 +40,17 @@ class Miner(BaseMinerNeuron):
         self.lock = asyncio.Lock()
         # log all incoming requests
         self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
+
+    async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
+        logger.info("Receive heartbeat synapse")
+        if not synapse:
+            logger.error("Invalid synapse object")
+            return synapse
+
+        logger.info("Responding to heartbeat synapse")
+        synapse.ack = True
+
+        return synapse
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
         logger.info("Received scoring result from validators")
@@ -135,7 +146,7 @@ class Miner(BaseMinerNeuron):
     async def priority_ranking(self, synapse: FeedbackRequest) -> float:
         """
         The priority function determines the order in which requests are handled. Higher-priority
-        requests are processed before others. Miners may recieve messages from multiple entities at
+        requests are processed before others. Miners may receive messages from multiple entities at
         once. This function determines which request should be processed first.
         Higher values indicate that the request should be processed first.
         Lower values indicate that the request should be processed later.

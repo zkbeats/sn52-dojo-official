@@ -2,13 +2,13 @@ import bisect
 import random
 import uuid
 from collections import defaultdict
-from typing import List, Optional
-
-import torch
-from commons.utils import keccak256_hash
-from loguru import logger
+from typing import List
 
 import bittensor as bt
+import torch
+from loguru import logger
+
+from commons.utils import keccak256_hash
 
 
 def get_all_serving_uids(metagraph: bt.metagraph):
@@ -40,7 +40,7 @@ def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
         if metagraph.axons[uid].is_serving and is_miner(metagraph, uid):
             avail_uids.append(uid)
 
-    # Check if candidate_uids contain enough for querying, if not grab all avaliable uids
+    # Check if candidate_uids contain enough for querying, if not grab all available uids
     logger.info(f"available uids: {avail_uids}")
     if not len(avail_uids):
         return torch.tensor([])
@@ -54,7 +54,6 @@ def get_random_miner_uids(metagraph: bt.metagraph, k: int) -> torch.LongTensor:
 
 
 def extract_miner_uids(metagraph: bt.metagraph):
-    # TODO perf: perform a health check synapse to be able to ensure reachability
     uids = [
         uid
         for uid in range(metagraph.n.item())
@@ -71,13 +70,13 @@ class MinerUidSelector:
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(MinerUidSelector, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls.ring = []
             cls.nodes_hash_map = {}
         return cls._instance
 
     @classmethod
-    def __init__(cls, nodes: Optional[List[int]] = None):
+    def __init__(cls, nodes: List[int] | None = None):
         if not nodes:
             return
 
