@@ -1,8 +1,8 @@
 import asyncio
 import copy
-import datetime
 import traceback
 from collections import defaultdict
+from datetime import datetime
 from typing import Dict, List
 
 import bittensor as bt
