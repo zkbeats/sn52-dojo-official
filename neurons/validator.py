@@ -407,27 +407,35 @@ class Validator(BaseNeuron):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
             await asyncio.sleep(60)
-            all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-            axons: List[bt.AxonInfo] = [
-                self.metagraph.axons[uid]
-                for uid in all_miner_uids
-                if self.metagraph.axons[uid].hotkey.casefold()
-                != self.wallet.hotkey.ss58_address.casefold()
-            ]
+            try:
+                all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
+                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
+                axons: List[bt.AxonInfo] = [
+                    self.metagraph.axons[uid]
+                    for uid in all_miner_uids
+                    if self.metagraph.axons[uid].hotkey.casefold()
+                    != self.wallet.hotkey.ss58_address.casefold()
+                ]
 
-            # T = TypeVar("T", bound=Heartbeat)
-
-            _synapse = Heartbeat()
-            responses = await self.dendrite.forward(
-                axons=axons, synapse=_synapse, deserialize=False, timeout=12
-            )
-            active_hotkeys = [r.axon.hotkey for r in responses if r.ack]
-            active_uids = [uid for uid, axon in axons if axon.hotkey in active_hotkeys]
-            async with self._lock:
-                self._active_miner_uids = set(active_uids)
-            logger.debug(
-                f"Sent heartbeats at time: {get_epoch_time()}, active miners: {sorted(active_uids)}"
-            )
+                responses: List[Heartbeat] = await self.dendrite.forward(
+                    axons=axons, synapse=Heartbeat(), deserialize=False, timeout=12
+                )
+                active_hotkeys = [r.axon.hotkey for r in responses if r.ack and r.axon]
+                active_uids = [
+                    uid
+                    for uid, axon in enumerate(self.metagraph.axons)
+                    if axon.hotkey in active_hotkeys
+                ]
+                async with self._lock:
+                    self._active_miner_uids = set(active_uids)
+                logger.debug(
+                    f"Sent heartbeats at time: {get_epoch_time()}, active miners: {sorted(active_uids)}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error in sending heartbeats: {e}, traceback: {traceback.format_exc()}"
+                )
+                pass
 
     async def send_request(
         self,

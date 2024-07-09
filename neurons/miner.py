@@ -42,14 +42,13 @@ class Miner(BaseMinerNeuron):
         self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
 
     async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
-        logger.info("Receive heartbeat synapse")
+        logger.debug("Received heartbeat synapse")
         if not synapse:
             logger.error("Invalid synapse object")
             return synapse
 
-        logger.info("Responding to heartbeat synapse")
+        logger.debug("Responding to heartbeat synapse")
         synapse.ack = True
-
         return synapse
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
