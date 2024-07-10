@@ -3,15 +3,16 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 import wandb
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
+
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
 from neurons.validator import DojoTaskTracker
 
 load_dotenv()
@@ -56,6 +57,7 @@ async def main():
         asyncio.create_task(validator.run()),
         asyncio.create_task(validator.update_score_and_send_feedback()),
         asyncio.create_task(DojoTaskTracker.monitor_task_completions()),
+        asyncio.create_task(validator.send_heartbeats()),
     ]
 
     await server.serve()

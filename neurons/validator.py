@@ -1,6 +1,5 @@
 import asyncio
 import copy
-import threading
 import time
 import traceback
 from collections import defaultdict
@@ -10,12 +9,12 @@ from typing import Dict, List
 import bittensor as bt
 import numpy as np
 import torch
-import wandb
 from fastapi.encoders import jsonable_encoder
 from loguru import logger
 from torch.nn import functional as F
 
 import template
+import wandb
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
@@ -27,11 +26,11 @@ from template.protocol import (
     CriteriaTypeEnum,
     DendriteQueryResponse,
     FeedbackRequest,
+    Heartbeat,
     MultiScoreCriteria,
     RankingCriteria,
     ScoringMethod,
     ScoringResult,
-    SyntheticQA,
     TaskType,
 )
 from template.utils.config import get_config
@@ -247,9 +246,8 @@ class DojoTaskTracker:
 
 class Validator(BaseNeuron):
     _should_exit: bool = False
-    _is_running: bool = False
-    _thread: threading.Thread = None
     _lock = asyncio.Lock()
+    _active_miner_uids: set[int] = set()
 
     def __init__(self):
         super().__init__()
@@ -329,7 +327,7 @@ class Validator(BaseNeuron):
                         continue
 
                     logger.debug(
-                        f"Initiailly had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
+                        f"Initially had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
                     )
 
                     self.update_scores(hotkey_to_scores=hotkey_to_score)
@@ -404,16 +402,66 @@ class Validator(BaseNeuron):
                 traceback.print_exc()
                 pass
 
+    async def send_heartbeats(self):
+        """Perform a health check periodically to ensure miners are reachable"""
+        while True:
+            await asyncio.sleep(60)
+            try:
+                all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
+                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
+                axons: List[bt.AxonInfo] = [
+                    self.metagraph.axons[uid]
+                    for uid in all_miner_uids
+                    if self.metagraph.axons[uid].hotkey.casefold()
+                    != self.wallet.hotkey.ss58_address.casefold()
+                ]
+
+                responses: List[Heartbeat] = await self.dendrite.forward(
+                    axons=axons, synapse=Heartbeat(), deserialize=False, timeout=12
+                )
+                active_hotkeys = [r.axon.hotkey for r in responses if r.ack and r.axon]
+                active_uids = [
+                    uid
+                    for uid, axon in enumerate(self.metagraph.axons)
+                    if axon.hotkey in active_hotkeys
+                ]
+                async with self._lock:
+                    self._active_miner_uids = set(active_uids)
+                logger.debug(
+                    f"Sent heartbeats at time: {get_epoch_time()}, active miners: {sorted(active_uids)}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Error in sending heartbeats: {e}, traceback: {traceback.format_exc()}"
+                )
+                pass
+
     async def send_request(
         self,
         synapse: FeedbackRequest = None,
-        data: SyntheticQA = None,
     ):
         start = get_epoch_time()
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
 
+        # ensure we consider only active miners
+        request_id = get_new_uuid()
+        async with self._lock:
+            sel_miner_uids = MinerUidSelector(
+                nodes=list(self._active_miner_uids),
+            ).get_target_uids(key=request_id, k=get_config().neuron.sample_size)
+        axons = [
+            self.metagraph.axons[uid]
+            for uid in sel_miner_uids
+            if self.metagraph.axons[uid].hotkey.casefold()
+            != self.wallet.hotkey.ss58_address.casefold()
+        ]
+        if not len(axons):
+            logger.warning("No axons to query ... skipping")
+            return
+
         if synapse is None:
+            data = await SyntheticAPI.get_qa()
             if not data:
                 logger.error("Failed to generate data from synthetic gen API")
                 return
@@ -425,6 +473,7 @@ class Validator(BaseNeuron):
                 completion.model = new_uuid
 
             synapse = FeedbackRequest(
+                request_id=request_id,
                 task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[
                     MultiScoreCriteria(
@@ -437,24 +486,10 @@ class Validator(BaseNeuron):
                 responses=data.responses,
             )
 
-        all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-        sel_miner_uids = MinerUidSelector(nodes=all_miner_uids).get_target_uids(
-            key=synapse.request_id, k=get_config().neuron.sample_size
-        )
         logger.info(
             f"Sending synapse off to miners, request id: {synapse.request_id}, miner uids: {sel_miner_uids}"
         )
-        axons = [
-            self.metagraph.axons[uid]
-            for uid in sel_miner_uids
-            if self.metagraph.axons[uid].hotkey.casefold()
-            != self.wallet.hotkey.ss58_address.casefold()
-        ]
-        if not len(axons):
-            logger.warning("No axons to query ... skipping")
-            return
 
-        miner_responses: List[FeedbackRequest] = []
         miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
@@ -527,8 +562,7 @@ class Validator(BaseNeuron):
         try:
             while True:
                 try:
-                    synthetic_data = await SyntheticAPI.get_qa()
-                    await self.send_request(data=synthetic_data)
+                    await self.send_request()
 
                     # # Check if we should exit.
                     if self._should_exit:
