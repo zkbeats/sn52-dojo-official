@@ -75,9 +75,9 @@ class Response(BaseModel):
         description="Unique identifier for the completion",
     )
     rank_id: int | None = Field(
-        description="Rank of the completion", examples=[1, 2, 3, 4]
+        description="Rank of the completion", examples=[1, 2, 3, 4], default=None
     )
-    score: float | None = Field(description="Score of the completion")
+    score: float | None = Field(description="Score of the completion", default=None)
 
 
 class SyntheticQA(BaseModel):
@@ -89,38 +89,37 @@ class FeedbackRequest(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
-        allow_mutation=False,
     )
     request_id: str = Field(
         default_factory=get_new_uuid,
         description="Unique identifier for the request",
-        allow_mutation=False,
     )
     prompt: str = Field(
         description="Prompt or query from the user sent the LLM",
-        allow_mutation=False,
     )
     responses: List[Response] = Field(
         description="List of completions for the prompt",
     )
-    task_type: str = Field(description="Type of task", allow_mutation=False)
+    task_type: str = Field(description="Type of task")
     criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
-        allow_mutation=False,
     )
     scoring_method: str | None = Field(
-        description="Method to use for scoring completions"
+        description="Method to use for scoring completions",
+        default=None,
     )
-    dojo_task_id: str | None = Field(description="Dojo task ID for the request")
+    dojo_task_id: str | None = Field(
+        description="Dojo task ID for the request", default=None
+    )
 
 
 class ScoringResult(bt.Synapse):
     request_id: str = Field(
         description="Unique identifier for the request",
-        allow_mutation=False,
     )
     hotkey_to_scores: Dict[str, float] = Field(
-        description="Hotkey to score mapping", allow_mutation=False
+        description="Hotkey to score mapping",
+        default_factory=dict,
     )
 
 
