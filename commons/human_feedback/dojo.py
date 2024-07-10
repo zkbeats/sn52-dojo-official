@@ -4,7 +4,6 @@ from typing import Dict, List
 
 import httpx
 from loguru import logger
-from requests_toolbelt import MultipartEncoder
 
 import template
 from commons.utils import loaddotenv
@@ -92,29 +91,30 @@ class DojoAPI:
             else:
                 logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
 
-        body = {
-            "title": "LLM Code Generation Task",
-            "body": ranking_request.prompt,
+        json_body = {
+            "title": ("", "LLM Code Generation Task"),
+            "body": ("", ranking_request.prompt),
             "expireAt": (
-                datetime.datetime.utcnow()
-                + datetime.timedelta(seconds=template.TASK_DEADLINE)
-            )
-            .replace(microsecond=0, tzinfo=datetime.timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z"),
-            "taskData": json.dumps([taskData]),
-            "maxResults": "1",
+                "",
+                (
+                    datetime.datetime.utcnow()
+                    + datetime.timedelta(seconds=template.TASK_DEADLINE)
+                )
+                .replace(microsecond=0, tzinfo=datetime.timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+            ),
+            "taskData": ("", json.dumps([taskData])),
+            "maxResults": ("", "1"),
         }
 
-        mp = MultipartEncoder(fields=body)
         DOJO_API_KEY = loaddotenv("DOJO_API_KEY")
-        print("DOJO API KEY: ", DOJO_API_KEY)
+
         response = await cls._http_client.post(
             path,
-            data=mp.to_string(),
+            files=json_body,
             headers={
                 "x-api-key": DOJO_API_KEY,
-                "content-type": mp.content_type,
             },
             timeout=15.0,
         )
@@ -132,6 +132,7 @@ class DojoAPI:
                 print("Tried to export create task request as curl, but failed.")
                 print(f"Exception: {e}")
 
+        task_ids = []
         if response.status_code == 200:
             task_ids = response.json()["body"]
             logger.success(f"Successfully created task with\ntask ids:{task_ids}")
