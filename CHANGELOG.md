@@ -1,3 +1,23 @@
+# [2.1.0](https://github.com/tensorplex-labs/dojo/compare/v2.0.0...v2.1.0) (2024-07-10)
+
+
+### Bug Fixes
+
+* add default values, remove pydantic v1 args ([4c7e829](https://github.com/tensorplex-labs/dojo/commit/4c7e829c5aa43514c0f1ae41c918041c5e19840e))
+* add try catch, use proper uid for logging ([4936043](https://github.com/tensorplex-labs/dojo/commit/493604376540792e3308787060b5f7c0f6466bc6))
+* call golang api failing using multipartencoder ([8954f08](https://github.com/tensorplex-labs/dojo/commit/8954f083cdaef6e5e9065bedfecd13dae8f6b464))
+
+
+### Features
+
+* add heartbeat, ruff fixes ([27d856f](https://github.com/tensorplex-labs/dojo/commit/27d856fdf42abc5b0152653b3b00b339e25ef18c))
+* ping miners to see if reachable ([e3ac465](https://github.com/tensorplex-labs/dojo/commit/e3ac4650cc25afb324cddc937807a89925f5e9ae))
+
+
+### Performance Improvements
+
+* only consume data when there are axons to query ([f578c1e](https://github.com/tensorplex-labs/dojo/commit/f578c1e26c25ff64f1e74a21cd55cb8ef4a20c57))
+
 # [2.0.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.3...v2.0.0) (2024-07-05)
 
 
