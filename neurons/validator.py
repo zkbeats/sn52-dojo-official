@@ -470,15 +470,11 @@ class Validator(BaseNeuron):
                 responses=data.responses,
             )
 
-        all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
         # ensure we consider only active miners
         async with self._lock:
-            active_miner_uids = [
-                uid for uid in all_miner_uids if uid in self._active_miner_uids
-            ]
-        sel_miner_uids = MinerUidSelector(nodes=active_miner_uids).get_target_uids(
-            key=synapse.request_id, k=get_config().neuron.sample_size
-        )
+            sel_miner_uids = MinerUidSelector(
+                nodes=list(self._active_miner_uids),
+            ).get_target_uids(key=synapse.request_id, k=get_config().neuron.sample_size)
         logger.info(
             f"Sending synapse off to miners, request id: {synapse.request_id}, miner uids: {sel_miner_uids}"
         )
