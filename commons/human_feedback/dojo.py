@@ -70,7 +70,7 @@ class DojoAPI:
         taskData = {
             "prompt": ranking_request.prompt,
             "responses": [
-                {"model": c.model, "completion": c.completion.dict()}
+                {"model": c.model, "completion": c.completion.model_dump()}
                 for c in ranking_request.responses
             ],
             "task": str(ranking_request.task_type).upper(),
@@ -82,9 +82,10 @@ class DojoAPI:
             ):
                 taskData["criteria"].append(
                     {
-                        **criteria_type.dict(),
+                        **criteria_type.model_dump(),
                         "options": [
-                            option for option in criteria_type.dict().get("options", [])
+                            option
+                            for option in criteria_type.model_dump().get("options", [])
                         ],
                     }
                 )

@@ -1,7 +1,7 @@
 from typing import Dict, List
 
 import bittensor as bt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from strenum import StrEnum
 
 from commons.utils import get_epoch_time, get_new_uuid
@@ -19,8 +19,7 @@ class CriteriaTypeEnum(StrEnum):
 
 
 class RankingCriteria(BaseModel):
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
     type: str = CriteriaTypeEnum.RANKING_CRITERIA.value
     options: List[str] = Field(
@@ -29,8 +28,7 @@ class RankingCriteria(BaseModel):
 
 
 class MultiScoreCriteria(BaseModel):
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
     type: str = CriteriaTypeEnum.MULTI_SCORE.value
     options: List[str] = Field(
@@ -62,7 +60,8 @@ class CodeAnswer(BaseModel):
         description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
     )
     additional_notes: str | None = Field(
-        description="Any additional notes or comments about the code solution"
+        default=None,
+        description="Any additional notes or comments about the code solution",
     )
 
 
@@ -128,8 +127,7 @@ class Heartbeat(bt.Synapse):
 
 
 class DendriteQueryResponse(BaseModel):
-    class Config:
-        allow_mutation = True
+    model_config = ConfigDict(frozen=False)
 
     request: FeedbackRequest
     miner_responses: List[FeedbackRequest]
