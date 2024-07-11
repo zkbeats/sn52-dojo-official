@@ -19,7 +19,7 @@ from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, get_new_uuid, init_wandb
+from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     DendriteQueryResponse,
@@ -121,7 +121,7 @@ class Validator(BaseNeuron):
                         continue
 
                     logger.debug(
-                        f"Initiailly had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
+                        f"Initially had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
                     )
 
                     self.update_scores(hotkey_to_scores=hotkey_to_score)
@@ -216,6 +216,8 @@ class Validator(BaseNeuron):
                 obfuscated_model_to_model[new_uuid] = completion.model
                 completion.model = new_uuid
 
+            expire_at = set_expire_time(template.TASK_DEADLINE)
+
             synapse = FeedbackRequest(
                 task_type=str(TaskType.CODE_GENERATION),
                 criteria_types=[
@@ -227,6 +229,7 @@ class Validator(BaseNeuron):
                 ],
                 prompt=data.prompt,
                 responses=data.responses,
+                expire_at=expire_at,
             )
 
         all_miner_uids = extract_miner_uids(metagraph=self.metagraph)

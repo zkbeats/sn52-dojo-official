@@ -2,16 +2,21 @@ import asyncio
 import copy
 import traceback
 from collections import defaultdict
-from datetime import datetime
 from typing import Dict, List
 
 import bittensor as bt
 from loguru import logger
 
+import template
 from commons.data_manager import DataManager
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
-from commons.utils import get_epoch_time
+from commons.utils import (
+    get_current_utc_time_iso,
+    get_epoch_time,
+    is_valid_expiry,
+    set_expire_time,
+)
 from template.protocol import (
     CriteriaTypeEnum,
     FeedbackRequest,
@@ -75,7 +80,14 @@ class DojoTaskTracker:
                 cls._rid_to_mhotkey_to_task_id[request_id][r.axon.hotkey] = (
                     r.dojo_task_id
                 )
-                cls._task_to_expiry[r.dojo_task_id] = r.expireAt
+
+                # Ensure expire_at is set and is reasonable
+                expire_at = r.expire_at
+                if expire_at is None or is_valid_expiry(expire_at) is not True:
+                    expire_at = set_expire_time(template.TASK_DEADLINE)
+
+                cls._task_to_expiry[r.dojo_task_id] = expire_at
+
             cls._rid_to_model_map[request_id] = obfuscated_model_to_model
         logger.debug("released lock for task tracker")
         return
@@ -83,7 +95,7 @@ class DojoTaskTracker:
     @classmethod
     async def remove_expired_tasks(cls):
         # Identify expired tasks
-        current_time = datetime.utcnow().isoformat() + "Z"
+        current_time = get_current_utc_time_iso()
         expired_tasks = [
             task_id
             for task_id, expiry_time in cls._task_to_expiry.items()

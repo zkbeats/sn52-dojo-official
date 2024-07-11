@@ -1,7 +1,6 @@
 import asyncio
 import json
 import pickle
-from datetime import datetime
 from pathlib import Path
 from typing import Any, List
 
@@ -10,6 +9,7 @@ from loguru import logger
 from strenum import StrEnum
 
 from commons.objects import ObjectManager
+from commons.utils import get_current_utc_time_iso
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
@@ -225,7 +225,7 @@ class DataManager:
             return
 
         # Identify expired tasks
-        current_time = datetime.utcnow().isoformat() + "Z"
+        current_time = get_current_utc_time_iso()
         task_to_expiry = state_data.get(ValidatorStateKeys.TASK_TO_EXPIRY, {})
         expired_tasks = [
             task_id

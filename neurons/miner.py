@@ -87,10 +87,10 @@ class Miner(BaseMinerNeuron):
             scoring_method = self.config.scoring_method
             if scoring_method.casefold() == ScoringMethod.DOJO:
                 synapse.scoring_method = ScoringMethod.DOJO
-                task_ids, expireAt = await DojoAPI.create_task(synapse)
+                task_ids = await DojoAPI.create_task(synapse)
                 assert len(task_ids) == 1
                 synapse.dojo_task_id = task_ids[0]
-                synapse.expireAt = expireAt
+
             else:
                 logger.error("Unrecognized scoring method!")
         except Exception:
@@ -136,7 +136,7 @@ class Miner(BaseMinerNeuron):
     async def priority_ranking(self, synapse: FeedbackRequest) -> float:
         """
         The priority function determines the order in which requests are handled. Higher-priority
-        requests are processed before others. Miners may recieve messages from multiple entities at
+        requests are processed before others. Miners may receive messages from multiple entities at
         once. This function determines which request should be processed first.
         Higher values indicate that the request should be processed first.
         Lower values indicate that the request should be processed later.

@@ -109,10 +109,10 @@ class FeedbackRequest(bt.Synapse):
         allow_mutation=False,
     )
     scoring_method: str | None = Field(
-        decscription="Method to use for scoring completions"
+        description="Method to use for scoring completions"
     )
     dojo_task_id: str | None = Field(description="Dojo task ID for the request")
-    expireAt: str | None = Field(description="Expired time for Dojo task")
+    expire_at: str | None = Field(description="Expired time for Dojo task")
 
 
 class ScoringResult(bt.Synapse):
