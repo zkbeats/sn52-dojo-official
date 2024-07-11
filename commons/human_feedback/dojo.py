@@ -93,11 +93,11 @@ class DojoAPI:
 
         expire_at = set_expire_time(template.TASK_DEADLINE)
 
-        json_body = {
-            "title": "LLM Code Generation Task",
-            "body": ranking_request.prompt,
-            "expireAt": expire_at,
-            "taskData": json.dumps([taskData]),
+        form_body = {
+            "title": ("", "LLM Code Generation Task"),
+            "body": ("", ranking_request.prompt),
+            "expireAt": ("", expire_at),
+            "taskData": ("", json.dumps([taskData])),
             "maxResults": ("", "1"),
         }
 
@@ -105,7 +105,7 @@ class DojoAPI:
 
         response = await cls._http_client.post(
             path,
-            files=json_body,
+            files=form_body,
             headers={
                 "x-api-key": DOJO_API_KEY,
             },
