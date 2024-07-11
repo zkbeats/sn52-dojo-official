@@ -1,7 +1,7 @@
 from typing import Dict, List
 
 import bittensor as bt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from strenum import StrEnum
 
 from commons.utils import get_epoch_time, get_new_uuid
@@ -19,8 +19,7 @@ class CriteriaTypeEnum(StrEnum):
 
 
 class RankingCriteria(BaseModel):
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
     type: str = CriteriaTypeEnum.RANKING_CRITERIA.value
     options: List[str] = Field(
@@ -29,8 +28,7 @@ class RankingCriteria(BaseModel):
 
 
 class MultiScoreCriteria(BaseModel):
-    class Config:
-        allow_mutation = False
+    model_config = ConfigDict(frozen=True)
 
     type: str = CriteriaTypeEnum.MULTI_SCORE.value
     options: List[str] = Field(
@@ -62,7 +60,8 @@ class CodeAnswer(BaseModel):
         description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
     )
     additional_notes: str | None = Field(
-        description="Any additional notes or comments about the code solution"
+        default=None,
+        description="Any additional notes or comments about the code solution",
     )
 
 
@@ -75,9 +74,9 @@ class Response(BaseModel):
         description="Unique identifier for the completion",
     )
     rank_id: int | None = Field(
-        description="Rank of the completion", examples=[1, 2, 3, 4]
+        description="Rank of the completion", examples=[1, 2, 3, 4], default=None
     )
-    score: float | None = Field(description="Score of the completion")
+    score: float | None = Field(description="Score of the completion", default=None)
 
 
 class SyntheticQA(BaseModel):
@@ -89,45 +88,49 @@ class FeedbackRequest(bt.Synapse):
     epoch_timestamp: float = Field(
         default_factory=get_epoch_time,
         description="Epoch timestamp for the request",
-        allow_mutation=False,
     )
     request_id: str = Field(
         default_factory=get_new_uuid,
         description="Unique identifier for the request",
-        allow_mutation=False,
     )
     prompt: str = Field(
         description="Prompt or query from the user sent the LLM",
-        allow_mutation=False,
     )
     responses: List[Response] = Field(
         description="List of completions for the prompt",
     )
-    task_type: str = Field(description="Type of task", allow_mutation=False)
+    task_type: str = Field(description="Type of task")
     criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
-        allow_mutation=False,
     )
     scoring_method: str | None = Field(
-        description="Method to use for scoring completions"
+        description="Method to use for scoring completions",
+        default=None,
     )
-    dojo_task_id: str | None = Field(description="Dojo task ID for the request")
-    expire_at: str | None = Field(description="Expired time for Dojo task")
+    dojo_task_id: str | None = Field(
+        description="Dojo task ID for the request", default=None
+    )
+    expire_at: str | None = Field(
+        description="Expired time for Dojo task", default=None
+    )
 
 
 class ScoringResult(bt.Synapse):
     request_id: str = Field(
         description="Unique identifier for the request",
-        allow_mutation=False,
     )
     hotkey_to_scores: Dict[str, float] = Field(
-        description="Hotkey to score mapping", allow_mutation=False
+        description="Hotkey to score mapping",
+        default_factory=dict,
     )
+
+
+class Heartbeat(bt.Synapse):
+    ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 
 class DendriteQueryResponse(BaseModel):
-    class Config:
-        allow_mutation = True
+    model_config = ConfigDict(frozen=False)
 
     request: FeedbackRequest
     miner_responses: List[FeedbackRequest]
