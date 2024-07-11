@@ -1,13 +1,13 @@
-from typing import List
-
-from commons.objects import ObjectManager
-from commons.utils import get_new_uuid
 from dotenv import load_dotenv
-from fastapi import APIRouter, responses
+from fastapi import APIRouter, Header, Request, responses
 from fastapi.encoders import jsonable_encoder
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field
-from template.protocol import FeedbackRequest, Response
+from pydantic.error_wrappers import ValidationError
+
+from commons.cache import RedisCache
+from commons.objects import ObjectManager
+from commons.utils import get_new_uuid
+from template.protocol import FeedbackRequest
 
 load_dotenv()
 
@@ -15,36 +15,51 @@ load_dotenv()
 reward_router = APIRouter(prefix="/api/reward_model")
 
 
-class ExternalRequest(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    prompt: str = Field(..., description="Prompt that generated the completions")
-    completions: List[str] = Field(..., description="List of completions")
-    media_type: str = Field(
-        ..., description="Media type of the request", pattern="^(text|image)$"
-    )
-    # scoring_methods: List[ScoringMethod] = Field(
-    #     ..., description="List of scoring methods to use"
-    # )
-    # NOTE @dev this exists because for huamn feedback methods we need to account for turnaround time
-    callback_url: str = Field(
-        ...,
-        description="URL to send the response to when requesting for specific types of methods",
-    )
+cache = RedisCache()
+
+
+@reward_router.get("/token")
+async def get_token(request: Request):
+    uuid = get_new_uuid()
+    client_host = request.client.host
+    await cache.put(client_host, uuid)
+    return {"token": uuid}
 
 
 @reward_router.post("/")
-async def reward_request_handler(request: ExternalRequest):
-    synapse = FeedbackRequest(
-        n_completions=len(request.completions),
-        pid=get_new_uuid(),
-        prompt=request.prompt,
-        responses=[Response() for c in request.completions],
-    )
+async def reward_request_handler(
+    request: Request, authorization: str | None = Header(default=None)
+):
+    token = authorization.split(" ")[1]
+    client_host = request.client.host
+    if token != await cache.get(client_host):
+        return responses.JSONResponse(
+            status_code=403, content={"message": "Invalid token"}
+        )
+
+    try:
+        request_data = await request.json()
+        request_data["task_type"] = request_data.pop("task")
+        request_data["criteria_types"] = request_data.pop("criteria")
+
+        logger.info("Received task data from external user")
+        logger.debug(f"Task data: {request_data}")
+        task_data = FeedbackRequest.parse_obj(request_data)
+    except (KeyError, ValidationError):
+        logger.error("Invalid data sent by external user")
+        return responses.JSONResponse(
+            status_code=400, content={"message": "Invalid request data"}
+        )
+    except Exception as e:
+        logger.exception(f"Encountered exception: {e}")
+        return responses.JSONResponse(
+            status_code=500, content={"message": "Internal server error"}
+        )
 
     try:
         validator = ObjectManager.get_validator()
-        response = await validator.send_request(synapse)
+        response = await validator.send_request(task_data, external_user=True)
         response_json = jsonable_encoder(response)
         return responses.JSONResponse(content=response_json)
     except Exception as e:
-        logger.error(f"Encountered exception: {e}")
+        logger.exception(f"Encountered exception: {e}")

@@ -24,7 +24,7 @@ class SyntheticAPI:
     _session = get_client_session()
 
     @classmethod
-    async def get_qa(cls) -> list[SyntheticQA]:
+    async def get_qa(cls) -> SyntheticQA | None:
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
         logger.debug(f"Generating synthetic QA from {path}.")
         # Instantiate the aiohttp ClientSession outside the loop

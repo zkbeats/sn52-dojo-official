@@ -33,7 +33,7 @@ __spec_version__ = (
 
 # TODO @dev change before live
 VALIDATOR_MIN_STAKE = 60
-TASK_DEADLINE = 8 * 60 * 60
+TASK_DEADLINE = 3 * 60
 
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if DOJO_API_BASE_URL is None:

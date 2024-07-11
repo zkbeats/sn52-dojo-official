@@ -2,12 +2,13 @@ import asyncio
 import json
 import pickle
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List
 
 import torch
-from commons.objects import ObjectManager
 from loguru import logger
 from strenum import StrEnum
+
+from commons.objects import ObjectManager
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
@@ -24,7 +25,7 @@ class DataManager:
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(DataManager, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._ensure_paths_exist()
         return cls._instance
 
@@ -46,7 +47,7 @@ class DataManager:
         return base_path / "data" / "validator_state.pt"
 
     @classmethod
-    async def _load_without_lock(cls, path) -> Optional[List[DendriteQueryResponse]]:
+    async def _load_without_lock(cls, path) -> List[DendriteQueryResponse] | None:
         try:
             with open(str(path), "rb") as file:
                 return pickle.load(file)
@@ -145,7 +146,7 @@ class DataManager:
     @classmethod
     async def remove_responses(
         cls, responses: List[DendriteQueryResponse]
-    ) -> Optional[DendriteQueryResponse]:
+    ) -> DendriteQueryResponse | None:
         path = DataManager.get_requests_data_path()
         async with cls._lock:
             data = await DataManager._load_without_lock(path=path)
