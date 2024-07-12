@@ -107,7 +107,7 @@ class Response(BaseModel):
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
-    rank_id: str | None = Field(
+    rank_id: int | None = Field(
         description="Rank of the completion", examples=[1, 2, 3, 4], default=None
     )
     score: float | None = Field(description="Score of the completion", default=None)

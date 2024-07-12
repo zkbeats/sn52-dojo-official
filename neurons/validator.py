@@ -602,7 +602,7 @@ class Validator(BaseNeuron):
                 except Exception as e:
                     logger.error(f"Error during validator run: {e}")
                     pass
-                await asyncio.sleep(60)
+                await asyncio.sleep(300)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:

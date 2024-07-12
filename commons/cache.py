@@ -49,11 +49,4 @@ class RedisCache:
 
     async def close(self):
         if self.redis:
-            self.redis.close()
             await self.redis.aclose()
-
-    async def check_num_keys(self, key):
-        if self.redis is None:
-            await self.connect()
-        keys = await self.redis.keys(f"{key}*")
-        return len(keys)
