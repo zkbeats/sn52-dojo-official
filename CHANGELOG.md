@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/tensorplex-labs/dojo/compare/v2.1.1...v2.2.0) (2024-07-12)
+
+
+### Features
+
+* external user ([10ca4a0](https://github.com/tensorplex-labs/dojo/commit/10ca4a0c55284255d4c133fafa8385fb389c3bc3))
+
 ## [2.1.1](https://github.com/tensorplex-labs/dojo/compare/v2.1.0...v2.1.1) (2024-07-12)
 
 
