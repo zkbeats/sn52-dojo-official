@@ -1,3 +1,16 @@
+## [2.1.1](https://github.com/tensorplex-labs/dojo/compare/v2.1.0...v2.1.1) (2024-07-12)
+
+
+### Bug Fixes
+
+* added empty string on form_body before making request to create_task ([250ee0b](https://github.com/tensorplex-labs/dojo/commit/250ee0b9fd252a05a1468b5538a88cf91125d671))
+* added expiredAt in DojoTaskTracker and DataManager ([0cde81b](https://github.com/tensorplex-labs/dojo/commit/0cde81b0075aae5e051571d3c986076ba27805f9))
+* added remove expiry task func in DataManager, and DojoTaskTracker ([a95b909](https://github.com/tensorplex-labs/dojo/commit/a95b90946cae6a4e8337a20485a8ee6ea6bc569e))
+* fixed datetime error ([510e421](https://github.com/tensorplex-labs/dojo/commit/510e421bd933925b43361ab037cdacd87af6f8d9))
+* fixed merge conflict, and ruff error ([219f252](https://github.com/tensorplex-labs/dojo/commit/219f2529373540ecc6156fffec2e557876e9bb55))
+* refactored from MR feedback ([a01653e](https://github.com/tensorplex-labs/dojo/commit/a01653e28f2cac7f100232c9f748b5854e3b7e32))
+* remove DojoTaskTracker class in seperate file ([08f001f](https://github.com/tensorplex-labs/dojo/commit/08f001f5c28307160dabae84e0145dfd68e1e93e))
+
 # [2.1.0](https://github.com/tensorplex-labs/dojo/compare/v2.0.0...v2.1.0) (2024-07-10)
 
 
