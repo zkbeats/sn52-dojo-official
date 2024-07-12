@@ -16,12 +16,36 @@ class TaskType(StrEnum):
 class CriteriaTypeEnum(StrEnum):
     RANKING_CRITERIA = "ranking"
     MULTI_SCORE = "multi-score"
+    SCORE = "score"
+    MULTI_SELECT = "multi-select"
+
+
+class DialogueRoleEnum(StrEnum):
+    ASSISTANT = "assistant"
+    USER = "user"
 
 
 class RankingCriteria(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     type: str = CriteriaTypeEnum.RANKING_CRITERIA.value
+    options: List[str] = Field(
+        description="List of options human labeller will see", default=[]
+    )
+
+
+class ScoreCriteria(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    type: str = CriteriaTypeEnum.SCORE.value
+    min: float = Field(description="Minimum score for the task")
+    max: float = Field(description="Maximum score for the task")
+
+
+class MultiSelectCriteria(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    type: str = CriteriaTypeEnum.MULTI_SELECT.value
     options: List[str] = Field(
         description="List of options human labeller will see", default=[]
     )
@@ -38,7 +62,9 @@ class MultiScoreCriteria(BaseModel):
     max: float = Field(description="Maximum score for the task")
 
 
-CriteriaType = MultiScoreCriteria | RankingCriteria
+CriteriaType = (
+    MultiScoreCriteria | RankingCriteria | ScoreCriteria | MultiSelectCriteria
+)
 
 
 class ScoringMethod(StrEnum):
@@ -65,10 +91,18 @@ class CodeAnswer(BaseModel):
     )
 
 
+class DialogueItem(BaseModel):
+    model_config = ConfigDict(use_enum_values=True)
+
+    role: DialogueRoleEnum
+    message: str
+
+
 class Response(BaseModel):
     model: str = Field(description="Model that generated the completion")
-    completion: CodeAnswer
-
+    completion: CodeAnswer | List[DialogueItem] | str | None = Field(
+        description="Completion from the model"
+    )
     cid: str = Field(
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",

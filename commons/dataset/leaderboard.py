@@ -4,9 +4,10 @@ from typing import List, Tuple
 
 import numpy as np
 import requests
-from commons.utils import keccak256_hash, ttl_cache
 from loguru import logger
 from strenum import StrEnum
+
+from commons.utils import keccak256_hash, ttl_cache
 
 
 class Leaderboard(StrEnum):

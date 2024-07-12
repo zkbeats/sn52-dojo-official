@@ -1,6 +1,7 @@
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, validator
+
 from template.protocol import Response
 
 system_score_completion_prompt = """
@@ -80,7 +81,7 @@ class PromptBuilder:
         rejected: str,
         chosen_idx,
         rejected_idx,
-        prompt: Optional[str] = None,
+        prompt: str | None = None,
     ):
         formatted_prompt = user_eval_human_preference_prompt.format(
             chosen=chosen,

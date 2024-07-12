@@ -39,6 +39,7 @@ from template.utils.uids import (
 class Validator(BaseNeuron):
     _should_exit: bool = False
     _lock = asyncio.Lock()
+    _threshold = 0.1
     _active_miner_uids: set[int] = set()
 
     def __init__(self):
@@ -114,7 +115,13 @@ class Validator(BaseNeuron):
 
                     if not hotkey_to_score:
                         request_id = d.request.request_id
-                        del DojoTaskTracker._rid_to_mhotkey_to_task_id[request_id]
+                        try:
+                            del DojoTaskTracker._rid_to_mhotkey_to_task_id[request_id]
+                        except KeyError:
+                            logger.warning(
+                                f"Failed to remove request id: {request_id} from dojo task tracker"
+                            )
+                            pass
                         await DataManager.remove_responses([d])
                         continue
 
@@ -194,6 +201,15 @@ class Validator(BaseNeuron):
                 traceback.print_exc()
                 pass
 
+    def obfuscate_model_names(self, data: FeedbackRequest) -> dict[str, str]:
+        """Obfuscate model names for both external requests and synthetic requests to prevent miners from knowing the true model names."""
+        obfuscated_model_to_model: dict[str, str] = {}
+        for completion in data.responses:
+            new_uuid = get_new_uuid()
+            obfuscated_model_to_model[new_uuid] = completion.model
+            completion.model = new_uuid
+        return obfuscated_model_to_model
+
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
@@ -231,6 +247,7 @@ class Validator(BaseNeuron):
     async def send_request(
         self,
         synapse: FeedbackRequest = None,
+        external_user: bool = False,
     ):
         start = get_epoch_time()
         # typically the request may come from an external source however,
@@ -239,9 +256,20 @@ class Validator(BaseNeuron):
         # ensure we consider only active miners
         request_id = get_new_uuid()
         async with self._lock:
-            sel_miner_uids = MinerUidSelector(
-                nodes=list(self._active_miner_uids),
-            ).get_target_uids(key=request_id, k=get_config().neuron.sample_size)
+            if external_user:
+                sel_miner_uids = [
+                    uid
+                    for uid in self._active_miner_uids
+                    if self.scores[uid] > self._threshold
+                ]
+                logger.debug(
+                    f"External user request, number of miners with scores above threshold: {len(sel_miner_uids)}"
+                )
+            else:
+                sel_miner_uids = MinerUidSelector(
+                    nodes=list(self._active_miner_uids),
+                ).get_target_uids(key=request_id, k=get_config().neuron.sample_size)
+
         axons = [
             self.metagraph.axons[uid]
             for uid in sel_miner_uids
@@ -258,11 +286,7 @@ class Validator(BaseNeuron):
                 logger.error("Failed to generate data from synthetic gen API")
                 return
 
-            obfuscated_model_to_model = {}
-            for completion in data.responses:
-                new_uuid = get_new_uuid()
-                obfuscated_model_to_model[new_uuid] = completion.model
-                completion.model = new_uuid
+            obfuscated_model_to_model = self.obfuscate_model_names(data)
 
             expire_at = set_expire_time(template.TASK_DEADLINE)
 
@@ -280,6 +304,8 @@ class Validator(BaseNeuron):
                 responses=data.responses,
                 expire_at=expire_at,
             )
+        elif external_user:
+            obfuscated_model_to_model = self.obfuscate_model_names(synapse)
 
         logger.info(
             f"Sending synapse off to miners, request id: {synapse.request_id}, miner uids: {sel_miner_uids}"
@@ -290,7 +316,7 @@ class Validator(BaseNeuron):
         )
         # map obfuscated model names back to the original model names
         logger.debug(f"Obfuscated model map: {obfuscated_model_to_model}")
-        valid_miner_responses = []
+        valid_miner_responses: List[FeedbackRequest] = []
         try:
             for miner_response in miner_responses:
                 # map obfuscated model names back to the original model names
@@ -303,6 +329,7 @@ class Validator(BaseNeuron):
                     real_model_ids.append(found_model_id)
                     if found_model_id:
                         miner_response.responses[i].model = found_model_id
+                        synapse.responses[i].model = found_model_id
 
                 if any(c is None for c in real_model_ids):
                     logger.warning("Failed to map obfuscated model to original model")
@@ -471,7 +498,8 @@ class Validator(BaseNeuron):
 
     def update_scores(self, hotkey_to_scores):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
-        after setting the self.scores variable here, `set_weights` will be called to set the weights on chain."""
+        after setting the self.scores variable here, `set_weights` will be called to set the weights on chain.
+        """
 
         nan_value_indices = np.isnan(list(hotkey_to_scores.values()))
         if nan_value_indices.any():

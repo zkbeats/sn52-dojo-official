@@ -1,14 +1,16 @@
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 import pingouin as pg
 import torch
 from attr import define, field
-from commons.dataset.leaderboard import get_leaderboard_scores
 from loguru import logger
 from pydantic import BaseModel, Field
+from torch.nn import functional as F
+
+from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
     CriteriaType,
     FeedbackRequest,
@@ -16,7 +18,6 @@ from template.protocol import (
     RankingCriteria,
     Response,
 )
-from torch.nn import functional as F
 
 
 @define(kw_only=True, frozen=True, slots=True)
@@ -49,11 +50,11 @@ class Score(BaseModel):
 
     ground_truth: GroundTruthScore = Field(description="Raw score from ground truth")
     consensus: ConsensusScore = Field(description="Raw score from ground truth")
-    weighted_consensus: Optional[torch.Tensor] = Field(
-        description="Weighted score from consensus"
+    weighted_consensus: torch.Tensor | None = Field(
+        default=None, description="Weighted score from consensus"
     )
-    weighted_ground_truth: Optional[torch.Tensor] = Field(
-        description="Weighted score from ground truth"
+    weighted_ground_truth: torch.Tensor | None = Field(
+        default=None, description="Weighted score from ground truth"
     )
 
 

@@ -60,21 +60,35 @@ class DojoAPI:
 
         return task_results
 
+    @staticmethod
+    def serialize_feedback_request(data: FeedbackRequest) -> Dict[str, str]:
+        output = dict(
+            prompt=data.prompt,
+            responses=[],
+            task=str(data.task_type).upper(),
+            criteria=[],
+        )
+        for c in data.responses:
+            completion_dict = {}
+            completion_dict["model"] = c.model
+            if isinstance(c.completion, list):  # handling the case for DIALOGUE
+                completion_dict["completion"] = [i.model_dump() for i in c.completion]
+            elif isinstance(c.completion, str):  # handling the case for TEXT_TO_IMAGE
+                completion_dict["completion"] = c.completion
+            else:  # if not DIALOGUE or TEXT_TO_IMAGE, then it is CODE_GENERATION
+                completion_dict["completion"] = c.completion.model_dump()
+
+            output["responses"].append(completion_dict)
+
+        return output
+
     @classmethod
     async def create_task(
         cls,
         ranking_request: FeedbackRequest,
     ):
         path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
-        taskData = {
-            "prompt": ranking_request.prompt,
-            "responses": [
-                {"model": c.model, "completion": c.completion.model_dump()}
-                for c in ranking_request.responses
-            ],
-            "task": str(ranking_request.task_type).upper(),
-            "criteria": [],
-        }
+        taskData = cls.serialize_feedback_request(ranking_request)
         for criteria_type in ranking_request.criteria_types:
             if isinstance(criteria_type, RankingCriteria) or isinstance(
                 criteria_type, MultiScoreCriteria
