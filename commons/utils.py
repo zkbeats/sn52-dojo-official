@@ -4,6 +4,7 @@ import time
 import uuid
 from collections import OrderedDict
 from collections.abc import Mapping
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache, update_wrapper
 from math import floor
 from typing import Any, Callable, Tuple, Type, get_origin
@@ -12,11 +13,12 @@ import bittensor as bt
 import jsonref
 import requests
 import torch
-import wandb
 from Crypto.Hash import keccak
 from loguru import logger
 from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
+
+import wandb
 
 
 def get_new_uuid():
@@ -329,3 +331,54 @@ def ttl_get_block(subtensor) -> int:
     Note: self here is the miner or validator instance
     """
     return subtensor.get_current_block()
+
+
+def get_current_utc_time_iso():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def set_expire_time(expire_in_seconds: int) -> str:
+    """
+    Sets the expiration time based on the current UTC time and the given number of seconds.
+
+    Args:
+        expire_in_seconds (int): The number of seconds from now when the expiration should occur.
+
+    Returns:
+        str: The expiration time in ISO 8601 format with 'Z' as the UTC indicator.
+    """
+    return (
+        (datetime.utcnow() + timedelta(seconds=expire_in_seconds))
+        .replace(microsecond=0, tzinfo=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def is_valid_expiry(expire_at: str) -> bool:
+    """
+    Checks if the given expiry time is not None and falls within a reasonable time period.
+
+    Args:
+        expire_at (str): The expiry time in ISO format.
+
+    Returns:
+        bool: True if the expiry time is valid, False otherwise.
+    """
+    if expire_at is None:
+        return False
+
+    try:
+        expiry_time = datetime.fromisoformat(expire_at)
+    except ValueError:
+        logger.error(f"Invalid expiry time format: {expire_at}")
+        return False
+
+    current_time = datetime.now(timezone.utc)
+    max_reasonable_time = current_time + timedelta(days=5)
+
+    if current_time <= expiry_time <= max_reasonable_time:
+        return True
+    else:
+        logger.warning(f"Expiry time {expire_at} is out of the reasonable range.")
+        return False

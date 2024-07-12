@@ -110,6 +110,9 @@ class FeedbackRequest(bt.Synapse):
     dojo_task_id: str | None = Field(
         description="Dojo task ID for the request", default=None
     )
+    expire_at: str | None = Field(
+        description="Expired time for Dojo task", default=None
+    )
 
 
 class ScoringResult(bt.Synapse):

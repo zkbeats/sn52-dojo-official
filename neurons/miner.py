@@ -100,6 +100,7 @@ class Miner(BaseMinerNeuron):
                 task_ids = await DojoAPI.create_task(synapse)
                 assert len(task_ids) == 1
                 synapse.dojo_task_id = task_ids[0]
+
             else:
                 logger.error("Unrecognized scoring method!")
         except Exception:
