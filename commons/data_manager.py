@@ -9,6 +9,7 @@ from loguru import logger
 from strenum import StrEnum
 
 from commons.objects import ObjectManager
+from commons.utils import get_current_utc_time_iso
 from template.protocol import DendriteQueryResponse, FeedbackRequest
 
 
@@ -16,6 +17,7 @@ class ValidatorStateKeys(StrEnum):
     SCORES = "scores"
     DOJO_TASKS_TO_TRACK = "dojo_tasks_to_track"
     MODEL_MAP = "model_map"
+    TASK_TO_EXPIRY = "task_to_expiry"
 
 
 class DataManager:
@@ -169,7 +171,9 @@ class DataManager:
             await DataManager._save_without_lock(path, new_data)
 
     @classmethod
-    async def validator_save(cls, scores, requestid_to_mhotkey_to_task_id, model_map):
+    async def validator_save(
+        cls, scores, requestid_to_mhotkey_to_task_id, model_map, task_to_expiry
+    ):
         """Saves the state of the validator to a file."""
         logger.debug("Attempting to save validator state.")
         async with cls._validator_lock:
@@ -185,6 +189,9 @@ class DataManager:
                         json.dumps(requestid_to_mhotkey_to_task_id)
                     ),
                     ValidatorStateKeys.MODEL_MAP: json.loads(json.dumps(model_map)),
+                    ValidatorStateKeys.TASK_TO_EXPIRY: json.loads(
+                        json.dumps(task_to_expiry)
+                    ),
                 },
                 cls.get_validator_state_filepath(),
             )
@@ -208,3 +215,45 @@ class DataManager:
             except Exception as e:
                 logger.error(f"Unexpected error: {e}")
                 return None
+
+    @staticmethod
+    async def remove_expired_tasks_from_storage():
+        # Load the current state
+        state_data = await DataManager.validator_load()
+        if not state_data:
+            logger.error("Failed to load validator state data for cleanup.")
+            return
+
+        # Identify expired tasks
+        current_time = get_current_utc_time_iso()
+        task_to_expiry = state_data.get(ValidatorStateKeys.TASK_TO_EXPIRY, {})
+        expired_tasks = [
+            task_id
+            for task_id, expiry_time in task_to_expiry.items()
+            if expiry_time < current_time
+        ]
+
+        # Remove expired tasks
+        for task_id in expired_tasks:
+            for request_id, hotkeys in list(
+                state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK].items()
+            ):
+                for hotkey, t_id in list(hotkeys.items()):
+                    if t_id == task_id:
+                        del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][
+                            request_id
+                        ][hotkey]
+                if not state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][request_id]:
+                    del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][request_id]
+            del task_to_expiry[task_id]
+
+        # Save the updated state
+        state_data[ValidatorStateKeys.TASK_TO_EXPIRY] = task_to_expiry
+        await DataManager.validator_save(
+            state_data[ValidatorStateKeys.SCORES],
+            state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK],
+            state_data[ValidatorStateKeys.MODEL_MAP],
+            task_to_expiry,
+        )
+
+        logger.info(f"Removed {len(expired_tasks)} expired tasks from DataManager.")

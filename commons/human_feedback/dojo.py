@@ -1,4 +1,3 @@
-import datetime
 import json
 from typing import Dict, List
 
@@ -6,7 +5,7 @@ import httpx
 from loguru import logger
 
 import template
-from commons.utils import loaddotenv
+from commons.utils import loaddotenv, set_expire_time
 from template import DOJO_API_BASE_URL
 from template.protocol import (
     FeedbackRequest,
@@ -106,19 +105,12 @@ class DojoAPI:
             else:
                 logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
 
-        json_body = {
+        expire_at = set_expire_time(template.TASK_DEADLINE)
+
+        form_body = {
             "title": ("", "LLM Code Generation Task"),
             "body": ("", ranking_request.prompt),
-            "expireAt": (
-                "",
-                (
-                    datetime.datetime.utcnow()
-                    + datetime.timedelta(seconds=template.TASK_DEADLINE)
-                )
-                .replace(microsecond=0, tzinfo=datetime.timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
-            ),
+            "expireAt": ("", expire_at),
             "taskData": ("", json.dumps([taskData])),
             "maxResults": ("", "1"),
         }
@@ -127,7 +119,7 @@ class DojoAPI:
 
         response = await cls._http_client.post(
             path,
-            files=json_body,
+            files=form_body,
             headers={
                 "x-api-key": DOJO_API_KEY,
             },
