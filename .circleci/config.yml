@@ -1,21 +1,15 @@
 version: 2.1
 
-# executors:
-#   docker-executor:
-#     docker:
-#       - image: docker:dind-rootless
-
 workflows:
   release:
     jobs:
+      - ruff-lint
       - release:
           filters:
             branches:
               only:
                 - main
-  # build:
-  #   jobs:
-  #     - build
+
 
 
 jobs:
@@ -31,3 +25,14 @@ jobs:
       - run:
           name: Run semantic release
           command: npx semantic-release
+
+  ruff-lint:
+    docker:
+      - image: cimg/python:3.11.9
+    steps:
+      - checkout
+      - run: pip install ruff
+      - run: rm -rf .ruff_cache
+      - run: ruff clean
+      - run: ruff --version
+      - run: ruff check . --config pyproject.toml --no-cache
