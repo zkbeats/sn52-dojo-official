@@ -1,8 +1,9 @@
 import argparse
 import os
 from pathlib import Path
-import bittensor as bt
 
+import bittensor as bt
+from loguru import logger
 
 logger_name = "named_logger"
 
@@ -17,7 +18,6 @@ def monkeypatch():
 
 monkeypatch()
 
-from loguru import logger
 
 base_path = Path.cwd()
 
@@ -28,13 +28,7 @@ def check_config(config: bt.config):
 
     log_dir = str(base_path / "logs")
     full_path = os.path.expanduser(
-        "{}/{}/{}/netuid{}/{}".format(
-            log_dir,
-            config.wallet.name,
-            config.wallet.hotkey,
-            config.netuid,
-            config.neuron.name,
-        )
+        f"{log_dir}/{config.wallet.name}/{config.wallet.hotkey}/netuid{config.netuid}/{config.neuron.name}"
     )
     config.neuron.full_path = os.path.expanduser(full_path)
     if not os.path.exists(config.neuron.full_path):
@@ -159,11 +153,6 @@ def add_args(parser):
             help="Method to use for scoring completions.",
             choices=[str(method) for method in ScoringMethod],
         )
-
-        args, unknown = parser.parse_known_args()
-        scoring_method = None
-        if known_args := vars(args):
-            scoring_method = known_args["scoring_method"]
 
 
 def get_config():

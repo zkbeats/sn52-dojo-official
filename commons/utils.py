@@ -1,4 +1,3 @@
-import copy
 import os
 import time
 import uuid
@@ -7,18 +6,16 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache, update_wrapper
 from math import floor
-from typing import Any, Callable, Tuple, Type, get_origin
+from typing import Any, Callable, Tuple
 
 import bittensor as bt
 import jsonref
 import requests
 import torch
+import wandb
 from Crypto.Hash import keccak
 from loguru import logger
-from pydantic import BaseModel
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
-
-import wandb
 
 
 def get_new_uuid():
@@ -208,41 +205,6 @@ def remove_key(input_dict, key, depth=0):
 
 def _resolve_references(json_str):
     return jsonref.loads(json_str)
-
-
-class PydanticUtils:
-    @staticmethod
-    def build_response_format(model: BaseModel):
-        """Build a response format for OpenAI API calls."""
-        schema = model.schema_json()
-        resolved_schema = copy.deepcopy(_resolve_references(schema))
-
-        if "definitions" in resolved_schema:
-            resolved_schema.pop("definitions")
-
-        resolved_schema = remove_key(resolved_schema, "title")
-        resolved_schema = remove_key(resolved_schema, "additionalProperties")
-        required = resolved_schema.get("required", [])
-        resolved_schema = remove_key(resolved_schema, "required")
-        resolved_schema["required"] = required
-        # return {"type": "json_object", "schema": resolved_schema}
-        return resolved_schema
-
-    @classmethod
-    def build_minimal_json(cls, model: Type[BaseModel]):
-        result = {}
-        for field_name, field in model.__fields__.items():
-            if get_origin(field.outer_type_) == list:
-                item_type = field.type_
-                if hasattr(item_type, "__fields__"):
-                    result[field_name] = [cls.build_minimal_json(item_type)]
-                else:
-                    result[field_name] = [field.field_info.description]
-            elif hasattr(field.type_, "__fields__"):
-                result[field_name] = cls.build_minimal_json(field.type_)
-            else:
-                result[field_name] = field.field_info.description
-        return result
 
 
 # LRU Cache with TTL

@@ -2,12 +2,12 @@ import asyncio
 from contextlib import asynccontextmanager
 
 import uvicorn
+import wandb
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-import wandb
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
 from commons.dataset.synthetic import SyntheticAPI
