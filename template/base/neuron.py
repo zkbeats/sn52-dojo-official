@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 
-from commons.objects import ObjectManager
-from commons.utils import initialise, ttl_get_block
+import bittensor as bt
 from loguru import logger
 
-import bittensor as bt
+from commons.objects import ObjectManager
+from commons.utils import initialise, ttl_get_block
 from template import __spec_version__ as spec_version
 
 

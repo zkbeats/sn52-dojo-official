@@ -1,16 +1,16 @@
+from enum import Enum
 from typing import List
 
-from substrateinterface import Keypair
-from enum import Enum
 import bittensor
 from bittensor.cli import (
     RegisterCommand,
-    RootRegisterCommand,
-    WalletBalanceCommand,
-    TransferCommand,
     RegisterSubnetworkCommand,
+    RootRegisterCommand,
     StakeCommand,
+    TransferCommand,
+    WalletBalanceCommand,
 )
+from substrateinterface import Keypair
 
 """
 - Uses special accounts (Alice, Bob, Charlie) as different roles

@@ -2,12 +2,12 @@ import argparse
 from pathlib import Path
 from typing import Callable, Dict
 
+import bittensor
 import requests
 from prompt_toolkit import PromptSession, prompt
 from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
 from rich.console import Console
 
-import bittensor
 from template import DOJO_API_BASE_URL
 
 console = Console()
