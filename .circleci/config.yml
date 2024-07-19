@@ -4,15 +4,48 @@ workflows:
   release:
     jobs:
       - ruff-lint
+      - setup-conda
+      - nox-compatibility-tests:
+          matrix:
+            parameters:
+              version: ["3.10", "3.11", "3.12"]
+          requires:
+            - setup-conda
+      - nox-unit-tests:
+          matrix:
+            parameters:
+              version: ["3.10", "3.11", "3.12"]
+          requires:
+            - setup-conda
       - release:
           filters:
             branches:
               only:
                 - main
 
-
-
 jobs:
+  setup-conda:
+    docker:
+      - image: cimg/python:3.11.9
+    steps:
+      - checkout
+      - run:
+          name: Install Miniconda
+          command: |
+            curl -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+            chmod +x ~/miniconda.sh
+            bash ~/miniconda.sh -b -p $HOME/miniconda
+            rm ~/miniconda.sh
+            echo 'export PATH=$HOME/miniconda/bin:$PATH' >> $BASH_ENV
+            source $BASH_ENV
+      - run:
+          name: Verify Conda Installation
+          command: conda --version
+      - save_cache:
+          key: v1-conda-cache
+          paths:
+            - $HOME/miniconda
+
   release:
     docker:
       - image: hoppr/semantic-release
@@ -36,3 +69,45 @@ jobs:
       - run: ruff clean
       - run: ruff --version
       - run: ruff check . --config pyproject.toml --no-cache
+
+  nox-compatibility-tests:
+    docker:
+      - image: cimg/python:3.11.9
+    parameters:
+      version:
+        type: string
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-conda-cache
+      - run:
+          name: Verify Conda Installation
+          command: source $BASH_ENV && conda --version
+      - run:
+          name: Install nox
+          command: source $BASH_ENV && pip install nox
+      - run:
+          name: Run Nox Compatibility Tests
+          command: source $BASH_ENV && nox -s compatibility
+
+  nox-unit-tests:
+    docker:
+      - image: cimg/python:3.11.9
+        environment:
+          DOJO_API_BASE_URL: "***REMOVED***"
+    parameters:
+      version:
+        type: string
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-conda-cache
+      - run:
+          name: Verify Conda Installation
+          command: source $BASH_ENV && conda --version
+      - run:
+          name: Install nox
+          command: source $BASH_ENV && pip install nox
+      - run:
+          name: Run Nox Unit Tests
+          command: source $BASH_ENV && nox -s unit_tests
