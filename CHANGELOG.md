@@ -1,3 +1,11 @@
+## [2.2.1](https://github.com/tensorplex-labs/dojo/compare/v2.2.0...v2.2.1) (2024-07-22)
+
+
+### Bug Fixes
+
+* Disabled circleci and enabled github actions ([e530318](https://github.com/tensorplex-labs/dojo/commit/e530318515b2cebb99f2dbc7525831fb904b006e))
+* updated folders ([bcc19f9](https://github.com/tensorplex-labs/dojo/commit/bcc19f97345e21e9aad5a12f864e157136396190))
+
 # [2.2.0](https://github.com/tensorplex-labs/dojo/compare/v2.1.1...v2.2.0) (2024-07-12)
 
 
