@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/tensorplex-labs/dojo/compare/v2.2.1...v2.2.2) (2024-07-22)
+
+
+### Bug Fixes
+
+* replace github token with PAT ([727b1e3](https://github.com/tensorplex-labs/dojo/commit/727b1e3c2ad31ebb4b9cd403a909b5a80625fc39))
+
 ## [2.2.1](https://github.com/tensorplex-labs/dojo/compare/v2.2.0...v2.2.1) (2024-07-22)
 
 
