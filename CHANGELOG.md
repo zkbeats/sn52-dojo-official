@@ -1,3 +1,10 @@
+## [2.2.3](https://github.com/tensorplex-labs/dojo/compare/v2.2.2...v2.2.3) (2024-07-22)
+
+
+### Bug Fixes
+
+* reverted to github token ([e73d00b](https://github.com/tensorplex-labs/dojo/commit/e73d00be4b6fc8d63d8e41db326d34fe71fd9831))
+
 ## [2.2.2](https://github.com/tensorplex-labs/dojo/compare/v2.2.1...v2.2.2) (2024-07-22)
 
 
