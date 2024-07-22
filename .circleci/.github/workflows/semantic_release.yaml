@@ -1,0 +1,29 @@
+name: Run Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    name: Release
+    runs-on: self-hosted
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18.17.0'
+      - name: Action For Semantic Release
+        uses: cycjimmy/semantic-release-action@v4.1.0
+        with:
+          branch: main
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+            @semantic-release/github
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

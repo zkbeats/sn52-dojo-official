@@ -1,38 +1,36 @@
-version: 2.1
+# version: 2.1
 
-workflows:
-  release:
-    jobs:
-      - ruff-lint
-      - release:
-          filters:
-            branches:
-              only:
-                - main
+# workflows:
+#   release:
+#     jobs:
+#       - ruff-lint
+#       - release:
+#           filters:
+#             branches:
+#               only:
+#                 - main
 
+# jobs:
+#   release:
+#     docker:
+#       - image: hoppr/semantic-release
+#     resource_class: tensorplex/standard
+#     steps:
+#       - checkout
+#       - run:
+#           name: Install Semantic Release plugins
+#           command: npm install -g -D semantic-release @semantic-release/{git,github,changelog}
+#       - run:
+#           name: Run semantic release
+#           command: npx semantic-release
 
-
-jobs:
-  release:
-    docker:
-      - image: hoppr/semantic-release
-    resource_class: tensorplex/standard
-    steps:
-      - checkout
-      - run:
-          name: Install Semantic Release plugins
-          command: npm install -g -D semantic-release @semantic-release/{git,github,changelog}
-      - run:
-          name: Run semantic release
-          command: npx semantic-release
-
-  ruff-lint:
-    docker:
-      - image: cimg/python:3.11.9
-    steps:
-      - checkout
-      - run: pip install ruff
-      - run: rm -rf .ruff_cache
-      - run: ruff clean
-      - run: ruff --version
-      - run: ruff check . --config pyproject.toml --no-cache
+#   ruff-lint:
+#     docker:
+#       - image: cimg/python:3.11.9
+#     steps:
+#       - checkout
+#       - run: pip install ruff
+#       - run: rm -rf .ruff_cache
+#       - run: ruff clean
+#       - run: ruff --version
+#       - run: ruff check . --config pyproject.toml --no-cache

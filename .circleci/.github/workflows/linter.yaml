@@ -1,0 +1,28 @@
+name: Run Linter
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - staging
+      - main
+
+jobs:
+  lint:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5.1.1      
+        with:
+          python-version: '3.11'
+
+      - name: Pipx
+        uses: CfirTsabari/actions-pipx@v1.0.2
+            
+      - uses: chartboost/ruff-action@v1
+        with:
+          version: 0.4.10
+          args: 'check . --config pyproject.toml --no-cache'
