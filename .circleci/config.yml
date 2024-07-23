@@ -1,5 +1,10 @@
 version: 2.1
 
+executors:
+  python-executor:
+    docker:
+      - image: cimg/python:3.11.9
+
 workflows:
   release:
     jobs:
@@ -7,14 +12,12 @@ workflows:
       - setup-conda
       - nox-compatibility-tests:
           matrix:
-            parameters:
-              version: ["3.10", "3.11", "3.12"]
+            version: ["3.10", "3.11", "3.12"]
           requires:
             - setup-conda
       - nox-unit-tests:
           matrix:
-            parameters:
-              version: ["3.10", "3.11", "3.12"]
+            version: ["3.10", "3.11", "3.12"]
           requires:
             - setup-conda
       - release:
@@ -25,8 +28,7 @@ workflows:
 
 jobs:
   setup-conda:
-    docker:
-      - image: cimg/python:3.11.9
+    executor: python-executor
     steps:
       - checkout
       - run:
@@ -60,8 +62,7 @@ jobs:
           command: npx semantic-release
 
   ruff-lint:
-    docker:
-      - image: cimg/python:3.11.9
+    executor: python-executor
     steps:
       - checkout
       - run: pip install ruff
@@ -71,8 +72,7 @@ jobs:
       - run: ruff check . --config pyproject.toml --no-cache
 
   nox-compatibility-tests:
-    docker:
-      - image: cimg/python:3.11.9
+    executor: python-executor
     parameters:
       version:
         type: string
@@ -80,6 +80,9 @@ jobs:
       - checkout
       - restore_cache:
           key: v1-conda-cache
+      - run:
+          name: Set Python Version
+          command: pyenv global << parameters.version >>
       - run:
           name: Verify Conda Installation
           command: source $BASH_ENV && conda --version
@@ -91,17 +94,19 @@ jobs:
           command: source $BASH_ENV && nox -s compatibility
 
   nox-unit-tests:
-    docker:
-      - image: cimg/python:3.11.9
-        environment:
-          DOJO_API_BASE_URL: "***REMOVED***"
+    executor: python-executor
     parameters:
       version:
         type: string
+    environment:
+      DOJO_API_BASE_URL: "***REMOVED***"
     steps:
       - checkout
       - restore_cache:
           key: v1-conda-cache
+      - run:
+          name: Set Python Version
+          command: pyenv global << parameters.version >>
       - run:
           name: Verify Conda Installation
           command: source $BASH_ENV && conda --version
