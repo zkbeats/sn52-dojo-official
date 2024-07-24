@@ -74,6 +74,10 @@ def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
     return np.array(gt)
 
 
+# def minmax_scale(arr: np.ndarray) -> np.ndarray:
+#     return (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
+
+
 class Scoring:
     @staticmethod
     def consensus_score(
@@ -228,18 +232,29 @@ class Scoring:
         # num_nans = np.sum(np.isnan(spearman))
 
         # calculate MSE between each rater and the mean, lower is better
-        mse = -1 * np.mean((miner_outputs - avg) ** 2, axis=1)
-        mse_norm = F.softmax(torch.tensor(mse), dim=0)
-        icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
-        combined = F.softmax(icc_norm + mse_norm, dim=0)
+        # use negative sign to penalize higher mse
+        mse = np.mean((miner_outputs - avg) ** 2, axis=1)
+        mse_reward = -1 * mse
+        # mse_reward_norm = minmax_scale(mse_reward.T).T
+        mse_reward_norm = F.softmax(torch.tensor(mse_reward), dim=0)
+        logger.debug(f"MSE raw: {mse}")
+        logger.debug(f"MSE reward: {mse_reward_norm}")
+        logger.debug(f"MSE normalized: {mse_reward_norm}")
 
-        logger.debug(f"MSE: {mse_norm}")
-        logger.debug(f"ICC: {icc_norm}")
-        logger.debug(f"Combined: {combined}")
+        # set these in case of NaN values in ICC
+        icc_norm = torch.zeros(size=mse.shape)
+        overall_score = F.softmax(mse_reward_norm, dim=0)
+        if np.isnan(icc_arr).any():
+            logger.warning("ICC array contains NaN values, using just MSE instead")
+        else:
+            icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
+            overall_score = F.softmax(icc_norm + mse_reward_norm, dim=0)
+            logger.debug(f"ICC normalized: {icc_norm}")
+        logger.debug(f"Overall consensus score: {overall_score}")
 
         return ConsensusScore(
-            score=combined,
-            mse_by_miner=mse_norm,
+            score=overall_score,
+            mse_by_miner=mse_reward_norm,
             icc_by_miner=icc_norm,
         )
 
