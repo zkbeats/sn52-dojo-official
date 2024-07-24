@@ -8,6 +8,7 @@ import torch
 from attr import define, field
 from loguru import logger
 from pydantic import BaseModel, Field
+from sklearn.preprocessing import minmax_scale
 from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_leaderboard_scores
@@ -215,12 +216,7 @@ class Scoring:
             # take ICC(2,1)
             icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
             icc_arr.append(icc2_value)
-        icc_arr: np.ndarray = np.array(icc_arr)
-
-        logger.info(f"ICC: {icc_arr}")
-
-        if np.isnan(icc_arr).all():
-            logger.warning("ICC array is all NaN.")
+        icc_arr: torch.Tensor = torch.tensor(np.array(icc_arr))
 
         # only use this for ordinal data
         # spearman = np.array(
@@ -231,31 +227,37 @@ class Scoring:
         # )
         # num_nans = np.sum(np.isnan(spearman))
 
-        # calculate MSE between each rater and the mean, lower is better
         # use negative sign to penalize higher mse
-        mse = np.mean((miner_outputs - avg) ** 2, axis=1)
-        mse_reward = -1 * mse
-        # mse_reward_norm = minmax_scale(mse_reward.T).T
-        mse_reward_norm = F.softmax(torch.tensor(mse_reward), dim=0)
+        mse = torch.tensor(np.mean(np.abs(miner_outputs - avg) ** 2, axis=1))
         logger.debug(f"MSE raw: {mse}")
-        logger.debug(f"MSE reward: {mse_reward_norm}")
+        logger.info(f"ICC raw: {icc_arr}")
+        if not np.isnan(icc_arr).any():
+            icc_norm = torch.tensor(minmax_scale(icc_arr.numpy(), axis=0))
+            logger.debug(f"ICC normalized: {icc_norm}")
+            return ConsensusScore(
+                score=icc_norm,
+                mse_by_miner=mse,
+                icc_by_miner=icc_arr,
+            )
+
+        logger.warning("ICC array contains NaN values, using just MSE instead")
+
+        mse_reward = -1 * mse
+        mse_reward_norm = torch.tensor(minmax_scale(mse_reward.numpy(), axis=0))
+
+        # # edge case where all miners provide the same rating
+        # if torch.all(mse_reward_norm == 0):
+        #     logger.warning("MSE reward normalization resulted in all zeros.")
+        #     reward_per_miner = 1 / len(miner_outputs)
+        #     mse_reward_norm = torch.full_like(mse_reward_norm, reward_per_miner)
+
+        logger.debug(f"MSE reward: {mse_reward}")
         logger.debug(f"MSE normalized: {mse_reward_norm}")
 
-        # set these in case of NaN values in ICC
-        icc_norm = torch.zeros(size=mse.shape)
-        overall_score = F.softmax(mse_reward_norm, dim=0)
-        if np.isnan(icc_arr).any():
-            logger.warning("ICC array contains NaN values, using just MSE instead")
-        else:
-            icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
-            overall_score = F.softmax(icc_norm + mse_reward_norm, dim=0)
-            logger.debug(f"ICC normalized: {icc_norm}")
-        logger.debug(f"Overall consensus score: {overall_score}")
-
         return ConsensusScore(
-            score=overall_score,
-            mse_by_miner=mse_reward_norm,
-            icc_by_miner=icc_norm,
+            score=mse_reward_norm,
+            mse_by_miner=mse,
+            icc_by_miner=icc_arr,
         )
 
     @staticmethod
