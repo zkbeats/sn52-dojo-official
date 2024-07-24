@@ -87,10 +87,24 @@ def mock_scoring_data_all_same_scores() -> TestData:
 
 
 class TestConsensusScoring(unittest.TestCase):
-    def test_consensus_no_exceptions(self):
+    def test_consensus_normal_data(self):
         test_data = mock_scoring_data_normal()
         request, miner_responses = test_data.request, test_data.miner_responses
-        Scoring.consensus_score(request.criteria_types[0], request, miner_responses)
+        score: ConsensusScore = Scoring.consensus_score(
+            request.criteria_types[0], request, miner_responses
+        )
+
+        self.assertIsNotNone(score, "score should not be None")
+        self.assertFalse(
+            np.isnan(score.score).any(), "overall score does not contain NaN values"
+        )
+        self.assertTrue(
+            np.count_nonzero(score.mse_by_miner) != 0, "MSE is not all zeros"
+        )
+        self.assertTrue(
+            not np.isnan(score.icc_by_miner).any(),
+            "ICC does not contain any NaN values",
+        )
 
     def test_consensus_same_scores(self):
         """Used to test that both miners have provided the same scores"""
@@ -102,5 +116,13 @@ class TestConsensusScoring(unittest.TestCase):
 
         self.assertIsNotNone(score, "score should not be None")
         self.assertFalse(
-            np.isnan(score.score).any(), "overall score contains NaN values"
+            np.isnan(score.score).any(), "overall score does not contain NaN values"
+        )
+        self.assertTrue(
+            np.count_nonzero(score.mse_by_miner) == 0,
+            "MSE is all zeros since miners provide the same score",
+        )
+        self.assertTrue(
+            np.isnan(score.icc_by_miner).any(),
+            "ICC should contain NaN values for when there is zero variance between miners ratings",
         )
