@@ -9,7 +9,6 @@ from attr import define, field
 from loguru import logger
 from pydantic import BaseModel, Field
 from sklearn.preprocessing import minmax_scale
-from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
@@ -307,12 +306,12 @@ class Scoring:
         diff_gt = torch.tensor(
             -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
         )
-        logger.trace(f"{diff_gt=}")
-        diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
-        logger.trace(f"{diff_gt_sm=}")
+        logger.debug(f"{diff_gt=}")
+        diff_gt_norm = minmax_scale(diff_gt.numpy(), axis=0)
+        logger.debug(f"{diff_gt_norm=}")
 
         return GroundTruthScore(
-            score=diff_gt_sm,
+            score=torch.tensor(diff_gt_norm),
             raw_scores_by_miner=diff_gt,
         )
 
