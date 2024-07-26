@@ -1,18 +1,39 @@
-import unittest
-
 import bittensor as bt
-
-from commons.scoring import Scoring
-from template.protocol import (
-    CodeAnswer,
-    FeedbackRequest,
-    MultiScoreCriteria,
-    Response,
-    TaskType,
-)
+import pytest
 
 
-def prepare_multi_score():
+@pytest.fixture
+def scoring_module(mock_env_var):
+    # ensure we import them depending on mock_env_var so the ValueError doesn't
+    # get raised
+    from commons.scoring import Scoring
+    from template.protocol import (
+        CodeAnswer,
+        FeedbackRequest,
+        MultiScoreCriteria,
+        Response,
+        TaskType,
+    )
+
+    return (
+        Scoring,
+        FeedbackRequest,
+        CodeAnswer,
+        MultiScoreCriteria,
+        Response,
+        TaskType,
+    )
+
+
+def prepare_multi_score(scoring_module):
+    from template.protocol import (
+        CodeAnswer,
+        FeedbackRequest,
+        MultiScoreCriteria,
+        Response,
+        TaskType,
+    )
+
     request = FeedbackRequest(
         prompt="Write a hello world program in python",
         task_type=TaskType.CODE_GENERATION,
@@ -180,17 +201,11 @@ def prepare_multi_score():
     return request, [miner_a, miner_b]
 
 
-class TestConsensusScoring(unittest.TestCase):
-    def setUp(self):
-        self.same_score_responses = prepare_multi_score()
+def test_consensus_no_exceptions(scoring_module):
+    try:
+        from commons.scoring import Scoring
 
-    def test_consensus_no_exceptions(self):
-        try:
-            request, miner_responses = prepare_multi_score()
-            Scoring.consensus_score(request.criteria_types[0], request, miner_responses)
-        except Exception as e:
-            self.fail(f"consensus_score raised an exception: {e}")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        request, miner_responses = prepare_multi_score(scoring_module)
+        Scoring.consensus_score(request.criteria_types[0], request, miner_responses)
+    except Exception as e:
+        pytest.fail(f"consensus_score raised an exception: {e}")
