@@ -1,3 +1,25 @@
+## [2.2.3](https://github.com/tensorplex-labs/dojo/compare/v2.2.2...v2.2.3) (2024-07-22)
+
+
+### Bug Fixes
+
+* reverted to github token ([e73d00b](https://github.com/tensorplex-labs/dojo/commit/e73d00be4b6fc8d63d8e41db326d34fe71fd9831))
+
+## [2.2.2](https://github.com/tensorplex-labs/dojo/compare/v2.2.1...v2.2.2) (2024-07-22)
+
+
+### Bug Fixes
+
+* replace github token with PAT ([727b1e3](https://github.com/tensorplex-labs/dojo/commit/727b1e3c2ad31ebb4b9cd403a909b5a80625fc39))
+
+## [2.2.1](https://github.com/tensorplex-labs/dojo/compare/v2.2.0...v2.2.1) (2024-07-22)
+
+
+### Bug Fixes
+
+* Disabled circleci and enabled github actions ([e530318](https://github.com/tensorplex-labs/dojo/commit/e530318515b2cebb99f2dbc7525831fb904b006e))
+* updated folders ([bcc19f9](https://github.com/tensorplex-labs/dojo/commit/bcc19f97345e21e9aad5a12f864e157136396190))
+
 # [2.2.0](https://github.com/tensorplex-labs/dojo/compare/v2.1.1...v2.2.0) (2024-07-12)
 
 

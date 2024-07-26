@@ -1,98 +1,97 @@
-version: 2.1
+# version: 2.1
 
-workflows:
-  release:
-    jobs:
-      - ruff-lint
-      - nox-compatibility-tests:
-          matrix:
-            parameters:
-              version: ["3.10", "3.11", "3.12"]
-      - nox-unit-tests:
-          matrix:
-            parameters:
-              version: ["3.10", "3.11", "3.12"]
-      - release:
-          filters:
-            branches:
-              only:
-                - main
+# workflows:
+#   release:
+#     jobs:
+#       - ruff-lint
+#       - nox-compatibility-tests:
+#           matrix:
+#             parameters:
+#               version: ["3.10", "3.11", "3.12"]
+#       - nox-unit-tests:
+#           matrix:
+#             parameters:
+#               version: ["3.10", "3.11", "3.12"]
+#       - release:
+#           filters:
+#             branches:
+#               only:
+#                 - main
 
-jobs:
-  release:
-    docker:
-      - image: hoppr/semantic-release
-    resource_class: tensorplex/standard
-    steps:
-      - checkout
-      - run:
-          name: Install Semantic Release plugins
-          command: npm install -g -D semantic-release @semantic-release/{git,github,changelog}
-      - run:
-          name: Run semantic release
-          command: npx semantic-release
+# jobs:
+#   release:
+#     docker:
+#       - image: hoppr/semantic-release
+#     resource_class: tensorplex/standard
+#     steps:
+#       - checkout
+#       - run:
+#           name: Install Semantic Release plugins
+#           command: npm install -g -D semantic-release @semantic-release/{git,github,changelog}
+#       - run:
+#           name: Run semantic release
+#           command: npx semantic-release
+#   ruff-lint:
+#     docker:
+#       - image: cimg/python:3.11.9
+#     steps:
+#       - checkout
+#       - run: pip install ruff
+#       - run: rm -rf .ruff_cache
+#       - run: ruff clean
+#       - run: ruff --version
+#       - run: ruff check . --config pyproject.toml --no-cache
 
-  ruff-lint:
-    docker:
-      - image: cimg/python:3.11.9
-    steps:
-      - checkout
-      - run: pip install ruff
-      - run: rm -rf .ruff_cache
-      - run: ruff clean
-      - run: ruff --version
-      - run: ruff check . --config pyproject.toml --no-cache
+#   nox-compatibility-tests:
+#     docker:
+#       - image: cimg/python:3.11.9
+#     parameters:
+#       version:
+#         type: string
+#     steps:
+#       - checkout
+#       - run:
+#           name: Install Miniconda
+#           command: |
+#             curl -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+#             chmod +x ~/miniconda.sh
+#             bash ~/miniconda.sh -b -p $HOME/miniconda
+#             rm ~/miniconda.sh
+#             echo 'export PATH=$HOME/miniconda/bin:$PATH' >> $BASH_ENV
+#             source $BASH_ENV
+#       - run:
+#           name: Check Conda Installation
+#           command: conda --version
+#       - run:
+#           name: Install nox
+#           command: pip install nox
+#       - run:
+#           name: Run nox tests for Python
+#           command: nox -s compatibility
 
-  nox-compatibility-tests:
-    docker:
-      - image: cimg/python:3.11.9
-    parameters:
-      version:
-        type: string
-    steps:
-      - checkout
-      - run:
-          name: Install Miniconda
-          command: |
-            curl -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-            chmod +x ~/miniconda.sh
-            bash ~/miniconda.sh -b -p $HOME/miniconda
-            rm ~/miniconda.sh
-            echo 'export PATH=$HOME/miniconda/bin:$PATH' >> $BASH_ENV
-            source $BASH_ENV
-      - run:
-          name: Check Conda Installation
-          command: conda --version
-      - run:
-          name: Install nox
-          command: pip install nox
-      - run:
-          name: Run nox tests for Python
-          command: nox -s compatibility
-
-  nox-unit-tests:
-    docker:
-      - image: cimg/python:3.11.9
-        environment:
-          DOJO_API_BASE_URL: "***REMOVED***"
-    parameters:
-      version:
-        type: string
-    steps:
-      - checkout
-      - run:
-          name: Install Miniconda
-          command: |
-            curl -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-            chmod +x ~/miniconda.sh
-            bash ~/miniconda.sh -b -p $HOME/miniconda
-            rm ~/miniconda.sh
-            echo 'export PATH=$HOME/miniconda/bin:$PATH' >> $BASH_ENV
-            echo 'here $BASH_ENV'
-            source $BASH_ENV
-      - run:
-          name: Install nox
-          command: pip install nox
-      - run:
-          name: Run nox tests for Python
-          command: nox -s unit_tests
+#   nox-unit-tests:
+#     docker:
+#       - image: cimg/python:3.11.9
+#         environment:
+#           DOJO_API_BASE_URL: "***REMOVED***"
+#     parameters:
+#       version:
+#         type: string
+#     steps:
+#       - checkout
+#       - run:
+#           name: Install Miniconda
+#           command: |
+#             curl -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+#             chmod +x ~/miniconda.sh
+#             bash ~/miniconda.sh -b -p $HOME/miniconda
+#             rm ~/miniconda.sh
+#             echo 'export PATH=$HOME/miniconda/bin:$PATH' >> $BASH_ENV
+#             echo 'here $BASH_ENV'
+#             source $BASH_ENV
+#       - run:
+#           name: Install nox
+#           command: pip install nox
+#       - run:
+#           name: Run nox tests for Python
+#           command: nox -s unit_tests
