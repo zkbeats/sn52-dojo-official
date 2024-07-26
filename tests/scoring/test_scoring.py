@@ -1,5 +1,6 @@
 import unittest
 from dataclasses import dataclass
+from unittest.mock import patch
 
 import bittensor as bt
 import numpy as np
@@ -90,21 +91,29 @@ class TestConsensusScoring(unittest.TestCase):
     def test_consensus_normal_data(self):
         test_data = mock_scoring_data_normal()
         request, miner_responses = test_data.request, test_data.miner_responses
-        score: ConsensusScore = Scoring.consensus_score(
-            request.criteria_types[0], request, miner_responses
-        )
+        for criteria in request.criteria_types:
+            score: ConsensusScore = Scoring.consensus_score(
+                criteria, request, miner_responses
+            )
 
-        self.assertIsNotNone(score, "score should not be None")
-        self.assertFalse(
-            np.isnan(score.score).any(), "overall score does not contain NaN values"
-        )
-        self.assertTrue(
-            np.count_nonzero(score.mse_by_miner) != 0, "MSE is not all zeros"
-        )
-        self.assertTrue(
-            not np.isnan(score.icc_by_miner).any(),
-            "ICC does not contain any NaN values",
-        )
+            self.assertIsNotNone(score, "score should not be None")
+            self.assertFalse(
+                np.isnan(score.score).any(), "overall score does not contain NaN values"
+            )
+            self.assertFalse(
+                np.isinf(score.score).any(), "overall score does not contain inf values"
+            )
+            self.assertTrue(
+                np.count_nonzero(score.mse_by_miner) != 0, "MSE is not all zeros"
+            )
+            self.assertTrue(
+                not np.isnan(score.icc_by_miner).any(),
+                "ICC does not contain any NaN values",
+            )
+            self.assertTrue(
+                not np.isinf(score.icc_by_miner).any(),
+                "ICC does not contain any inf values",
+            )
 
     def test_consensus_same_scores(self):
         """Used to test that both miners have provided the same scores"""
@@ -118,6 +127,9 @@ class TestConsensusScoring(unittest.TestCase):
         self.assertFalse(
             np.isnan(score.score).any(), "overall score does not contain NaN values"
         )
+        self.assertFalse(
+            np.isinf(score.score).any(), "overall score does not contain inf values"
+        )
         self.assertTrue(
             np.count_nonzero(score.mse_by_miner) == 0,
             "MSE is all zeros since miners provide the same score",
@@ -126,3 +138,48 @@ class TestConsensusScoring(unittest.TestCase):
             np.isnan(score.icc_by_miner).any(),
             "ICC should contain NaN values for when there is zero variance between miners ratings",
         )
+
+
+class TestGroundTruthScoring(unittest.TestCase):
+    @patch("commons.scoring.get_leaderboard_scores")
+    def test_ground_truth_normal_data(self, mock_get_leaderboard_scores):
+        mock_scores = [
+            ("anthropic/claude-3-haiku-20240307", 68.9),
+            ("anthropic/claude-3-opus-20240229", 77.4),
+            ("anthropic/claude-3-sonnet-20240229", 64.0),
+            ("meta-llama/llama-3-8b-instruct", 56.7),
+        ]
+        mock_get_leaderboard_scores.return_value = mock_scores
+
+        test_data = mock_scoring_data_normal()
+        request, miner_responses = test_data.request, test_data.miner_responses
+
+        for criteria in request.criteria_types:
+            gt_score = Scoring.cmp_ground_truth(criteria, request, miner_responses)
+            self.assertIsNotNone(gt_score)
+
+            mock_get_leaderboard_scores.assert_called_once_with(
+                [
+                    "anthropic/claude-3-haiku-20240307",
+                    "anthropic/claude-3-opus-20240229",
+                    "anthropic/claude-3-sonnet-20240229",
+                    "meta-llama/llama-3-8b-instruct",
+                ]
+            )
+
+            self.assertFalse(
+                np.isnan(gt_score.score).any(),
+                "overall score does not contain NaN values",
+            )
+            self.assertFalse(
+                np.isinf(gt_score.score).any(),
+                "overall score does not contain inf values",
+            )
+            self.assertFalse(
+                np.isnan(gt_score.raw_scores_by_miner).any(),
+                "overall score does not contain NaN values",
+            )
+            self.assertFalse(
+                np.isinf(gt_score.raw_scores_by_miner).any(),
+                "overall score does not contain inf values",
+            )
