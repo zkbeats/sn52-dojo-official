@@ -8,7 +8,7 @@ import torch
 from attr import define, field
 from loguru import logger
 from pydantic import BaseModel, Field
-from sklearn.preprocessing import minmax_scale
+from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
@@ -72,10 +72,6 @@ def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
     elif isinstance(criteria, MultiScoreCriteria):
         gt = [score for _, score in model_with_score_sorted]
     return np.array(gt)
-
-
-# def minmax_scale(arr: np.ndarray) -> np.ndarray:
-#     return (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
 
 
 class Scoring:
@@ -215,6 +211,7 @@ class Scoring:
             # take ICC(2,1)
             icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
             icc_arr.append(icc2_value)
+        # already in the range [0, 1]
         icc_arr: torch.Tensor = torch.tensor(np.array(icc_arr))
 
         # only use this for ordinal data
@@ -226,23 +223,20 @@ class Scoring:
         # )
         # num_nans = np.sum(np.isnan(spearman))
 
-        # use negative sign to penalize higher mse
         mse = torch.tensor(np.mean(np.abs(miner_outputs - avg) ** 2, axis=1))
         logger.debug(f"MSE raw: {mse}")
         logger.info(f"ICC raw: {icc_arr}")
         if not np.isnan(icc_arr).any():
-            icc_norm = torch.tensor(minmax_scale(icc_arr.numpy(), axis=0))
-            logger.debug(f"ICC normalized: {icc_norm}")
             return ConsensusScore(
-                score=icc_norm,
+                score=torch.tensor(icc_arr),
                 mse_by_miner=mse,
                 icc_by_miner=icc_arr,
             )
 
         logger.warning("ICC array contains NaN values, using just MSE instead")
 
-        mse_reward = -1 * mse
-        mse_reward_norm = torch.tensor(minmax_scale(mse_reward.numpy(), axis=0))
+        # use negative sign to penalize higher mse
+        mse_reward = F.softmax(-1 * mse, dim=0)
 
         # # edge case where all miners provide the same rating
         # if torch.all(mse_reward_norm == 0):
@@ -251,10 +245,10 @@ class Scoring:
         #     mse_reward_norm = torch.full_like(mse_reward_norm, reward_per_miner)
 
         logger.debug(f"MSE reward: {mse_reward}")
-        logger.debug(f"MSE normalized: {mse_reward_norm}")
+        logger.debug(f"MSE normalized: {mse_reward}")
 
         return ConsensusScore(
-            score=mse_reward_norm,
+            score=mse_reward,
             mse_by_miner=mse,
             icc_by_miner=icc_arr,
         )
@@ -307,11 +301,11 @@ class Scoring:
             -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
         )
         logger.debug(f"{diff_gt=}")
-        diff_gt_norm = minmax_scale(diff_gt.numpy(), axis=0)
-        logger.debug(f"{diff_gt_norm=}")
+        gt_reward = F.softmax(diff_gt, dim=0)
+        logger.debug(f"{gt_reward=}")
 
         return GroundTruthScore(
-            score=torch.tensor(diff_gt_norm),
+            score=torch.tensor(gt_reward),
             raw_scores_by_miner=diff_gt,
         )
 
