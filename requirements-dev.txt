@@ -1,4 +1,0 @@
-commitizen
-curlify2
-pytest
-ruff
