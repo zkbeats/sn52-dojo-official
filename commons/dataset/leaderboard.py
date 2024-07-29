@@ -82,6 +82,12 @@ def get_leaderboard_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
 
         scores[i] = score
 
+    # throw valueerror if any of scores is None
+    if any(score is None for score in scores):
+        raise ValueError(
+            f"Scores: {scores} cannot contain None values, models: {models}"
+        )
+
     return zip(models, scores)
 
 
