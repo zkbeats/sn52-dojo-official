@@ -189,10 +189,72 @@ def test_ground_truth_leaderboard_data_normal(mock_get_leaderboard_scores):
 
 
 @pytest.mark.skip(reason="Placeholder test, not implemented yet")
-def test_ground_truth_leaderboard_data_missing():
-    pass
-
-
-@pytest.mark.skip(reason="Placeholder test, not implemented yet")
 def test_ground_truth_state_missing():
     pass
+
+
+@patch("commons.dataset.leaderboard.get_leaderboard_data")
+def test_cmp_ground_truth_missing_data(mock_get_leaderboard_data_func):
+    from commons.scoring import Scoring
+
+    # mock leaderboard data, purposely omit llama 8b which is inside `mock_request`
+    mock_leaderboard_data = {
+        "claude-2 (Mar 2024)": {
+            "link": "https://www.anthropic.com/news/claude-2",
+            "open-data": "NONE",
+            "pass@1": {
+                "humaneval": 69.5,
+                "humaneval+": 61.6,
+                "mbpp": None,
+                "mbpp+": None,
+            },
+            "prompted": True,
+            "size": None,
+        },
+        "claude-3-haiku (Mar 2024)": {
+            "link": "https://www.anthropic.com/news/claude-3-family",
+            "open-data": "NONE",
+            "pass@1": {
+                "humaneval": 76.8,
+                "humaneval+": 68.9,
+                "mbpp": 80.2,
+                "mbpp+": 68.8,
+            },
+            "prompted": True,
+            "size": None,
+        },
+        "claude-3-opus (Mar 2024)": {
+            "link": "https://www.anthropic.com/news/claude-3-family",
+            "open-data": "NONE",
+            "pass@1": {
+                "humaneval": 82.9,
+                "humaneval+": 77.4,
+                "mbpp": 89.4,
+                "mbpp+": 73.3,
+            },
+            "prompted": True,
+            "size": None,
+        },
+        "claude-3-sonnet (Mar 2024)": {
+            "link": "https://www.anthropic.com/news/claude-3-family",
+            "open-data": "NONE",
+            "pass@1": {
+                "humaneval": 70.7,
+                "humaneval+": 64,
+                "mbpp": 83.6,
+                "mbpp+": 69.3,
+            },
+            "prompted": True,
+            "size": None,
+        },
+    }
+    mock_get_leaderboard_data_func.return_value = mock_leaderboard_data
+
+    request, miner_responses = mock_scoring_data_normal()
+
+    for criteria in request.criteria_types:
+        # test that it raises a ValueError when data is missing
+        with pytest.raises(ValueError, match=".*cannot contain None values.*"):
+            Scoring.cmp_ground_truth(criteria, request, miner_responses)
+
+    mock_get_leaderboard_data_func.assert_called_once()

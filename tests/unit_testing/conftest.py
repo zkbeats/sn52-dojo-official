@@ -1,3 +1,5 @@
+import json
+import os
 from unittest.mock import patch
 
 import pytest
@@ -15,3 +17,24 @@ def mock_env_var(monkeypatch):
     from template import __version__
 
     assert __version__ == "1.0.0"
+
+
+@pytest.fixture
+def mock_evalplus_leaderboard_results():
+    fixture_path = os.path.join(
+        os.path.dirname(__file__), "..", "fixtures", "evalplus_leaderboard_results.json"
+    )
+    with open(fixture_path) as f:
+        mock_data = json.load(f)
+
+    expected_keys = [
+        "claude-2 (Mar 2024)",
+        "claude-3-haiku (Mar 2024)",
+        "claude-3-opus (Mar 2024)",
+        "claude-3-sonnet (Mar 2024)",
+    ]
+    assert all(
+        key in mock_data for key in expected_keys
+    ), f"Missing one or more expected keys in the fixture data. Expected keys: {expected_keys}"
+
+    return mock_data
