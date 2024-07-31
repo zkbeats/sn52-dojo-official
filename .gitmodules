@@ -4,3 +4,6 @@
 [submodule "dojo-ui"]
 	path = dojo-ui
 	url = git@github.com:tensorplex-labs/dojo-ui.git
+[submodule "dojo-worker-api"]
+	path = dojo-worker-api
+	url = git@github.com:tensorplex-labs/dojo-worker-api.git
