@@ -11,3 +11,11 @@ hooks:
 	python3 pre-commit.pyz uninstall --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 	python3 pre-commit.pyz gc
 	python3 pre-commit.pyz install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
+
+update-submodules:
+	@echo "Updating submodules"
+	git fetch origin
+	git fetch --tags
+	git pull origin main
+	git submodule update --init --recursive
+	@echo "All submodules updated"
