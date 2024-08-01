@@ -1,3 +1,17 @@
+# [2.3.0](https://github.com/tensorplex-labs/dojo/compare/v2.2.3...v2.3.0) (2024-08-01)
+
+
+### Bug Fixes
+
+* prevent nan values in consensus score ([ee0ac29](https://github.com/tensorplex-labs/dojo/commit/ee0ac29a5c0c37d9e794a82c18d182256cbf5785))
+* use minmax normalisation ([912f9c0](https://github.com/tensorplex-labs/dojo/commit/912f9c088ab55fbb16765481c6477b3ddd36efab))
+* use softmax reward instead of minmax scale ([4d2871e](https://github.com/tensorplex-labs/dojo/commit/4d2871eb7e8f214e6a472b8e74ecb67d4d3ef2b2))
+
+
+### Features
+
+* use icc where possible, otherwise mse. use minmax norm ([82d04d5](https://github.com/tensorplex-labs/dojo/commit/82d04d5d6f295284f9e1066bcfa50ec83e1736fe))
+
 ## [2.2.3](https://github.com/tensorplex-labs/dojo/compare/v2.2.2...v2.2.3) (2024-07-22)
 
 
