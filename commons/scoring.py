@@ -211,12 +211,8 @@ class Scoring:
             # take ICC(2,1)
             icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
             icc_arr.append(icc2_value)
-        icc_arr: np.ndarray = np.array(icc_arr)
-
-        logger.info(f"ICC: {icc_arr}")
-
-        if np.isnan(icc_arr).all():
-            logger.warning("ICC array is all NaN.")
+        # already in the range [0, 1]
+        icc_arr: torch.Tensor = torch.tensor(np.array(icc_arr))
 
         # only use this for ordinal data
         # spearman = np.array(
@@ -227,20 +223,34 @@ class Scoring:
         # )
         # num_nans = np.sum(np.isnan(spearman))
 
-        # calculate MSE between each rater and the mean, lower is better
-        mse = -1 * np.mean((miner_outputs - avg) ** 2, axis=1)
-        mse_norm = F.softmax(torch.tensor(mse), dim=0)
-        icc_norm = F.softmax(torch.tensor(icc_arr), dim=0)
-        combined = F.softmax(icc_norm + mse_norm, dim=0)
+        mse = torch.tensor(np.mean(np.abs(miner_outputs - avg) ** 2, axis=1))
+        logger.debug(f"MSE raw: {mse}")
+        logger.info(f"ICC raw: {icc_arr}")
+        if not np.isnan(icc_arr).any():
+            return ConsensusScore(
+                score=torch.tensor(icc_arr),
+                mse_by_miner=mse,
+                icc_by_miner=icc_arr,
+            )
 
-        logger.debug(f"MSE: {mse_norm}")
-        logger.debug(f"ICC: {icc_norm}")
-        logger.debug(f"Combined: {combined}")
+        logger.warning("ICC array contains NaN values, using just MSE instead")
+
+        # use negative sign to penalize higher mse
+        mse_reward = F.softmax(-1 * mse, dim=0)
+
+        # # edge case where all miners provide the same rating
+        # if torch.all(mse_reward_norm == 0):
+        #     logger.warning("MSE reward normalization resulted in all zeros.")
+        #     reward_per_miner = 1 / len(miner_outputs)
+        #     mse_reward_norm = torch.full_like(mse_reward_norm, reward_per_miner)
+
+        logger.debug(f"MSE reward: {mse_reward}")
+        logger.debug(f"MSE normalized: {mse_reward}")
 
         return ConsensusScore(
-            score=combined,
-            mse_by_miner=mse_norm,
-            icc_by_miner=icc_norm,
+            score=mse_reward,
+            mse_by_miner=mse,
+            icc_by_miner=icc_arr,
         )
 
     @staticmethod
@@ -290,12 +300,12 @@ class Scoring:
         diff_gt = torch.tensor(
             -1 * np.linalg.norm(miner_outputs - ground_truth, ord=2, axis=1)
         )
-        logger.trace(f"{diff_gt=}")
-        diff_gt_sm = F.softmax(torch.tensor(diff_gt), dim=0)
-        logger.trace(f"{diff_gt_sm=}")
+        logger.debug(f"{diff_gt=}")
+        gt_reward = F.softmax(diff_gt, dim=0)
+        logger.debug(f"{gt_reward=}")
 
         return GroundTruthScore(
-            score=diff_gt_sm,
+            score=torch.tensor(gt_reward),
             raw_scores_by_miner=diff_gt,
         )
 

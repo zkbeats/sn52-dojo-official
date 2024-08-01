@@ -61,7 +61,7 @@ def get_leaderboard_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
     since we are sorting in reverse order."""
     leaderboard_data = get_leaderboard_data(leaderboard)
 
-    scores = [None] * len(models)
+    scores: list[float | None] = [None] * len(models)
     for i, model_name in enumerate(models):
         mapped_model_name = MODEL_MAPPING.get(model_name, {}).get(leaderboard, None)
         if not mapped_model_name:
@@ -81,6 +81,12 @@ def get_leaderboard_scores(models: List[str], leaderboard=Leaderboard.EVALPLUS):
             continue
 
         scores[i] = score
+
+    # throw valueerror if any of scores is None
+    if any(score is None for score in scores):
+        raise ValueError(
+            f"Scores: {scores} cannot contain None values, models: {models}"
+        )
 
     return zip(models, scores)
 
