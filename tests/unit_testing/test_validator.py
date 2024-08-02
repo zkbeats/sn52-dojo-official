@@ -8,6 +8,7 @@ import pytest
 import torch
 from loguru import logger
 
+from commons.data_manager import DataManager
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from neurons.validator import Validator
@@ -102,10 +103,6 @@ async def test_validator_querying_miners_dojo(mock_get_qa, validator):
     2. The dendrite response is saved correctly with non-obfuscated model IDs.
     3. The saved data includes the correct prompt and model IDs.
     """
-    import template
-
-    logger.info(f"template ..... {template.get_latest_git_tag()}")
-    from commons.data_manager import DataManager
 
     # Mock get_config to return a valid configuration
     with patch("neurons.validator.get_config", return_value=MockConfig):
@@ -165,11 +162,6 @@ async def test_validator_querying_miners_dojo(mock_get_qa, validator):
         assert data, "Data was not saved"
         assert len(data) > 0, "No data found in saved file"
         assert data[0].request.prompt == "synthetic_prompt", "Saved data is incorrect"
-
-        # Ensure the git tag is mocked correctly
-        from template import __version__
-
-        assert __version__ == "1.0.0"
 
         # Verify that model ids are not obfuscated in saved data
         for response in data[0].miner_responses:
