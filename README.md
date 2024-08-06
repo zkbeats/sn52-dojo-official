@@ -44,13 +44,6 @@
   - [Validating](#validating)
     - [Requirements for running a validator](#requirements-for-running-a-validator)
     - [Start Validating](#start-validating)
-- [Subnet Mechanisms](#subnet-mechanisms)
-  - [Responsibilties of Miners](#responsibilties-of-miners)
-  - [Responsibilities of Validators](#responsibilities-of-validators)
-  - [Task Lifecycle, User Journey and Data Flow](#task-lifecycle-user-journey-and-data-flow)
-- [Scoring Mechanism](#scoring-mechanism)
-  - [Miner Scoring](#miner-scoring)
-  - [Validator Scoring](#validator-scoring)
 - [License](#license)
 
 </details>
@@ -102,6 +95,7 @@ By democratising the collection of human preference data, the Dojo Subnet not on
 
 - Python >=3.10
 - PM2
+- Docker
 
 # System Requirements
 
@@ -274,7 +268,6 @@ Pull the synthetic qa api git submodule
 ```bash
 # pull submodules
 git submodule update --init
-
 ```
 
 Setup the env variables, these are marked with "# CHANGE" in `dojo-synthetic-api/docker-compose.yml`
@@ -340,113 +333,6 @@ pm2 start run.sh \
 --neuron.type validator \
 --axon.port 9603
 ```
-
-# Subnet Mechanisms
-
-## Responsibilties of Miners
-
-Miners are required to gather Participants to complete tasks. Miners are expected to build and curate their Participant pools to strategically complete Tasks based on domain expertise in order to succeed in the Dojo subnet.
-
-## Responsibilities of Validators
-
-Validators are responsible to play the role of Instructor, Augmenter, Output Generator and Obfuscator in the Task generation phase, as well as to calculate the scoring, set reward and miner trust. The terms will be described in the next section.
-
-## Task Lifecycle, User Journey and Data Flow
-
-![image](./assets/doc/task_lifecycle.png)
-
-<center> Figure 1: High-level Task Lifecycle Diagram</center>
-
-Important terms:
-
-- Task: A task consists of an instruction that is accompanied by multiple responses to be ranked by human contributors. The task is considered complete only when sufficient and high quality preference data points are collected for the task.
-- Worker: The entity used to describe human contributors regardless of the associated miner. Miners are expected to curate their pool of workers in terms of quality and domain expertise to specialize, and workers are free to be associated with different miners’ organisations (hotkeys).
-- Instructor: The object class that generates the instruction of the task.
-
-Task generation begins with the Instructor creating instructions for Tasks based on randomly sampled combinations of Task Seeds. The list of Task Seeds is initially defined by Tensorplex, and will incorporate more diverse task seeds based on organic requests / future collaborations with interested parties. Inspired by the [Self Instruct framework](https://arxiv.org/pdf/2212.10560), a few-shot prompting technique will be employed on a sample of existing task seeds for SOTA LLMs to generate Tasks with new instructions. A filter will also be applied to check against the Global Task Database which stores completed and rejected Tasks by running a series of semantic filters and comparators.
-
-![image](./assets/doc/synthetic_ground_truth_generation_process.png)
-
-<center> Figure 2: Synthetic Ground Truth Generation Process </center>
-<br>
-
-For the Task instructions that are generated successfully, the Augmenter will perform several iterations of augmentation on the initial Task instruction to produce n-set of different Task instructions that deviates from the original Task instruction progressively. The goal of such augmentation is for LLMs to follow the augmented prompts and produce objectively subpar responses in order to build the synthetic ground truth for human preference ranking scoring. This is critical in assessing and assigning Miner trust to the worker pool to build a reliable Dojo participant community.
-
-The original Task instructions, along with the augmented Task instructions will be sent to the Output Generator, where LLM is used to generate the responses to the corresponding instructions. Depending on the domain, various prompting techniques such as CoT and execution feedback may be applied to ensure reasonable and compilable responses are produced for workers’ ranking.
-
-Next, the Obfuscator will apply data obfuscation of various layers/forms on the responses which prevents the participants from performing lookup attacks. The obfuscation process will not affect the functionality or quality of the response.
-
-Finally, after applying data obfuscation, the task which contains the original instruction and the responses generated from the original and augmented instructions will be compiled and managed by Task Manager, which the Miners obtain the tasks from.
-
-![image](./assets/doc/subnet_entities.png)
-
-<center> Figure 3. Task Dissemination from Validators to Participants </center>
-<br>
-Once the task is assigned to the Miner, the Miners can decide how to pass this task to the Participant, who may be a separate entity. The Participant’s outputs are associated with the respective Miner's hotkey for scoring and reward calculations. These are the various methods for task assignment and completion:
-
-- Dojo Interface: Miners who prefer to mine conveniently can create a personalized API key through the CLI, which will then be used by the Participants to contribute through the Dojo Interface.
-
-- Local Dojo Interface: Sophisticated miners are recommended to run a localised Dojo interface to eliminate the dependency on the Dojo API. (Coming soon)
-
-- External Platforms: Miners can also choose to distribute these tasks to an external service provider such as scale.ai, AWS mTurk, Prolific, Appen or Web3 data labeling platforms. However, these miners will need to be responsible for quality control and ensuring tasks are completed within the stipulated deadlines. (Coming soon)
-
-![image](./assets/doc/dojo_interface.png)
-
-<center> Figure 4: Dojo interface for measuring prompt similarity of different UI outputs </center>
-<br>
-
-Finally, the completed task will be logged in the Global Task Database, marking the end of the lifecycle of a Task.
-
-# Scoring Mechanism
-
-## Miner Scoring
-
-The scoring formula for Miners is the summation of the score of the tasks computed in the past few epochs. The individual task score is a weighted function of the following metrics:
-
-- Weighted Cohen’s Kappa: Calculates the agreement between Miners while controlling for the probability of chance agreement, providing a more robust measure of reliability compared to simple percent agreement. A weighted variant of Cohen’s kappa will be used as we are concerned with the relative ranking of the responses generated by LLMs.
-- Spearman’s Correlation: Measures the strength and direction of a monotonic relationship between two continuous or ordinal variables, robust to non-normal distributions and outliers, helps to assess the agreement among Miners and as well as against ground truth.
-- Distance against synthetic ground truth: To address the loss of fidelity of Spearman’s correlation.
-
-While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth.
-
-![image](./assets/doc/scoring_mechanism.png)
-
-<center> Figure 5: Augmented Prompt Deviation as Synthetic Ground Truth </center>
-<br>
-
-While alignment with synthetic ground truth is important, the scoring mechanism is designed in such a way that a high level of agreement between human contributors will still be prioritized when there is a disagreement with the synthetic ground truth.
-
-![image](./assets/doc/inconsistent_results.png)
-
-<center> Figure 6: Inconsistent Participants Results </center>
-<br>
-
-The Cohen’s Kappa metric can also be used to monitor data quality, i.e. do not assign miner trust if Weighted Cohen’s Kappa is not above a certain threshold (no consensus between Miners is achieved).
-
-![image](./assets/doc/attack.png)
-
-<center> Figure 7: Various failure modes and the corresponding reaction of the scoring mehchanism </center>
-<br>
-
-The scoring mechanism is designed to handle various attack vectors and failure modes, and will be continually improved on to ensure a fair, productive and collaborative environment for all participants.
-
-![image](./assets/doc/llm_as_synthetic_truth.png)
-
-<center> Figure 8: LLM Leaderboard as Synthetic Ground Truth </center>
-<br>
-
-The Synthetic Ground Truth could be derived from other sources such as a publicly available LLM leaderboard, where the rank of the leaderboard in specific domain can be used as a proxy for the accuracy score.
-
-![image](./assets/doc/partial_ground_truth.png)
-
-<center> Figure 9: Task with Partial Ground Truths </center>
-<br>
-
-Participants can also determine accuracy scores of responses that do not have ground truth. For example, a*, b*, c\* can be processed in different manners with the intention to improve the outputs like using various experimental prompt engineering frameworks, or using new LLMs that are not yet benchmarked.
-
-## Validator Scoring
-
-Due to the need to provide ample time for human feedback, the deadline for each `RankingRequest` is currently set to 4 hours. Only after the deadline has been passed, validators will score all participants responses. This deadline is generous and provides plenty of time for the feedback loop.
 
 # License
 
