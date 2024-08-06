@@ -81,12 +81,13 @@ class Miner(BaseMinerNeuron):
     async def forward_feedback_request(
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
-        logger.info(f"Miner received request id: {synapse.request_id}")
         try:
             # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
             if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
                 logger.error("Invalid synapse: dendrite or dendrite.hotkey is None.")
                 return synapse
+
+            logger.info(f"Miner received request id: {synapse.request_id}")
 
             if not synapse.responses:
                 logger.error("Invalid synapse: response field is None.")

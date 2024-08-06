@@ -43,6 +43,7 @@ class MockMetagraph(bt.metagraph):
         if subtensor is not None:
             self.subtensor = subtensor
         self.sync(subtensor=subtensor)
+        self.hotkeys = []
 
         for axon in self.axons:
             axon.ip = "127.0.0.0"
@@ -50,6 +51,18 @@ class MockMetagraph(bt.metagraph):
 
         bt.logging.info(f"Metagraph: {self}")
         bt.logging.info(f"Axons: {self.axons}")
+
+    @property
+    def hotkeys(self):
+        return self._hotkeys
+
+    @hotkeys.setter
+    def hotkeys(self, value):
+        self._hotkeys = value
+
+    # # Add a method to set the total_stake for testing
+    # def set_stakes(self, stakes):
+    #     self.total_stake = np.array(stakes, dtype=np.float32)
 
 
 class MockDendrite(bt.dendrite):

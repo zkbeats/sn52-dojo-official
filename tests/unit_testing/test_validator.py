@@ -12,7 +12,6 @@ from commons.data_manager import DataManager
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from neurons.validator import Validator
-from template.mock import MockDendrite, MockMetagraph, MockSubtensor
 from template.protocol import Response, SyntheticQA
 
 
@@ -26,35 +25,6 @@ class MockConfig:
         sample_size = 5
 
     neuron = NeuronConfig()
-
-
-@pytest.fixture
-def mock_initialise():
-    """Fixture to initialise mock components for testing."""
-    logger.info("Setting up mock_initialise fixture.")
-    netuid = 1
-
-    bt.MockSubtensor.reset()
-    mock_wallet = bt.MockWallet()
-    mock_subtensor = MockSubtensor(netuid=netuid, wallet=mock_wallet)
-    mock_metagraph = MockMetagraph(netuid=netuid, subtensor=mock_subtensor)
-    mock_dendrite = MockDendrite(wallet=mock_wallet)
-
-    with patch("commons.utils.initialise") as mock_initialise:
-        mock_initialise.return_value = (
-            mock_wallet,
-            mock_subtensor,
-            mock_metagraph,
-            mock_dendrite,
-        )
-        yield (
-            mock_initialise,
-            mock_wallet,
-            mock_subtensor,
-            mock_metagraph,
-            mock_dendrite,
-        )
-    logger.info("mock_initialise fixture setup complete.")
 
 
 @pytest.fixture
