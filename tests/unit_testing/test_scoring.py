@@ -6,7 +6,7 @@ import pytest
 
 
 @pytest.fixture
-def scoring_module(mock_env_var):
+def scoring_module():
     # ensure we import them depending on mock_env_var so the ValueError doesn't
     # get raised
     from commons.scoring import Scoring

@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5.1.1
@@ -32,5 +34,15 @@ jobs:
       - name: Install dependencies
         run: uv pip install nox pytest
 
+      - name: Get latest git tag
+        id: get_tag
+        run: |
+          echo "Attempting to get the latest git tag..."
+          git_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "1.0.0")
+          echo "GIT_TAG=$git_tag" >> $GITHUB_ENV
+
       - name: Run tests using shared session
         run: nox -s tests_session --python=${{ matrix.python-version }}
+        env:
+          GIT_TAG: ${{ env.GIT_TAG }}
+          DOJO_API_BASE_URL: http://example.com
