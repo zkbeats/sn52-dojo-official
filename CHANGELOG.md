@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/tensorplex-labs/dojo/compare/v2.3.0...v2.4.0) (2024-08-06)
+
+
+### Features
+
+* added unit testing for validator ([64d1351](https://github.com/tensorplex-labs/dojo/commit/64d1351840b7f72ddd61cced0328a9d7452e329e))
+
 # [2.3.0](https://github.com/tensorplex-labs/dojo/compare/v2.2.3...v2.3.0) (2024-08-01)
 
 
