@@ -51,7 +51,6 @@
 - [Scoring Mechanism](#scoring-mechanism)
   - [Miner Scoring](#miner-scoring)
   - [Validator Scoring](#validator-scoring)
-- [Roadmap](#roadmap)
 - [License](#license)
 
 </details>
@@ -124,7 +123,7 @@ To get started as a miner or validator, these are the common steps both a miner 
 
 > The following guide is tailored for distributions utilizing APT as the package manager. Adjust the installation steps as per the requirements of your system.
 >
-> We will utilize /opt directory as our preferred location in this guide.
+> We will utilize ~/opt directory as our preferred location in this guide.
 
 Install PM2 (**If not already installed**)
 
@@ -142,8 +141,8 @@ Install Docker (**If not already installed**)
 Clone the project, set up and configure python virtual environment
 
 ```bash
-# In this guide, we will utilize the /opt directory as our preferred location.
-cd /opt
+# In this guide, we will utilize the ~/opt directory as our preferred location.
+cd ~/opt
 
 # Clone the project
 git clone https://github.com/tensorplex-labs/dojo.git
@@ -245,7 +244,7 @@ pm2 start main_miner.py \
 ### Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
 
 Note: URLs are different for devnet, testnet and mainnet.
-Testnet: https://dojo-api-staging.tensorplex.ai
+Testnet: https://dojo-api-testnet.tensorplex.ai
 Mainnet: **_REMOVED_**
 
 1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
@@ -278,7 +277,7 @@ git submodule update --init
 
 ```
 
-Setup the env variables, these are marked with "# CHANGE" in `synthetic-qa-api/docker-compose.yml`
+Setup the env variables, these are marked with "# CHANGE" in `dojo-synthetic-api/docker-compose.yml`
 
 Run the server
 
@@ -299,7 +298,7 @@ cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
 # Please select one
-DOJO_API_BASE_URL="https://dojo-api-staging.tensorplex.ai"
+DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
@@ -448,31 +447,6 @@ Participants can also determine accuracy scores of responses that do not have gr
 ## Validator Scoring
 
 Due to the need to provide ample time for human feedback, the deadline for each `RankingRequest` is currently set to 4 hours. Only after the deadline has been passed, validators will score all participants responses. This deadline is generous and provides plenty of time for the feedback loop.
-
-# Roadmap
-
-- V0 (Tensorplex Devnet)
-
-  - Subnet Validator and Miner Code
-  - Dojo Worker API
-  - Dojo User Interface
-
-- V1 (Bittensor Testnet)
-
-  - Multiple Modality Support
-  - Scoring Mechanism
-
-- V2 (Bittensor Mainnet)
-
-  - Cross-Subnet Integration
-
-- V3 (Bittensor Mainnet + Dojo Mainnet)
-
-  - On-chain Execution of Task Completions
-  - Proof-of-stake Consensus Mechanism
-
-- V4 (Bittensor Mainnet + Dojo Mainnet)
-  - External Reputation Staking Mechanism
 
 # License
 
