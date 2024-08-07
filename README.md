@@ -18,6 +18,8 @@
   ·
   <a href="https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet">Docs</a>
   ·
+  <a href="https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet/whitepaper">Whitepaper</a>
+  ·
   <a href="https://huggingface.co/tensorplex-labs">HuggingFace</a>
   ·
   <a href="#getting-started">Getting Started</a>
