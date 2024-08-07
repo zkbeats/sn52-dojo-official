@@ -254,8 +254,6 @@ Mainnet: **_REMOVED_**
 - Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
 - Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
 
-Congratulations, you magnificent mining maestro🧙! Grab your virtual pickaxe and let the digital gold rush begin! 🚀🔥
-
 ## Validating
 
 ### Requirements for running a validator
