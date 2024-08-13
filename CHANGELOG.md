@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/tensorplex-labs/dojo/compare/v2.4.0...v2.4.1) (2024-08-13)
+
+
+### Bug Fixes
+
+* broken submodule link ([42a599e](https://github.com/tensorplex-labs/dojo/commit/42a599e70ceed1345e22c113c2269a791694710a))
+
 # [2.4.0](https://github.com/tensorplex-labs/dojo/compare/v2.3.0...v2.4.0) (2024-08-06)
 
 
