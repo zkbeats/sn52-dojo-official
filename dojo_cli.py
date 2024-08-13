@@ -154,8 +154,6 @@ class State:
 
 def get_session_cookies(wallet):
     info("Grabbing wallet hotkey from keypair file... please input your password")
-    wallet.coldkey
-
     kp = wallet.hotkey
     hotkey = str(wallet.hotkey.ss58_address)
 
