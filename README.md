@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="./assets/dojo.png" alt="Dojo Logo" width="300">
   <h1 style="border-bottom: 0">Dojo Subnet</h1>
 </div>
 
