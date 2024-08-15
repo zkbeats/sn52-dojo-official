@@ -218,3 +218,42 @@ services:
         condition: service_healthy
       worker-ui:
         condition: service_healthy
+
+  synthetic-api:
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
+    ports:
+      - "127.0.0.1:5003:5003"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis-service
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_USER=${REDIS_USERNAME}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+    depends_on:
+      redis-service:
+        condition: service_healthy
+
+  validator-testnet:
+    image: python:3.11
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+    command: >
+      pip install -e . &&
+      python main_validator.py
+      --netuid 98
+      --subtensor.network ws://node-subtensor-testnet:9944
+      --logging.debug
+      --wallet.name ${WALLET_NAME}
+      --wallet.hotkey ${WALLET_HOTKEY}
+      --axon.port ${AXON_PORT}
+      --neuron.type validator
+      ${ARGS}
+    depends_on:
+      synthetic-api:
+        condition: service_healthy
