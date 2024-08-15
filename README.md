@@ -150,6 +150,7 @@ cd ~/opt
 # Clone the project
 git clone https://github.com/tensorplex-labs/dojo.git
 cd dojo/
+git submodule update --init
 
 # Set up python virtual environment and pip packages
 # Here we use venv for managing python versions
@@ -231,17 +232,7 @@ Start the miner by running the following commands:
 
 ```bash
 # For Testnet
-pm2 start main_miner.py \
---name dojo-miner \
---interpreter env/bin/python3 \
--- --netuid 98 \
---wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---axon.port 9602 \
---neuron.type miner \
---scoring_method "dojo" \
---subtensor.network test
+docker compose up -d miner-testnet
 ```
 
 ### Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
@@ -314,16 +305,7 @@ Start the validator
 ```bash
 # start the validator
 # Testnet
-pm2 start main_validator.py \
---name dojo-validator \
---interpreter env/bin/python3 \
--- --netuid 98 \
---wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---axon.port 9603 \
---neuron.type validator \
---subtensor.network test
+docker compose up -d validator-testnet
 ```
 
 To start with autoupdate for validators (**optional**)
