@@ -207,7 +207,7 @@ services:
       --netuid 98
       --subtensor.network ws://node-subtensor-testnet:9944
       --logging.debug
-      --wallet.name ${WALLET_NAME}
+      --wallet.name ${WALLET_COLDKEY}
       --wallet.hotkey ${WALLET_HOTKEY}
       --axon.port ${AXON_PORT}
       --neuron.type miner
@@ -249,7 +249,7 @@ services:
       --netuid 98
       --subtensor.network ws://node-subtensor-testnet:9944
       --logging.debug
-      --wallet.name ${WALLET_NAME}
+      --wallet.name ${WALLET_COLDKEY}
       --wallet.hotkey ${WALLET_HOTKEY}
       --axon.port ${AXON_PORT}
       --neuron.type validator

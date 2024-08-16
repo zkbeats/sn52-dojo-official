@@ -194,7 +194,7 @@ Create .env file with the following values first
 cp .env.miner.example .env
 # fill in the following vars
 DOJO_API_BASE_URL="http://localhost:8080"
-WALLET_NAME=your coldkey wallet name
+WALLET_COLDKEY=your coldkey wallet name
 WALLET_HOTKEY=your hotkey wallet name
 AXON_PORT=port to serve requests over the public network for validators to call
 ```
