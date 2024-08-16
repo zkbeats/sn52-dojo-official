@@ -43,10 +43,13 @@
   - [Validator](#validator-1)
 - [Getting Started](#getting-started)
   - [Mining](#mining)
-    - [Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-miners-on-ui-to-connect-to-dojo-subnet-for-scoring)
+    - [Option 1: Self-hosting the miner backend services](#option-1-self-hosting-the-miner-backend-services)
+    - [Option 2: Using our hosted Tensorplex backend](#option-2-using-our-hosted-tensorplex-backend)
+    - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
     - [Requirements for running a validator](#requirements-for-running-a-validator)
     - [Start Validating](#start-validating)
+- [Dojo CLI](#dojo-cli)
 - [License](#license)
 
 </details>
@@ -164,6 +167,8 @@ pip install -e ".[dev]"
 
 ## Mining
 
+### Option 1: Self-hosting the miner backend services
+
 Activate the python virtual environment
 
 ```bash
@@ -175,7 +180,6 @@ Create your wallets and register them to our subnet
 ```bash
 # create your wallets
 btcli wallet new_coldkey
-
 btcli wallet new_hotkey
 
 # register your wallet to our subnet
@@ -183,41 +187,66 @@ btcli wallet new_hotkey
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
 
-Retrieve the API Key and Subscription Key with Dojo CLI
+Create .env file with the following values first
 
 ```bash
-# Start the dojo cli tool
-# Upon starting the CLI it will ask if you wanna use the default path for bittensor wallets, which is `~/.bittensor/wallets/`.
-# If you want to use a different path, please enter 'n' and then specify the path when prompted.
-dojo
-
-# TIP: During the whole process, you could actually use tab-completion to display the options, so you don't have to remember them all. Please TAB your way guys! 🙇‍♂️
-# It should be prompting you to enter you coldkey and hotkey
-# After entering the coldkey and hotkey, you should be in the command line interface for dojo, please authenticate by running the following command.
-# You should see a message saying "✅ Wallet coldkey name and hotkey name set successfully."
-authenticate
-
-# Afterwards, please generate an API Key with the following command.
-# You should see a message saying:  "✅ All API keys: ['sk-<KEY>]". Displaying a list of your API Keys.
-api_key generate
-
-# Lastly, please generate a Subscription Key with the following command.
-# You should see a message saying:  "✅ All Subscription keys: ['sk-<KEY>]". Displaying a list of your Subscription Keys.
-subscription_key generate
-
-# :rocket: You should now have all the required keys, and be able to start mining.
-
-# Other commands available to the CLI:
-# You can always run the following command to get your current keys.
-api_key list
-subscription_key list
-
-# You can also delete your keys with the following commands.
-api_key delete
-subscription_key delete
+# copy .env.miner.example
+cp .env.miner.example .env
+# fill in the following vars
+DOJO_API_BASE_URL="http://localhost:8080"
+WALLET_NAME=your coldkey wallet name
+WALLET_HOTKEY=your hotkey wallet name
+AXON_PORT=port to serve requests over the public network for validators to call
 ```
 
-Create .env file
+Start the worker api which will be connected to the CLI later.
+
+```bash
+docker compose up -d worker-api
+```
+
+Start the worker-api by running the following commands:
+
+```bash
+docker compose up -d worker-api
+```
+
+Now activate the python environment and run the CLI to generate an API key and subscription key, see [Dojo CLI](#dojo-cli) for usage.
+
+```bash
+source env/bin/activate
+dojo
+```
+
+Grab the API key and add it to your .env file
+
+Now, run the full miner service.
+
+```bash
+docker compose up -d miner-testnet
+```
+
+### Option 2: Using our hosted Tensorplex backend
+
+Activate the python virtual environment
+
+```bash
+source env/bin/activate
+```
+
+Create your wallets and register them to our subnet
+
+```bash
+# create your wallets
+btcli wallet new_coldkey
+btcli wallet new_hotkey
+
+# register your wallet to our subnet
+# Testnet
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
+```
+
+Create .env file with the following values first.
 
 ```bash
 # copy .env.miner.example
@@ -228,6 +257,8 @@ DOJO_API_KEY="sk-<KEY>"
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 ```
 
+Retrieve the API Key and Subscription Key with Dojo CLI, see [Dojo CLI](#dojo-cli) for usage.
+
 Start the miner by running the following commands:
 
 ```bash
@@ -235,7 +266,7 @@ Start the miner by running the following commands:
 docker compose up -d miner-testnet
 ```
 
-### Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
+### Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring
 
 Note: URLs are different for devnet, testnet and mainnet.
 Testnet: https://dojo-api-testnet.tensorplex.ai
@@ -321,6 +352,47 @@ pm2 start run.sh \
 --subtensor.network test \
 --neuron.type validator \
 --axon.port 9603
+```
+
+# Dojo CLI
+
+We provide a CLI that allows miners to manage their API and subscription keys either when connecting to our hosted Tensorplex API services or their own self-hosted miner backend.
+
+Features:
+
+- Tab completion
+- Prefix matching wallets
+
+```bash
+# Start the dojo cli tool
+# Upon starting the CLI it will ask if you wanna use the default path for bittensor wallets, which is `~/.bittensor/wallets/`.
+# If you want to use a different path, please enter 'n' and then specify the path when prompted.
+dojo
+
+# TIP: During the whole process, you could actually use tab-completion to display the options, so you don't have to remember them all. Please TAB your way guys! 🙇‍♂️
+# It should be prompting you to enter you coldkey and hotkey
+# After entering the coldkey and hotkey, you should be in the command line interface for dojo, please authenticate by running the following command.
+# You should see a message saying "✅ Wallet coldkey name and hotkey name set successfully."
+authenticate
+
+# Afterwards, please generate an API Key with the following command.
+# You should see a message saying:  "✅ All API keys: ['sk-<KEY>]". Displaying a list of your API Keys.
+api_key generate
+
+# Lastly, please generate a Subscription Key with the following command.
+# You should see a message saying:  "✅ All Subscription keys: ['sk-<KEY>]". Displaying a list of your Subscription Keys.
+subscription_key generate
+
+# :rocket: You should now have all the required keys, and be able to start mining.
+
+# Other commands available to the CLI:
+# You can always run the following command to get your current keys.
+api_key list
+subscription_key list
+
+# You can also delete your keys with the following commands.
+api_key delete
+subscription_key delete
 ```
 
 # License
