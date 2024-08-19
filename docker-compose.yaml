@@ -236,8 +236,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - E2B_API_KEY=${E2B_API_KEY}
     healthcheck:
-      # test: ["CMD", "nc", "-z", "localhost", "5003"]
-      test: ["CMD-SHELL", "exit 0"]
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -260,7 +259,6 @@ services:
           --logging.debug \
           --wallet.name ${WALLET_COLDKEY} \
           --wallet.hotkey ${WALLET_HOTKEY} \
-          --axon.port ${AXON_PORT} \
           --neuron.type validator \
       '
     depends_on:

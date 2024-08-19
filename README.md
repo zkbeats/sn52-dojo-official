@@ -328,8 +328,7 @@ pm2 start run.sh \
 --wallet.hotkey hotkey \
 --logging.debug \
 --subtensor.network test \
---neuron.type validator \
---axon.port 9603
+--neuron.type validator
 ```
 
 # Dojo CLI
