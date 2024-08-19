@@ -182,6 +182,8 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+    volumes:
+      - ./.env:/dojo-api/.env
 
   worker-ui:
     # TODO @dev switch to tag `main` once it's published
