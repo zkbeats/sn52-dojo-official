@@ -47,8 +47,6 @@
     - [Option 2: Using our hosted Tensorplex backend](#option-2-using-our-hosted-tensorplex-backend)
     - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
-    - [Requirements for running a validator](#requirements-for-running-a-validator)
-    - [Start Validating](#start-validating)
 - [Dojo CLI](#dojo-cli)
 - [License](#license)
 
@@ -287,34 +285,9 @@ Mainnet: **_REMOVED_**
 
 ## Validating
 
-### Requirements for running a validator
-
-- Openrouter API Key
-- Deploy the synthetic QA API on the same server as the validator
-
-Pull the synthetic qa api git submodule
+Copy the validator .env file and set up the .env file
 
 ```bash
-# pull submodules
-git submodule update --init
-```
-
-Setup the env variables, these are marked with "# CHANGE" in `dojo-synthetic-api/docker-compose.yml`
-
-Run the server
-
-```bash
-cd dojo-synthetic-api
-docker compose up -d
-```
-
-### Start Validating
-
-Head back to dojo project and set up the .env file
-
-```bash
-cd dojo
-
 # copy .env.validator.example
 cp .env.validator.example .env
 
@@ -323,10 +296,15 @@ cp .env.validator.example .env
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true
-OPENROUTER_API_KEY="sk-or-v1-<KEY>"
 WANDB_API_KEY="<wandb_key>"
 
-# Optional or if you've chosen it
+# for dojo-synthetic-api
+REDIS_PASSWORD=
+REDIS_USER=
+OPENROUTER_API_KEY="sk-or-v1-<KEY>"
+E2B_API_KEY=
+
+# Other LLM API providers, Optional or if you've chosen it
 TOGETHER_API_KEY=
 OPENAI_API_KEY=
 ```
