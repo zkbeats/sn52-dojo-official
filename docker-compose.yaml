@@ -203,17 +203,18 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
     command: >
-      pip install -e . &&
-      python main_miner.py
-      --netuid 98
-      --subtensor.network ws://node-subtensor-testnet:9944
-      --logging.debug
-      --wallet.name ${WALLET_COLDKEY}
-      --wallet.hotkey ${WALLET_HOTKEY}
-      --axon.port ${AXON_PORT}
-      --neuron.type miner
-      --scoring_method dojo
-      ${ARGS}
+      sh -c '
+        pip install -e . &&
+        python main_miner.py \
+        --netuid 98 \
+        --subtensor.network ws://node-subtensor-testnet:9944 \
+        --logging.debug \
+        --wallet.name ${WALLET_COLDKEY} \
+        --wallet.hotkey ${WALLET_HOTKEY} \
+        --axon.port ${AXON_PORT} \
+        --neuron.type miner \
+        --scoring_method dojo \
+      '
     depends_on:
       worker-api:
         condition: service_healthy
@@ -254,7 +255,7 @@ services:
       sh -c '
         pip install -e . &&
         python3 main_validator.py \
-          --netuid 1 \
+          --netuid 98 \
           --subtensor.network ws://node-subtensor-testnet:9944 \
           --logging.debug \
           --wallet.name ${WALLET_COLDKEY} \
