@@ -135,8 +135,7 @@ services:
     env_file:
       - .env
     platform: linux/amd64
-    # TODO @dev switch to tag `main` once it's published
-    image: ghcr.io/tensorplex-labs/dojo-worker-api:dev
+    image: ghcr.io/tensorplex-labs/dojo-worker-api:main
     environment:
       RUNTIME_ENV: local
       SERVER_PORT: 8081
@@ -186,8 +185,7 @@ services:
       - ./.env:/dojo-api/.env
 
   worker-ui:
-    # TODO @dev switch to tag `main` once it's published
-    image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-dev
+    image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
     ports:
       - "3000:3000"
     healthcheck:
@@ -222,7 +220,7 @@ services:
         condition: service_healthy
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
     ports:
       - "127.0.0.1:5003:5003"
     env_file:
