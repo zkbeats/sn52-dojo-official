@@ -43,10 +43,11 @@
   - [Validator](#validator-1)
 - [Getting Started](#getting-started)
   - [Mining](#mining)
-    - [Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-miners-on-ui-to-connect-to-dojo-subnet-for-scoring)
+    - [Option 1: Self-hosting the miner backend services](#option-1-self-hosting-the-miner-backend-services)
+    - [Option 2: Using our hosted Tensorplex backend](#option-2-using-our-hosted-tensorplex-backend)
+    - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
-    - [Requirements for running a validator](#requirements-for-running-a-validator)
-    - [Start Validating](#start-validating)
+- [Dojo CLI](#dojo-cli)
 - [License](#license)
 
 </details>
@@ -163,6 +164,8 @@ pip install -e ".[dev]"
 
 ## Mining
 
+### Option 1: Self-hosting the miner backend services
+
 Activate the python virtual environment
 
 ```bash
@@ -174,7 +177,6 @@ Create your wallets and register them to our subnet
 ```bash
 # create your wallets
 btcli wallet new_coldkey
-
 btcli wallet new_hotkey
 
 # register your wallet to our subnet
@@ -182,7 +184,151 @@ btcli wallet new_hotkey
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
 
-Retrieve the API Key and Subscription Key with Dojo CLI
+Create .env file with the following values first
+
+```bash
+# copy .env.miner.example
+cp .env.miner.example .env
+# fill in the following vars
+DOJO_API_BASE_URL="http://localhost:8080"
+WALLET_COLDKEY=your coldkey wallet name
+WALLET_HOTKEY=your hotkey wallet name
+AXON_PORT=port to serve requests over the public network for validators to call
+```
+
+Start the worker api which will be connected to the CLI later.
+
+```bash
+docker compose up -d worker-api
+```
+
+Now activate the python environment and run the CLI to generate an API key and subscription key, see [Dojo CLI](#dojo-cli) for usage.
+
+```bash
+source env/bin/activate
+dojo
+```
+
+Grab the API key and add it to your .env file
+
+Now, run the full miner service.
+
+```bash
+docker compose up -d miner-testnet
+```
+
+### Option 2: Using our hosted Tensorplex backend
+
+Activate the python virtual environment
+
+```bash
+source env/bin/activate
+```
+
+Create your wallets and register them to our subnet
+
+```bash
+# create your wallets
+btcli wallet new_coldkey
+btcli wallet new_hotkey
+
+# register your wallet to our subnet
+# Testnet
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
+```
+
+Create .env file with the following values first.
+
+```bash
+# copy .env.miner.example
+cp .env.miner.example .env
+
+# ENV's that needs to be filled for miners:
+DOJO_API_KEY="sk-<KEY>"
+DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+```
+
+Retrieve the API Key and Subscription Key with Dojo CLI, see [Dojo CLI](#dojo-cli) for usage.
+
+Start the miner by running the following commands:
+
+```bash
+# For Testnet
+docker compose up -d miner-testnet
+```
+
+### Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring
+
+Note: URLs are different for testnet and mainnet. Please refer to [docs](https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet/official-links).
+
+1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
+
+- You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
+- Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.jpg)
+- Click "Next" and "Continue", then finally it will be requesting a signature from your wallet, please sign and it will be connected. ![image](./assets/ui/wallet_sign.jpg)
+- Once connected, the top navigation bar should display your wallet address. ![image](./assets/ui/wallet_connected.png)
+
+2. Once connected, please stay connected to your wallet and click on "Enter Subscription Key". ![image](./assets/subscription/enter_subscription.png)
+
+- Give your subscription a name, and enter your subscription key generated earlier before running the miner. _*Refer to step 4 of "Getting Started" if you need to retrieve your key*_ ![image](./assets/subscription/enter_details.png)
+- Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
+- Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
+
+## Validating
+
+Copy the validator .env file and set up the .env file
+
+```bash
+# copy .env.validator.example
+cp .env.validator.example .env
+
+# edit the .env file with vim, vi or nano
+DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+SYNTHETIC_API_URL="http://127.0.0.1:5003"
+TOKENIZERS_PARALLELISM=true
+WANDB_API_KEY="<wandb_key>"
+
+# for dojo-synthetic-api
+REDIS_PASSWORD=
+REDIS_USER=
+OPENROUTER_API_KEY="sk-or-v1-<KEY>"
+E2B_API_KEY=
+
+# Other LLM API providers, Optional or if you've chosen it
+TOGETHER_API_KEY=
+OPENAI_API_KEY=
+```
+
+Start the validator
+
+```bash
+# start the validator
+# Testnet
+docker compose up -d validator-testnet
+```
+
+To start with autoupdate for validators (**optional**)
+
+```bash
+# Testnet
+pm2 start run.sh \
+--interpreter bash \
+--name dojo-autoupdater \
+-- --wallet.name coldkey \
+--wallet.hotkey hotkey \
+--logging.debug \
+--subtensor.network test \
+--neuron.type validator
+```
+
+# Dojo CLI
+
+We provide a CLI that allows miners to manage their API and subscription keys either when connecting to our hosted Tensorplex API services or their own self-hosted miner backend.
+
+Features:
+
+- Tab completion
+- Prefix matching wallets
 
 ```bash
 # Start the dojo cli tool
@@ -214,131 +360,6 @@ subscription_key list
 # You can also delete your keys with the following commands.
 api_key delete
 subscription_key delete
-```
-
-Create .env file
-
-```bash
-# copy .env.miner.example
-cp .env.miner.example .env
-
-# ENV's that needs to be filled for miners:
-DOJO_API_KEY="sk-<KEY>"
-DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
-```
-
-Start the miner by running the following commands:
-
-```bash
-# For Testnet
-pm2 start main_miner.py \
---name dojo-miner \
---interpreter env/bin/python3 \
--- --netuid 98 \
---wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---axon.port 9602 \
---neuron.type miner \
---scoring_method "dojo" \
---subtensor.network test
-```
-
-### Setup Subscription Key for Miners on UI to connect to Dojo Subnet for scoring
-
-Note: URLs are different for devnet, testnet and mainnet.
-Testnet: https://dojo-api-testnet.tensorplex.ai
-Mainnet: **_REMOVED_**
-
-1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
-
-- You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
-- Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.jpg)
-- Click "Next" and "Continue", then finally it will be requesting a signature from your wallet, please sign and it will be connected. ![image](./assets/ui/wallet_sign.jpg)
-- Once connected, the top navigation bar should display your wallet address. ![image](./assets/ui/wallet_connected.png)
-
-2. Once connected, please stay connected to your wallet and click on "Enter Subscription Key". ![image](./assets/subscription/enter_subscription.png)
-
-- Give your subscription a name, and enter your subscription key generated earlier before running the miner. _*Refer to step 4 of "Getting Started" if you need to retrieve your key*_ ![image](./assets/subscription/enter_details.png)
-- Click "Create" and your subscription will be saved. ![image](./assets/subscription/created_details.png)
-- Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
-
-## Validating
-
-### Requirements for running a validator
-
-- Openrouter API Key
-- Deploy the synthetic QA API on the same server as the validator
-
-Pull the synthetic qa api git submodule
-
-```bash
-# pull submodules
-git submodule update --init
-```
-
-Setup the env variables, these are marked with "# CHANGE" in `dojo-synthetic-api/docker-compose.yml`
-
-Run the server
-
-```bash
-cd dojo-synthetic-api
-docker compose up -d
-```
-
-### Start Validating
-
-Head back to dojo project and set up the .env file
-
-```bash
-cd dojo
-
-# copy .env.validator.example
-cp .env.validator.example .env
-
-# edit the .env file with vim, vi or nano
-# Please select one
-DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
-SYNTHETIC_API_URL="http://127.0.0.1:5003"
-TOKENIZERS_PARALLELISM=true
-OPENROUTER_API_KEY="sk-or-v1-<KEY>"
-WANDB_API_KEY="<wandb_key>"
-
-# Optional or if you've chosen it
-TOGETHER_API_KEY=
-OPENAI_API_KEY=
-```
-
-Start the validator
-
-```bash
-# start the validator
-# Testnet
-pm2 start main_validator.py \
---name dojo-validator \
---interpreter env/bin/python3 \
--- --netuid 98 \
---wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---axon.port 9603 \
---neuron.type validator \
---subtensor.network test
-```
-
-To start with autoupdate for validators (**optional**)
-
-```bash
-# Testnet
-pm2 start run.sh \
---interpreter bash \
---name dojo-autoupdater \
--- --wallet.name coldkey \
---wallet.hotkey hotkey \
---logging.debug \
---subtensor.network test \
---neuron.type validator \
---axon.port 9603
 ```
 
 # License

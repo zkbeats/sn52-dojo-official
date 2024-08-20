@@ -1,12 +1,266 @@
+volumes:
+  postgres-volume:
+  redis-volume:
+  testnet-lite-volume:
+
 services:
-  redis:
-    image: 'redis/redis-stack-server'
-    ports:
-      - '127.0.0.1:6379:6379'
-    restart: always
-    command:
-      - redis-server
-      - /usr/local/etc/redis/redis.conf
+  redis-service:
+    env_file:
+      - .env
+    image: redis/redis-stack-server:7.4.0-v0
+    environment:
+      # CHANGE THE PASSWORD TO A PASSWORD YOU WANT TO USE
+      REDIS_ARGS: "--requirepass ${REDIS_PASSWORD} --user ${REDIS_USERNAME} on >${REDIS_PASSWORD} ~* allcommands"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    expose:
+      - 6379
     volumes:
-      - ./redis.conf:/usr/local/etc/redis/redis.conf
-      - ./redis-data:/data
+      - redis-volume:/data
+
+  postgres-service:
+    env_file:
+      - .env
+    image: postgres:15.7
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    expose:
+      - 5432
+    volumes:
+      - postgres-volume:/var/lib/postgresql/data
+
+  prisma-setup:
+    platform: linux/amd64
+    image: golang:1.22
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+    working_dir: /app
+    volumes:
+      - ./dojo-worker-api/go.mod:/app/go.mod
+      - ./dojo-worker-api/go.sum:/app/go.sum
+      - ./dojo-worker-api/schema.prisma:/app/schema.prisma
+    command:
+      - /bin/sh
+      - -c
+      - |
+        go install github.com/steebchen/prisma-client-go@latest
+        go run github.com/steebchen/prisma-client-go generate
+        go run github.com/steebchen/prisma-client-go db push
+    depends_on:
+      - postgres-service
+
+  node-subtensor-testnet:
+    container_name: node-subtensor-testnet
+    image: ghcr.io/opentensor/subtensor:pr-720
+    platform: linux/amd64
+    ports:
+      - "9944:9944"
+      - "30333:30333"
+      - "9933:9933"
+    expose:
+      - 9944
+      - 30333
+      - 9933
+    environment:
+      - CARGO_HOME=/var/www/node-subtensor/.cargo
+    volumes:
+      - testnet-lite-volume:/tmp/blockchain
+    command:
+      - /bin/bash
+      - -c
+      - |
+        node-subtensor \
+          --base-path /tmp/blockchain \
+          --chain raw_spec_testfinney.json \
+          --rpc-external --rpc-cors all \
+          --no-mdns \
+          --in-peers 500 --out-peers 500 \
+          --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --sync warp
+          --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
+          --reserved-only
+    healthcheck:
+      test:
+        # [
+        #   "CMD-SHELL",
+        #   "docker logs node-subtensor-testnet 2>&1 | grep -q 'Imported #' && exit 0 || exit 1",
+        # ]
+        ["CMD-SHELL", "exit 0"]
+      interval: 12s
+      timeout: 24s
+      retries: 10
+      start_period: 30s
+
+  sidecar:
+    image: docker.io/parity/substrate-api-sidecar:v19.0.2
+    read_only: true
+    environment:
+      # for testnet: wss://test.finney.opentensor.ai:443
+      # SAS_SUBSTRATE_URL: wss://test.finney.opentensor.ai:443
+      SAS_SUBSTRATE_URL: ws://node-subtensor-testnet:9944
+    expose:
+      - 8080
+    healthcheck:
+      # jank as fuck since no curl
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8080, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();",
+        ]
+      interval: 12s
+      timeout: 24s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      node-subtensor-testnet:
+        condition: service_healthy
+
+  worker-api:
+    env_file:
+      - .env
+    platform: linux/amd64
+    image: ghcr.io/tensorplex-labs/dojo-worker-api:main
+    environment:
+      RUNTIME_ENV: local
+      SERVER_PORT: 8081
+      SUBNET_UID: 98
+      VALIDATOR_MIN_STAKE: 20000
+      CORS_ALLOWED_ORIGINS: http://localhost*
+      SUBSTRATE_API_URL: sidecar:8080
+      # authentication
+      TOKEN_EXPIRY: 24
+      REDIS_HOST: redis-service
+      REDIS_PORT: 6379
+      # these envs get sourced from .env so we dont need to rebuild
+      # # postgres
+      # ETHEREUM_NODE: ${ETHEREUM_NODE}
+      # JWT_SECRET: ${JWT_SECRET}
+      # DB_NAME: ${DB_NAME}
+      # DB_HOST: ${DB_HOST}
+      # DB_USERNAME: ${DB_USERNAME}
+      # DB_PASSWORD: ${DB_PASSWORD}
+      # DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+      # # aws s3 setup
+      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+      # S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      # # redis
+      # REDIS_USERNAME: ${REDIS_USERNAME}
+      # REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports:
+      - "8080:8081"
+    depends_on:
+      redis-service:
+        condition: service_healthy
+      postgres-service:
+        condition: service_healthy
+      sidecar:
+        condition: service_healthy
+      prisma-setup:
+        condition: service_completed_successfully
+    command: ["./service", "--debug"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ./.env:/dojo-api/.env
+
+  worker-ui:
+    image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  miner-testnet:
+    image: python:3.11
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+    command: >
+      sh -c '
+        pip install -e . &&
+        python main_miner.py \
+        --netuid 98 \
+        --subtensor.network ws://node-subtensor-testnet:9944 \
+        --logging.debug \
+        --wallet.name ${WALLET_COLDKEY} \
+        --wallet.hotkey ${WALLET_HOTKEY} \
+        --axon.port ${AXON_PORT} \
+        --neuron.type miner \
+        --scoring_method dojo \
+      '
+    depends_on:
+      worker-api:
+        condition: service_healthy
+      worker-ui:
+        condition: service_healthy
+
+  synthetic-api:
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    ports:
+      - "127.0.0.1:5003:5003"
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=redis-service
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_USER=${REDIS_USERNAME}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    depends_on:
+      redis-service:
+        condition: service_healthy
+
+  validator-testnet:
+    image: python:3.11
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+    command: >
+      sh -c '
+        pip install -e . &&
+        python3 main_validator.py \
+          --netuid 98 \
+          --subtensor.network ws://node-subtensor-testnet:9944 \
+          --logging.debug \
+          --wallet.name ${WALLET_COLDKEY} \
+          --wallet.hotkey ${WALLET_HOTKEY} \
+          --neuron.type validator \
+      '
+    depends_on:
+      synthetic-api:
+        condition: service_healthy
+      node-subtensor-testnet:
+        condition: service_healthy
