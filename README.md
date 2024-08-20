@@ -151,7 +151,6 @@ cd ~/opt
 # Clone the project
 git clone https://github.com/tensorplex-labs/dojo.git
 cd dojo/
-git submodule update --init
 
 # Set up python virtual environment and pip packages
 # Here we use venv for managing python versions
@@ -198,12 +197,6 @@ AXON_PORT=port to serve requests over the public network for validators to call
 ```
 
 Start the worker api which will be connected to the CLI later.
-
-```bash
-docker compose up -d worker-api
-```
-
-Start the worker-api by running the following commands:
 
 ```bash
 docker compose up -d worker-api
@@ -266,9 +259,7 @@ docker compose up -d miner-testnet
 
 ### Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring
 
-Note: URLs are different for devnet, testnet and mainnet.
-Testnet: https://dojo-api-testnet.tensorplex.ai
-Mainnet: **_REMOVED_**
+Note: URLs are different for testnet and mainnet. Please refer to [docs](https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet/official-links).
 
 1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
 
@@ -292,7 +283,6 @@ Copy the validator .env file and set up the .env file
 cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
-# Please select one
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true
