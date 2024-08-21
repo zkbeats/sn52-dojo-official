@@ -49,7 +49,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
     working_dir: /app
-    volumes:
+    volumes: #TODO: make this point to github repo when dojo-worker is public
       - ./dojo-worker-api/go.mod:/app/go.mod
       - ./dojo-worker-api/go.sum:/app/go.sum
       - ./dojo-worker-api/schema.prisma:/app/schema.prisma

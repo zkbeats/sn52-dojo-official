@@ -5,12 +5,13 @@ import time
 
 from loguru import logger
 
-from template import __version__, get_latest_git_tag
+from template import __version__
 
 CHECK_INTERVAL = 1800  # 30 minutes
 
 # Define the base URL for the images
 BASE_IMAGE_URL = "ghcr.io/tensorplex-labs/"
+BRANCH = "main"
 
 CONFIG = {
     "validator": {
@@ -41,6 +42,34 @@ logger.remove()
 logger.add(sys.stdout, colorize=True)
 
 
+def get_latest_remote_tag():
+    """Fetch and return the latest tag from the remote repository."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "ls-remote",
+                "--tags",
+                "https://github.com/tensorplex-labs/dojo.git",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Parse the result to get the latest tag
+        tags = [line.split("/")[-1] for line in result.stdout.strip().split("\n")]
+        latest_tag = sorted(
+            tags, key=lambda s: list(map(int, s.strip("v").split(".")))
+        )[-1]
+        # strip "v"
+        latest_tag = latest_tag[1:]
+        logger.debug(f"Latest tag from remote: {latest_tag}")
+        return latest_tag
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to fetch latest git tag: {e}")
+        return None
+
+
 def get_image_digest(image_name):
     """Get the image digest for the specified Docker image."""
     try:
@@ -65,10 +94,10 @@ def get_image_digest(image_name):
         return None
 
 
-def check_for_update(image_name):
+def check_for_update(image_url):
     """Check if there is an update available for the Docker image."""
-    logger.info(f"Checking for updates for {image_name}...")
-    local_digest = get_image_digest(image_name)
+    logger.info(f"Checking for updates for {image_url}...")
+    local_digest = get_image_digest(image_url)
 
     if not local_digest:
         return False
@@ -76,9 +105,9 @@ def check_for_update(image_name):
     logger.debug(f"Local digest: {local_digest}")
 
     # Pull the remote image
-    pull_docker_image(image_name)
+    pull_docker_image(image_url)
 
-    remote_digest = get_image_digest(image_name)
+    remote_digest = get_image_digest(image_url)
 
     if not remote_digest:
         return False
@@ -86,10 +115,10 @@ def check_for_update(image_name):
     logger.debug(f"Remote digest: {remote_digest}")
 
     if local_digest != remote_digest:
-        logger.info(f"Update available for {image_name}.")
+        logger.info(f"Update available for {image_url}.")
         return True
     else:
-        logger.info(f"No update available for {image_name}.")
+        logger.info(f"No update available for {image_url}.")
         return False
 
 
@@ -105,11 +134,25 @@ def pull_docker_image(image_url):
     return True
 
 
+def pull_docker_images(list_of_images: list[str]):
+    for image_name in list_of_images:
+        image_url = (
+            f"{BASE_IMAGE_URL}{image_name}:tensorplex-prod"
+            if image_name == "dojo-ui"
+            else f"{BASE_IMAGE_URL}{image_name}:{BRANCH}"
+        )
+        pull_docker_image(image_url)
+
+
 def check_for_image_updates(images):
     logger.info(f"Checking images: {images}")
     has_update = False
     for image_name in images:
-        image_url = f"{BASE_IMAGE_URL}{image_name}:dev"
+        image_url = (
+            f"{BASE_IMAGE_URL}{image_name}:tensorplex-prod"
+            if image_name == "dojo-ui"
+            else f"{BASE_IMAGE_URL}{image_name}:{BRANCH}"
+        )
         result = check_for_update(image_url)
         if result:
             has_update = True
@@ -130,6 +173,7 @@ def stash_changes():
 def pull_latest_changes():
     logger.info("Pulling latest changes from the main branch.")
     subprocess.run(["git", "pull", "origin", "main"], check=True)
+    subprocess.run(["git", "fetch", "--tags"], check=True)
 
 
 def pop_stash():
@@ -140,6 +184,7 @@ def pop_stash():
 def restart_docker(service_name):
     service_data = CONFIG.get(service_name, {})
     services_to_restart = service_data.get("services", [])
+    main_service = "miner-testnet" if service_name == "miner" else "validator-testnet"
 
     if not services_to_restart:
         logger.error(f"No services found for {service_name}.")
@@ -151,7 +196,7 @@ def restart_docker(service_name):
     subprocess.run(["docker", "compose", "stop"] + services_to_restart, check=True)
 
     # Start the services in a single command
-    subprocess.run(["docker", "compose", "up", "-d"] + services_to_restart, check=True)
+    subprocess.run(["docker", "compose", "up", "-d", main_service], check=True)
 
 
 def get_current_version():
@@ -173,12 +218,13 @@ def main(service_name):
 
     # Initial update and start the docker services
     current_dojo_version = get_current_version()
-    new_dojo_version = get_latest_git_tag()
+    new_dojo_version = get_latest_remote_tag()
 
     if current_dojo_version != new_dojo_version:
         update_repo()
 
-    check_for_image_updates(config["images"])
+    # Pull the latest images
+    pull_docker_images(config["images"])
     restart_docker(service_name)
 
     # Start the periodic check loop

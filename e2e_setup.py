@@ -55,6 +55,8 @@ def setup_wallet(uri: str, coldkey_name: str):
     parser = bittensor.cli.__create_parser__()
 
     def exec_command(command, extra_args: List[str]):
+        # Convert all arguments to strings to avoid any issues with argparse
+        extra_args = [str(arg) for arg in extra_args]
         cli_instance = bittensor.cli(
             bittensor.config(
                 parser=parser,
@@ -89,6 +91,7 @@ if __name__ == "__main__":
 
             _, _, exec = roles[r.name]
             coldkey_name = get_coldkey_name(r.name)
+
             exec(
                 TransferCommand,
                 [
@@ -108,6 +111,7 @@ if __name__ == "__main__":
             )
 
         _, _, owner_exec = roles[Roles.SUBNET_OWNER.name]
+
         owner_exec(
             RegisterSubnetworkCommand,
             [
