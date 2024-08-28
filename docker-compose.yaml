@@ -2,6 +2,7 @@ volumes:
   postgres-volume:
   redis-volume:
   testnet-lite-volume:
+  dojo-pip-cache:
 
 services:
   redis-service:
@@ -43,23 +44,14 @@ services:
 
   prisma-setup:
     platform: linux/amd64
-    image: golang:1.22
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.prisma
     env_file:
       - .env
     environment:
       DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
     working_dir: /app
-    volumes: #TODO: make this point to github repo when dojo-worker is public
-      - ./dojo-worker-api/go.mod:/app/go.mod
-      - ./dojo-worker-api/go.sum:/app/go.sum
-      - ./dojo-worker-api/schema.prisma:/app/schema.prisma
-    command:
-      - /bin/sh
-      - -c
-      - |
-        go install github.com/steebchen/prisma-client-go@latest
-        go run github.com/steebchen/prisma-client-go generate
-        go run github.com/steebchen/prisma-client-go db push
     depends_on:
       - postgres-service
 
@@ -109,11 +101,10 @@ services:
     image: docker.io/parity/substrate-api-sidecar:v19.0.2
     read_only: true
     environment:
-      # for testnet: wss://test.finney.opentensor.ai:443
-      # SAS_SUBSTRATE_URL: wss://test.finney.opentensor.ai:443
       SAS_SUBSTRATE_URL: ws://node-subtensor-testnet:9944
+      SAS_EXPRESS_PORT: 8081
     expose:
-      - 8080
+      - 8081
     healthcheck:
       # jank as fuck since no curl
       test:
@@ -121,7 +112,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8080, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();",
+          "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8081, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();",
         ]
       interval: 12s
       timeout: 24s
@@ -134,38 +125,25 @@ services:
   worker-api:
     env_file:
       - .env
+    volumes:
+      - ./.env:/dojo-api/.env
     platform: linux/amd64
     image: ghcr.io/tensorplex-labs/dojo-worker-api:main
     environment:
       RUNTIME_ENV: local
-      SERVER_PORT: 8081
+      SERVER_PORT: 8080
       SUBNET_UID: 98
       VALIDATOR_MIN_STAKE: 20000
-      CORS_ALLOWED_ORIGINS: http://localhost*
-      SUBSTRATE_API_URL: sidecar:8080
+      CORS_ALLOWED_ORIGINS: http://localhost*,http://worker-ui*,http://dojo-cli*
+      SUBSTRATE_API_URL: sidecar:8081
       # authentication
       TOKEN_EXPIRY: 24
       REDIS_HOST: redis-service
       REDIS_PORT: 6379
-      # these envs get sourced from .env so we dont need to rebuild
-      # # postgres
-      # ETHEREUM_NODE: ${ETHEREUM_NODE}
-      # JWT_SECRET: ${JWT_SECRET}
-      # DB_NAME: ${DB_NAME}
-      # DB_HOST: ${DB_HOST}
-      # DB_USERNAME: ${DB_USERNAME}
-      # DB_PASSWORD: ${DB_PASSWORD}
-      # DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
-      # # aws s3 setup
-      # AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      # AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      # AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
-      # S3_PUBLIC_URL: ${S3_PUBLIC_URL}
-      # # redis
-      # REDIS_USERNAME: ${REDIS_USERNAME}
-      # REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
-      - "8080:8081"
+      - "8080:8080"
+    expose:
+      - 8080
     depends_on:
       redis-service:
         condition: service_healthy
@@ -177,12 +155,10 @@ services:
         condition: service_completed_successfully
     command: ["./service", "--debug"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
       timeout: 10s
       retries: 5
-    volumes:
-      - ./.env:/dojo-api/.env
 
   worker-ui:
     image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
@@ -194,29 +170,54 @@ services:
       timeout: 10s
       retries: 5
 
-  miner-testnet:
-    image: python:3.11
-    working_dir: /app
+  btcli:
+    image: dojo-base:latest
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
-    command: >
-      sh -c '
-        pip install -e . &&
-        python main_miner.py \
-        --netuid 98 \
-        --subtensor.network ws://node-subtensor-testnet:9944 \
-        --logging.debug \
-        --wallet.name ${WALLET_COLDKEY} \
-        --wallet.hotkey ${WALLET_HOTKEY} \
-        --axon.port ${AXON_PORT} \
-        --neuron.type miner \
-        --scoring_method dojo \
-      '
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["btcli"]
+    tty: true
+    stdin_open: true
+
+  dojo-cli:
+    image: dojo-base:latest
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["dojo-cli"]
+    tty: true
+    stdin_open: true
+
+  miner-testnet-decentralised:
+    image: dojo-base:latest
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["miner"]
     depends_on:
       worker-api:
         condition: service_healthy
       worker-ui:
+        condition: service_healthy
+
+  miner-testnet-centralised:
+    image: dojo-base:latest
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["miner"]
+    depends_on:
+      node-subtensor-testnet:
         condition: service_healthy
 
   synthetic-api:
@@ -248,6 +249,7 @@ services:
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
     command: >
       sh -c '
         pip install -e . &&
