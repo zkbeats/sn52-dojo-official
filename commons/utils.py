@@ -14,11 +14,10 @@ import bittensor as bt
 import jsonref
 import requests
 import torch
+import wandb
 from Crypto.Hash import keccak
 from loguru import logger
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
-
-import wandb
 
 
 def get_new_uuid():
