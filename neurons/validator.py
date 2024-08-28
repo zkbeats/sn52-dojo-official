@@ -55,6 +55,7 @@ class Validator(BaseNeuron):
         # manually always register and always sync metagraph when application starts
         self.check_registered()
         self.resync_metagraph()
+
         init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
