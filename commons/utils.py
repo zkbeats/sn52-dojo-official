@@ -1,21 +1,24 @@
+import copy
 import os
 import time
 import uuid
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache, update_wrapper
 from math import floor
-from typing import Any, Callable, Tuple
+from pathlib import Path
+from typing import Any, Tuple
 
 import bittensor as bt
 import jsonref
 import requests
 import torch
-import wandb
 from Crypto.Hash import keccak
 from loguru import logger
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
+
+import wandb
 
 
 def get_new_uuid():
@@ -40,8 +43,34 @@ def keccak256_hash(data):
     return k.hexdigest()
 
 
+def hide_sensitive_path(path):
+    """
+    Replace the path up to the directory just before '/logs' with '~/dir_before_logs'.
+    If 'logs' is not found, return the path starting from the first directory after '~'.
+    """
+
+    logger.info(f"Masking sensitive path: {path}")
+    path = str(path)
+
+    home_directory = os.path.expanduser("~")
+    print(f"home_directory: {home_directory}")
+    # Replace home directory with '~'
+    if path.startswith(home_directory):
+        path = path.replace(home_directory, "~")
+
+    return Path(path)
+
+
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
+    # Ensure paths are decoupled
     import template
+
+    # Deep copy of the config
+    config = copy.deepcopy(config)
+
+    # Manually deepcopy neuron and data_manager, otherwise it is referenced to the same object
+    config.neuron = copy.deepcopy(config.neuron)
+    config.data_manager = copy.deepcopy(config.data_manager)
 
     project_name = None
     if "localhost" in template.DOJO_API_BASE_URL:
@@ -56,6 +85,22 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
         raise ValueError("Unable to infer wandb project name")
 
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
+
+    # Hide sensitive paths in the config
+    config.neuron.full_path = (
+        hide_sensitive_path(config.neuron.full_path)
+        if config.neuron.full_path
+        else None
+    )
+    config.data_manager.base_path = (
+        hide_sensitive_path(config.data_manager.base_path)
+        if config.data_manager.base_path
+        else None
+    )
+
+    logger.debug(f"config.neuron.full_path: {config.neuron.full_path}")
+    logger.debug(f"config.data_manager.base_path: {config.data_manager.base_path}")
+
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
     config.run_name = run_name
