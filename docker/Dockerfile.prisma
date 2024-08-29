@@ -1,0 +1,18 @@
+FROM golang:1.22
+
+WORKDIR /app
+
+ADD https://raw.githubusercontent.com/tensorplex-labs/dojo-worker-api/main/go.mod go.mod
+ADD https://raw.githubusercontent.com/tensorplex-labs/dojo-worker-api/main/go.sum go.sum
+ADD https://raw.githubusercontent.com/tensorplex-labs/dojo-worker-api/main/schema.prisma schema.prisma
+
+# prefetch the binaries, so that they will be cached and not downloaded on each change
+RUN go run github.com/steebchen/prisma-client-go prefetch
+
+# # version based on what's in the go.mod file atm
+# RUN go install github.com/steebchen/prisma-client-go@v0.36.0
+
+ENV DATABASE_URL postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+
+CMD go run github.com/steebchen/prisma-client-go generate && \
+    go run github.com/steebchen/prisma-client-go db push
