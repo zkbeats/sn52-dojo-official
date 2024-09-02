@@ -171,7 +171,8 @@ services:
       retries: 5
 
   btcli:
-    image: dojo-base:latest
+    # TODO @dev change back after testing
+    image: dojo-base:dev
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -181,7 +182,7 @@ services:
     stdin_open: true
 
   dojo-cli:
-    image: dojo-base:latest
+    image: dojo-base:dev
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -191,7 +192,7 @@ services:
     stdin_open: true
 
   miner-testnet-decentralised:
-    image: dojo-base:latest
+    image: dojo-base:dev
     working_dir: /app
     env_file:
       - .env
@@ -207,7 +208,7 @@ services:
         condition: service_healthy
 
   miner-testnet-centralised:
-    image: dojo-base:latest
+    image: dojo-base:dev
     working_dir: /app
     env_file:
       - .env
