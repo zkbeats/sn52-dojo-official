@@ -17,7 +17,6 @@ from neurons.validator import DojoTaskTracker
 
 load_dotenv()
 
-
 validator = ObjectManager.get_validator()
 
 
@@ -27,7 +26,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Performing shutdown tasks...")
     validator._should_exit = True
-    DojoTaskTracker()._should_exit = True
+    DojoTaskTracker._should_exit = True
     wandb.finish()
     validator.save_state()
     await SyntheticAPI._session.close()

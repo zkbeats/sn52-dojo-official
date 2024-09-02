@@ -133,7 +133,6 @@ services:
       RUNTIME_ENV: local
       SERVER_PORT: 8080
       SUBNET_UID: 98
-      VALIDATOR_MIN_STAKE: 20000
       CORS_ALLOWED_ORIGINS: http://localhost*,http://worker-ui*,http://dojo-cli*
       SUBSTRATE_API_URL: sidecar:8081
       # authentication
@@ -222,7 +221,7 @@ services:
         condition: service_healthy
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
     ports:
       - "127.0.0.1:5003:5003"
     env_file:

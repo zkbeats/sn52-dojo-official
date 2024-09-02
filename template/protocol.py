@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Dict, List
 
 import bittensor as bt
@@ -168,3 +169,30 @@ class DendriteQueryResponse(BaseModel):
 
     request: FeedbackRequest
     miner_responses: List[FeedbackRequest]
+
+
+class Result(BaseModel):
+    type: str = Field(description="Type of the result")
+    value: dict = Field(description="Value of the result")
+
+
+class TaskResult(BaseModel):
+    id: str = Field(description="Task ID")
+    created_at: datetime = Field(description="Creation timestamp")
+    updated_at: datetime = Field(description="Last update timestamp")
+    status: str = Field(description="Status of the task result")
+    result_data: list[Result] = Field(description="List of Result data for the task")
+    task_id: str = Field(description="ID of the associated task")
+    worker_id: str = Field(description="ID of the worker who completed the task")
+    stake_amount: float | None = Field(description="Stake amount", default=None)
+    potential_reward: float | None = Field(description="Potential reward", default=None)
+    potential_loss: float | None = Field(description="Potential loss", default=None)
+    finalised_reward: float | None = Field(description="Finalised reward", default=None)
+    finalised_loss: float | None = Field(description="Finalised loss", default=None)
+
+
+class TaskResultRequest(bt.Synapse):
+    task_id: str = Field(description="The ID of the task to retrieve results for")
+    task_results: list[TaskResult] = Field(
+        description="List of TaskResult objects", default=[]
+    )

@@ -55,16 +55,21 @@ def add_args(parser):
 
     if trace:
         logger.remove()
-        logger.add(sys.stderr, level="TRACE")
+        logger.add(sys.stdout, level="TRACE", colorize=True)
     elif debug:
         logger.remove()
-        logger.add(sys.stderr, level="DEBUG")
+        logger.add(sys.stdout, level="DEBUG", colorize=True)
     elif info:
         logger.remove()
-        logger.add(sys.stderr, level="INFO")
+        logger.add(sys.stdout, level="INFO", colorize=True)
     else:
         logger.remove()
-        logger.add(sys.stderr, level="INFO")
+        logger.add(sys.stdout, level="INFO", colorize=True)
+
+    logger.add(
+        sys.stderr,
+        level="ERROR",  # Only send ERROR and above to stderr
+    )
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
