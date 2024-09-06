@@ -172,7 +172,7 @@ services:
 
   btcli:
     # TODO @dev change back after testing
-    image: dojo-base:dev
+    image: ghcr.io/tensorplex-labs/dojo:dev
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -182,7 +182,7 @@ services:
     stdin_open: true
 
   dojo-cli:
-    image: dojo-base:dev
+    image: ghcr.io/tensorplex-labs/dojo:dev
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -192,7 +192,7 @@ services:
     stdin_open: true
 
   miner-testnet-decentralised:
-    image: dojo-base:dev
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     env_file:
       - .env
@@ -208,7 +208,7 @@ services:
         condition: service_healthy
 
   miner-testnet-centralised:
-    image: dojo-base:dev
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     env_file:
       - .env
