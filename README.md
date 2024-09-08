@@ -49,6 +49,7 @@
     - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
 - [Dojo CLI](#dojo-cli)
+- [For Dojo devs](#for-dojo-devs)
 - [License](#license)
 
 </details>
@@ -457,6 +458,37 @@ subscription_key list
 # You can also delete your keys with the following commands.
 api_key delete
 subscription_key delete
+```
+
+# For Dojo devs
+
+You most likely won't be running a dockerized version of the subnet code as you ship. Use the following guide to get up and running
+
+1. Get uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Make sure you have a python version >=3.10
+
+```bash
+uv python list
+```
+
+3. Create a virtualenv
+
+```bash
+# i'm using 3.11 here, but you may use any >=3.10 version
+uv venv dojo_venv --python=$(uv python find 3.11)
+# if you wish to follow
+```
+
+4. Activate virtualenv
+
+```bash
+# follows python-venv syntax
+source dojo_venv/bin/activate
 ```
 
 # License

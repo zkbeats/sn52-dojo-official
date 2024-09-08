@@ -16,7 +16,13 @@ nox.options.reuse_existing_virtualenvs = True
     name=VENV_NAME,
 )
 def compatibility(session):
-    session.install("-e", ".[test]", silent=False)
+    session.install(
+        "-e",
+        ".[test]",
+        "--find-links",
+        "https://download.pytorch.org/whl/torch_stable.html",
+        silent=False,
+    )
     pip_show_output = session.run("pip", "show", "dojo", silent=True)
     if "not found" in pip_show_output:
         raise Exception(
