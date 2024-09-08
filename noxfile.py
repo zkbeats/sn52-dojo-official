@@ -37,5 +37,11 @@ def compatibility(session):
     name=VENV_NAME,
 )
 def unit_tests(session):
-    session.install("-e", ".[test]", silent=False)
+    session.install(
+        "-e",
+        ".[test]",
+        "--find-links",
+        "https://download.pytorch.org/whl/torch_stable.html",
+        silent=False,
+    )
     session.run("pytest", "-s", "-v", "tests/unit_testing")
