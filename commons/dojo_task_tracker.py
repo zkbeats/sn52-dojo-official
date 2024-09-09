@@ -37,16 +37,10 @@ class DojoTaskTracker:
     _task_to_expiry: Dict[str, str] = defaultdict(str)
     _lock = asyncio.Lock()
     _should_exit: bool = False
-    _miner_ip_map: dict[str, str] = {}
-    # _wallet: bt.wallet | None
-    # _dendrite: bt.dendrite | None
 
-    def __new__(cls, wallet: bt.wallet = None, *args, **kwargs):
+    def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            # if wallet is not None:  # Set wallet and dendrite if provided
-            #     cls._wallet = wallet
-            #     cls._dendrite = bt.dendrite(wallet=cls._wallet)
         return cls._instance
 
     @staticmethod
@@ -143,8 +137,11 @@ class DojoTaskTracker:
 
             # Prepare the synapse (data request) that will be sent via Dendrite
             task_synapse = TaskResultRequest(task_id=task_id)
+
             # Use Dendrite to communicate with the Axon
             miner_axon = metagraph.axons[metagraph.hotkeys.index(miner_hotkey)]
+            if not miner_axon:
+                raise ValueError(f"Miner Axon not found for hotkey: {miner_hotkey}")
 
             # Send the request via Dendrite and get the response
             response = await dendrite.forward(
@@ -171,7 +168,7 @@ class DojoTaskTracker:
     @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
-        await asyncio.sleep(30)
+        await asyncio.sleep(60)
 
         while not cls._should_exit:
             try:
