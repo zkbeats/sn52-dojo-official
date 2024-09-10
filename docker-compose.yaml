@@ -4,6 +4,15 @@ volumes:
   testnet-lite-volume:
   dojo-pip-cache:
 
+
+networks:
+  external:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+  internal:
+    driver: bridge
+
 services:
   redis-service:
     env_file:
@@ -13,7 +22,7 @@ services:
       # CHANGE THE PASSWORD TO A PASSWORD YOU WANT TO USE
       REDIS_ARGS: "--requirepass ${REDIS_PASSWORD} --user ${REDIS_USERNAME} on >${REDIS_PASSWORD} ~* allcommands"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,6 +30,8 @@ services:
       - 6379
     volumes:
       - redis-volume:/data
+    networks:
+      - internal
 
   postgres-service:
     env_file:
@@ -31,7 +42,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -41,86 +52,45 @@ services:
       - 5432
     volumes:
       - postgres-volume:/var/lib/postgresql/data
+    networks:
+      - internal
 
   prisma-setup:
     platform: linux/amd64
+    env_file:
+      - .env
     build:
       context: .
       dockerfile: ./docker/Dockerfile.prisma
-    env_file:
-      - .env
     environment:
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: ${DB_HOST}
       DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
     working_dir: /app
     depends_on:
       - postgres-service
-
-  node-subtensor-testnet:
-    container_name: node-subtensor-testnet
-    image: ghcr.io/opentensor/subtensor:pr-720
-    platform: linux/amd64
-    ports:
-      - "9944:9944"
-      - "30333:30333"
-      - "9933:9933"
-    expose:
-      - 9944
-      - 30333
-      - 9933
-    environment:
-      - CARGO_HOME=/var/www/node-subtensor/.cargo
-    volumes:
-      - testnet-lite-volume:/tmp/blockchain
-    command:
-      - /bin/bash
-      - -c
-      - |
-        node-subtensor \
-          --base-path /tmp/blockchain \
-          --chain raw_spec_testfinney.json \
-          --rpc-external --rpc-cors all \
-          --no-mdns \
-          --in-peers 500 --out-peers 500 \
-          --bootnodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
-          --sync warp
-          --reserved-nodes /dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr \
-          --reserved-only
-    healthcheck:
-      test:
-        # [
-        #   "CMD-SHELL",
-        #   "docker logs node-subtensor-testnet 2>&1 | grep -q 'Imported #' && exit 0 || exit 1",
-        # ]
-        ["CMD-SHELL", "exit 0"]
-      interval: 12s
-      timeout: 24s
-      retries: 10
-      start_period: 30s
+    networks:
+      - internal
 
   sidecar:
     image: docker.io/parity/substrate-api-sidecar:v19.0.2
     read_only: true
     environment:
-      SAS_SUBSTRATE_URL: ws://node-subtensor-testnet:9944
+      SAS_SUBSTRATE_URL: wss://test.finney.opentensor.ai
       SAS_EXPRESS_PORT: 8081
     expose:
       - 8081
     healthcheck:
       # jank as fuck since no curl
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8081, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();",
-        ]
+      test: [ "CMD", "node", "-e", "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8081, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();" ]
       interval: 12s
       timeout: 24s
       retries: 10
       start_period: 30s
-    depends_on:
-      node-subtensor-testnet:
-        condition: service_healthy
+    networks:
+      - internal
 
   worker-api:
     env_file:
@@ -153,22 +123,27 @@ services:
         condition: service_healthy
       prisma-setup:
         condition: service_completed_successfully
-    command: ["./service", "--debug"]
+    command: [ "./service", "--debug" ]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
       interval: 10s
       timeout: 10s
       retries: 5
+    networks:
+      - internal
 
   worker-ui:
     image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
     ports:
       - "3000:3000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
       interval: 10s
       timeout: 10s
       retries: 5
+    networks:
+      - internal
+      - external
 
   btcli:
     # TODO @dev change back after testing
@@ -177,7 +152,7 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["btcli"]
+    command: [ "btcli" ]
     tty: true
     stdin_open: true
 
@@ -187,7 +162,7 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["dojo-cli"]
+    command: [ "dojo-cli" ]
     tty: true
     stdin_open: true
 
@@ -200,12 +175,15 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["miner"]
+    command: [ "miner" ]
     depends_on:
       worker-api:
         condition: service_healthy
       worker-ui:
         condition: service_healthy
+    networks:
+      - internal
+      - external
 
   miner-testnet-centralised:
     image: ghcr.io/tensorplex-labs/dojo:dev
@@ -216,10 +194,10 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["miner"]
-    depends_on:
-      node-subtensor-testnet:
-        condition: service_healthy
+    command: [ "miner" ]
+    networks:
+      - internal
+      - external
 
   synthetic-api:
     image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
@@ -236,13 +214,15 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - E2B_API_KEY=${E2B_API_KEY}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:5003/health" ]
       interval: 10s
       timeout: 10s
       retries: 5
     depends_on:
       redis-service:
         condition: service_healthy
+    networks:
+      - internal
 
   validator-testnet:
     image: python:3.11
@@ -256,7 +236,7 @@ services:
         pip install -e . &&
         python3 main_validator.py \
           --netuid 98 \
-          --subtensor.network ws://node-subtensor-testnet:9944 \
+          --subtensor.network ${SUBTENSOR_NETWORK} \
           --logging.debug \
           --wallet.name ${WALLET_COLDKEY} \
           --wallet.hotkey ${WALLET_HOTKEY} \
@@ -265,5 +245,5 @@ services:
     depends_on:
       synthetic-api:
         condition: service_healthy
-      node-subtensor-testnet:
-        condition: service_healthy
+    networks:
+      - internal
