@@ -241,6 +241,9 @@ btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subt
 cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
+# for testnet
+SUBTENSOR_NETWORK=test
+SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
@@ -277,6 +280,9 @@ docker compose up -d miner-testnet-centralised
 cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
+# for testnet
+SUBTENSOR_NETWORK=test
+SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="http://worker-api:8080" # use this value
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
@@ -376,6 +382,9 @@ Copy the validator .env file and set up the .env file
 cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
+# for testnet
+SUBTENSOR_NETWORK=test
+SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true

@@ -18,10 +18,13 @@ if [ "$1" = 'miner' ]; then
     echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
     echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
     echo "AXON_PORT: ${AXON_PORT}"
+    echo "SUBTENSOR_NETWORK: ${SUBTENSOR_NETWORK}"
+    echo "SUBTENSOR_ENDPOINT: ${SUBTENSOR_ENDPOINT}"
 
     python main_miner.py \
     --netuid 98 \
-    --subtensor.network ws://node-subtensor-testnet:9944 \
+    --subtensor.network ${SUBTENSOR_NETWORK} \
+    --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
     --logging.debug \
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
