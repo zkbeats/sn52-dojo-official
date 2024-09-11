@@ -4,7 +4,6 @@ volumes:
   testnet-lite-volume:
   dojo-pip-cache:
 
-
 networks:
   external:
     driver: bridge
@@ -22,7 +21,7 @@ services:
       # CHANGE THE PASSWORD TO A PASSWORD YOU WANT TO USE
       REDIS_ARGS: "--requirepass ${REDIS_PASSWORD} --user ${REDIS_USERNAME} on >${REDIS_PASSWORD} ~* allcommands"
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -42,7 +41,7 @@ services:
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -84,7 +83,13 @@ services:
       - 8081
     healthcheck:
       # jank as fuck since no curl
-      test: [ "CMD", "node", "-e", "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8081, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();" ]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8081, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();",
+        ]
       interval: 12s
       timeout: 24s
       retries: 10
@@ -123,9 +128,9 @@ services:
         condition: service_healthy
       prisma-setup:
         condition: service_completed_successfully
-    command: [ "./service", "--debug" ]
+    command: ["./service", "--debug"]
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -137,7 +142,7 @@ services:
     ports:
       - "3000:3000"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -152,7 +157,7 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: [ "btcli" ]
+    command: ["btcli"]
     tty: true
     stdin_open: true
 
@@ -162,9 +167,11 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: [ "dojo-cli" ]
+    command: ["dojo-cli"]
     tty: true
     stdin_open: true
+    networks:
+      - internal
 
   miner-testnet-decentralised:
     image: ghcr.io/tensorplex-labs/dojo:dev
@@ -175,7 +182,7 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: [ "miner" ]
+    command: ["miner"]
     depends_on:
       worker-api:
         condition: service_healthy
@@ -196,7 +203,7 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: [ "miner" ]
+    command: ["miner"]
     networks:
       - internal
       - external
@@ -216,7 +223,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - E2B_API_KEY=${E2B_API_KEY}
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:5003/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
       interval: 10s
       timeout: 10s
       retries: 5
