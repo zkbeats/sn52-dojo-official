@@ -17,7 +17,6 @@ from neurons.validator import DojoTaskTracker
 
 load_dotenv()
 
-
 validator = ObjectManager.get_validator()
 
 

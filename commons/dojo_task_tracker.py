@@ -9,7 +9,6 @@ from loguru import logger
 
 import template
 from commons.data_manager import DataManager
-from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from commons.utils import (
     get_current_utc_time_iso,
@@ -23,6 +22,8 @@ from template.protocol import (
     MultiScoreCriteria,
     RankingCriteria,
     ScoringMethod,
+    TaskResult,
+    TaskResultRequest,
 )
 
 
@@ -117,6 +118,54 @@ class DojoTaskTracker:
         logger.info(f"Removed {len(expired_tasks)} expired tasks from DojoTaskTracker.")
 
     @classmethod
+    async def get_task_results_from_miner(
+        cls, miner_hotkey: str, task_id: str
+    ) -> list[TaskResult]:
+        """Fetch task results from the miner's Axon using Dendrite."""
+        try:
+            logger.info(
+                f"Fetching task result from miner {miner_hotkey} for task {task_id}"
+            )
+
+            validator = ObjectManager.get_validator()
+
+            dendrite: bt.dendrite = validator.dendrite
+            metagraph: bt.metagraph = validator.metagraph
+
+            if not dendrite:
+                raise ValueError("Dendrite not initialized")
+
+            # Prepare the synapse (data request) that will be sent via Dendrite
+            task_synapse = TaskResultRequest(task_id=task_id)
+
+            # Use Dendrite to communicate with the Axon
+            miner_axon = metagraph.axons[metagraph.hotkeys.index(miner_hotkey)]
+            if not miner_axon:
+                raise ValueError(f"Miner Axon not found for hotkey: {miner_hotkey}")
+
+            # Send the request via Dendrite and get the response
+            response = await dendrite.forward(
+                axons=[miner_axon], synapse=task_synapse, deserialize=False
+            )
+
+            logger.debug(f"TaskResult Response from miner {miner_hotkey}: {response}")
+
+            if response and response[0]:
+                logger.info(
+                    f"Received task result from miner {miner_hotkey} for task {task_id}"
+                )
+                return response[0].task_results
+            else:
+                logger.warning(
+                    f"No task results found from miner {miner_hotkey} for task {task_id}"
+                )
+                return []
+
+        except Exception as e:
+            logger.error(f"Error fetching task result from miner {miner_hotkey}: {e}")
+            return []
+
+    @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
         await asyncio.sleep(60)
@@ -154,10 +203,11 @@ class DojoTaskTracker:
                             )
                             continue
 
-                        task_results = await DojoAPI.get_task_results_by_task_id(
-                            task_id
+                        task_results = await cls.get_task_results_from_miner(
+                            miner_hotkey, task_id
                         )
-                        if not task_results:
+
+                        if not task_results and not len(task_results) > 0:
                             logger.warning(
                                 f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
                             )
@@ -173,9 +223,9 @@ class DojoTaskTracker:
                         # keep track so we average across the miner's worker pool
                         num_ranks_by_workers, num_scores_by_workers = 0, 0
                         for result in task_results:
-                            for result_data in result["result_data"]:
-                                type = result_data["type"]
-                                value = result_data["value"]
+                            for result_data in result.result_data:
+                                type = result_data.type
+                                value = result_data.value
                                 if type == CriteriaTypeEnum.RANKING_CRITERIA:
                                     for rank, model_id in value.items():
                                         real_model_id = cls._rid_to_model_map.get(
