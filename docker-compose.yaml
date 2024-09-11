@@ -181,6 +181,8 @@ services:
         condition: service_healthy
       worker-ui:
         condition: service_healthy
+    ports:
+      - ${AXON_PORT}:${AXON_PORT}
     networks:
       - internal
       - external
@@ -237,6 +239,7 @@ services:
         python3 main_validator.py \
           --netuid 98 \
           --subtensor.network ${SUBTENSOR_NETWORK} \
+          --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
           --logging.debug \
           --wallet.name ${WALLET_COLDKEY} \
           --wallet.hotkey ${WALLET_HOTKEY} \
@@ -245,5 +248,4 @@ services:
     depends_on:
       synthetic-api:
         condition: service_healthy
-    networks:
-      - internal
+    network_mode: host
