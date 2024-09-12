@@ -32,3 +32,22 @@ if [ "$1" = 'miner' ]; then
     --neuron.type miner \
     --scoring_method dojo
 fi
+
+# If the first argument is 'validator', run the validator script
+if [ "$1" = 'validator' ]; then
+    echo "Environment variables:"
+    echo "WALLET_COLDKEY: ${WALLET_COLDKEY}"
+    echo "WALLET_HOTKEY: ${WALLET_HOTKEY}"
+    echo "AXON_PORT: ${AXON_PORT}"
+    echo "SUBTENSOR_NETWORK: ${SUBTENSOR_NETWORK}"
+    echo "SUBTENSOR_ENDPOINT: ${SUBTENSOR_ENDPOINT}"
+
+    python main_validator.py \
+    --netuid 98 \
+    --subtensor.network ${SUBTENSOR_NETWORK} \
+    --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
+    --logging.debug \
+    --wallet.name ${WALLET_COLDKEY} \
+    --wallet.hotkey ${WALLET_HOTKEY} \
+    --neuron.type validator
+fi

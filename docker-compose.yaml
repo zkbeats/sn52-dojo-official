@@ -233,24 +233,15 @@ services:
       - internal
 
   validator-testnet:
-    image: python:3.11
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
+    env_file:
+     - .env
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: >
-      sh -c '
-        pip install -e . &&
-        python3 main_validator.py \
-          --netuid 98 \
-          --subtensor.network ${SUBTENSOR_NETWORK} \
-          --subtensor.chain_endpoint ${SUBTENSOR_ENDPOINT} \
-          --logging.debug \
-          --wallet.name ${WALLET_COLDKEY} \
-          --wallet.hotkey ${WALLET_HOTKEY} \
-          --neuron.type validator \
-      '
+    command: ["validator"]
     depends_on:
       synthetic-api:
         condition: service_healthy
