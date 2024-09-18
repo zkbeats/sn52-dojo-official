@@ -3,6 +3,22 @@ from unittest.mock import patch
 import bittensor as bt
 import numpy as np
 import pytest
+import torch
+
+from template.protocol import FeedbackRequest, RankingCriteria, TaskType
+
+# # Remove the default loguru handler
+# logger.remove()
+
+# # Add a new handler to log to stdout
+# logger.add(sys.stdout, level="DEBUG")
+
+default_ground_truth = {
+    "cid_1": 0,  # 1st place
+    "cid_2": 1,  # 2nd place
+    "cid_3": 2,  # 3rd place
+    "cid_4": 3,  # 4th place
+}
 
 
 @pytest.fixture
@@ -10,13 +26,7 @@ def scoring_module():
     # ensure we import them depending on mock_env_var so the ValueError doesn't
     # get raised
     from commons.scoring import Scoring
-    from template.protocol import (
-        CodeAnswer,
-        FeedbackRequest,
-        MultiScoreCriteria,
-        Response,
-        TaskType,
-    )
+    from template.protocol import CodeAnswer, MultiScoreCriteria, Response
 
     return (
         Scoring,
@@ -30,10 +40,12 @@ def scoring_module():
 
 def mock_response(
     model: str,
-    score: float | None,
     filename: str,
     content: str,
     language: str,
+    score: float | None = 0.0,
+    cid: str = "",
+    rank_id: int = 0,
 ):
     from template.protocol import CodeAnswer, FileObject, Response
 
@@ -45,11 +57,13 @@ def mock_response(
             installation_commands="",
         ),
         score=score,
+        rank_id=rank_id,
+        cid=cid,
     )
 
 
 def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
-    from template.protocol import FeedbackRequest, MultiScoreCriteria, TaskType
+    from template.protocol import MultiScoreCriteria
 
     axon = bt.TerminalInfo(hotkey=hotkey)
     prompt = "Write a hello world program in python"
@@ -74,6 +88,7 @@ def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
         )
     ]
 
+    # Include the ground truth in the request object if provided
     return FeedbackRequest(
         axon=axon,
         prompt=prompt,
@@ -258,3 +273,176 @@ def test_cmp_ground_truth_missing_data(mock_get_leaderboard_data_func):
             Scoring.cmp_ground_truth(criteria, request, miner_responses)
 
     mock_get_leaderboard_data_func.assert_called_once()
+
+
+"""
+TESTS FOR SPEARMAN CORRELATION
+"""
+
+
+def mock_request_spm(
+    hotkey: str | None = None,
+    rank_ids: list[int] = [],
+    cids: list[str] = [],
+    ground_truth: dict[str, int] = default_ground_truth,
+):
+    """
+    Dynamically generates miner responses using separate rank_ids and cids.
+    """
+    from template.protocol import FeedbackRequest, TaskType
+
+    axon = bt.TerminalInfo(hotkey=hotkey)
+    prompt = "Write a hello world program in python"
+    task_type = TaskType.CODE_GENERATION
+
+    # List of models for testing purposes (you can adjust this as necessary)
+    models = [
+        "anthropic/claude-3-haiku-20240307",
+        "anthropic/claude-3-opus-20240229",
+        "anthropic/claude-3-sonnet-20240229",
+        "meta-llama/llama-3-8b-instruct",
+    ]
+
+    # Ensure both rank_ids and cids have the same length
+    assert len(rank_ids) == len(cids), "rank_ids and cids must have the same length."
+
+    # Create responses dynamically using rank_ids and cids
+    responses = [
+        mock_response(
+            model=models[i],
+            score=None,
+            cid=cid,
+            filename=f"{models[i]}_output.py",
+            content="print('hello')",
+            language="python",
+            rank_id=rank_id,
+        )
+        for i, (cid, rank_id) in enumerate(zip(cids, rank_ids))
+    ]
+
+    # Create and return FeedbackRequest with the dynamically generated responses
+    return FeedbackRequest(
+        axon=axon,
+        prompt=prompt,
+        task_type=task_type,
+        criteria_types=[RankingCriteria(type="rank", options=[], min=0, max=3)],
+        responses=responses,
+        ground_truth=ground_truth,
+    )
+
+
+def mock_scoring_data_for_spm() -> tuple:
+    ground_truth = {
+        "cid_1": 0,  # 1st place
+        "cid_2": 1,  # 2nd place
+        "cid_3": 2,  # 3rd place
+        "cid_4": 3,  # 4th place
+    }
+
+    # Pass separate rank_ids and cids for miner A and miner B
+    request = mock_request_spm(
+        ground_truth=ground_truth,
+        rank_ids=[2, 1, 0, 3],
+        cids=["cid_1", "cid_2", "cid_3", "cid_4"],
+    )
+    miner_a = mock_request_spm(
+        hotkey="hotkeyA",
+        rank_ids=[2, 1, 0, 3],
+        cids=["cid_1", "cid_2", "cid_3", "cid_4"],
+    )
+    miner_b = mock_request_spm(
+        hotkey="hotkeyB",
+        rank_ids=[0, 1, 2, 3],
+        cids=["cid_1", "cid_2", "cid_3", "cid_4"],
+    )
+
+    return request, [miner_a, miner_b]
+
+
+def mock_scoring_data_with_known_values() -> tuple:
+    """
+    This mock data has specific values where we can predict the Spearman correlation.
+    """
+
+    ground_truth = {
+        "cid1": 0,  # Best-ranked item
+        "cid2": 1,
+        "cid3": 2,
+        "cid4": 3,  # Worst-ranked item
+    }
+
+    # Miner A ranks the items perfectly in reverse order of ground truth
+    miner_a = mock_request_spm(
+        hotkey="hotkeyA",
+        rank_ids=[3, 2, 1, 0],  # Reverse of ground truth
+        cids=["cid1", "cid2", "cid3", "cid4"],
+        ground_truth=ground_truth,
+    )
+
+    # Miner B ranks the items in the exact order of the ground truth
+    miner_b = mock_request_spm(
+        hotkey="hotkeyB",
+        rank_ids=[0, 1, 2, 3],  # Perfect match with ground truth
+        cids=["cid1", "cid2", "cid3", "cid4"],
+        ground_truth=ground_truth,
+    )
+
+    request = mock_request_spm(ground_truth=ground_truth)
+    return request, [miner_a, miner_b]
+
+
+def test_spearman_correlation(scoring_module):
+    from commons.scoring import Scoring
+
+    request, miner_responses = mock_scoring_data_for_spm()
+
+    for criteria in request.criteria_types:
+        spearman_score = Scoring.spm_ground_truth(criteria, request, miner_responses)
+
+        # Ensure no NaN values
+        assert not np.isnan(
+            spearman_score.score
+        ).any(), "Spearman score should not contain NaN values"
+
+        # Ensure no inf values
+        assert not np.isinf(
+            spearman_score.score
+        ).any(), "Spearman score should not contain inf values"
+
+        # Check if Spearman scores are valid between -1 and 1
+        assert torch.all(
+            (spearman_score.raw_scores_by_miner >= -1)
+            & (spearman_score.raw_scores_by_miner <= 1)
+        )
+
+
+def test_spearman_correlation_known_values(scoring_module):
+    from scipy.stats import spearmanr
+
+    from commons.scoring import Scoring
+
+    request, miner_responses = mock_scoring_data_with_known_values()
+
+    for criteria in request.criteria_types:
+        spearman_score = Scoring.spm_ground_truth(criteria, request, miner_responses)
+
+        # Expected values:
+        # Miner A has the worst possible Spearman correlation (-1.0)
+        # Miner B has the best possible Spearman correlation (1.0)
+
+        # Test Miner A and Miner B's raw Spearman scores
+        miner_a_spearman = spearmanr([3, 2, 1, 0], [0, 1, 2, 3]).correlation  # -1.0
+        miner_b_spearman = spearmanr([0, 1, 2, 3], [0, 1, 2, 3]).correlation  # 1.0
+
+        # Ensure that the raw scores are cast to float32 before comparison
+        assert torch.allclose(
+            spearman_score.raw_scores_by_miner[0].float(),  # Cast to float32
+            torch.tensor(miner_a_spearman, dtype=torch.float32),
+            atol=1e-6,
+        ), f"Expected Spearman score for Miner A: {miner_a_spearman}, got: {spearman_score.raw_scores_by_miner[0]}"
+
+        assert torch.allclose(
+            spearman_score.raw_scores_by_miner[1].float(),  # Cast to float32
+            torch.tensor(miner_b_spearman, dtype=torch.float32),
+            atol=1e-6,
+        ), f"Expected Spearman score for Miner B: {miner_b_spearman}, got: {spearman_score.raw_scores_by_miner[1]}"

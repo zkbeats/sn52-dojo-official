@@ -94,7 +94,8 @@ exclude = [
   "dist",
   "node_modules",
   "site-packages",
-  "venv"
+  "venv",
+  "wandb"
 ]
 show-fixes = true
 output-format = "full"
@@ -146,6 +147,10 @@ ignore = [
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
+
+[tool.ruff.lint.isort]
+# this explicitly tells isort to treat wandb as a third-party package
+known-third-party = ["wandb"]
 
 [tool.setuptools]
 packages = {find = {}}

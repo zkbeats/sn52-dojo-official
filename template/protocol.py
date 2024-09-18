@@ -117,6 +117,10 @@ class Response(BaseModel):
 class SyntheticQA(BaseModel):
     prompt: str
     responses: List[Response]
+    ground_truth: dict[str, int] = Field(
+        description="Mapping of unique identifiers to their ground truth values",
+        default_factory=dict,
+    )
 
 
 class FeedbackRequest(bt.Synapse):
@@ -148,6 +152,10 @@ class FeedbackRequest(bt.Synapse):
     expire_at: str | None = Field(
         description="Expired time for Dojo task", default=None
     )
+    ground_truth: dict[str, int] = Field(
+        description="Mapping of unique identifiers to their ground truth values",
+        default_factory=dict,
+    )
 
 
 class ScoringResult(bt.Synapse):
@@ -166,7 +174,6 @@ class Heartbeat(bt.Synapse):
 
 class DendriteQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=False)
-
     request: FeedbackRequest
     miner_responses: List[FeedbackRequest]
 

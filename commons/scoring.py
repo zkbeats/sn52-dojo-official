@@ -8,6 +8,7 @@ import torch
 from attr import define, field
 from loguru import logger
 from pydantic import BaseModel, Field
+from scipy.stats import spearmanr
 from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_leaderboard_scores
@@ -310,6 +311,51 @@ class Scoring:
         )
 
     @staticmethod
+    def spm_ground_truth(
+        criteria: CriteriaType,
+        request: FeedbackRequest,
+        miner_responses: List[FeedbackRequest],
+    ):
+        """
+        Calculate Spearman Correlation between miner outputs and ground truth using 'cid'.
+        """
+
+        gt_keys = list(request.ground_truth.keys())
+        gt_values = list(request.ground_truth.values())
+
+        # Gather miner outputs based on their responses
+        miner_outputs = []
+        for response in miner_responses:
+            curr_miner_outputs = []
+            for completion in sorted(
+                response.responses, key=lambda response: gt_keys.index(response.cid)
+            ):
+                curr_miner_outputs.append(
+                    _get_miner_response_by_criteria(criteria, completion)
+                )
+            miner_outputs.append(curr_miner_outputs)
+
+        # Convert miner outputs to numpy array for easier processing
+        miner_outputs = np.array(miner_outputs)
+
+        # Calculate Spearman correlation for each miner's output against the ground truth
+        spearman_scores = [
+            spearmanr(miner_output, gt_values).correlation
+            for miner_output in miner_outputs
+        ]
+
+        # Convert the Spearman correlation scores into rewards
+        spearman_scores = torch.tensor(
+            np.nan_to_num(spearman_scores), dtype=torch.float32
+        )  # Handle NaN values
+        gt_reward = F.softmax(torch.tensor(spearman_scores, dtype=torch.float32), dim=0)
+
+        return GroundTruthScore(
+            score=gt_reward,
+            raw_scores_by_miner=spearman_scores,
+        )
+
+    @staticmethod
     def calculate_score(
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
@@ -340,7 +386,6 @@ class Scoring:
                             f"Detected all default values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
                         )
                         continue
-
                 valid_miner_responses.append(response)
 
             if len(valid_miner_responses) < 2:
@@ -352,9 +397,15 @@ class Scoring:
 
                 continue
 
-            gt_score = Scoring.cmp_ground_truth(
-                criteria, request, valid_miner_responses
-            )
+            if isinstance(criteria, RankingCriteria):
+                gt_score = Scoring.spm_ground_truth(
+                    criteria, request, valid_miner_responses
+                )
+            else:
+                gt_score = Scoring.cmp_ground_truth(
+                    criteria, request, valid_miner_responses
+                )
+
             consensus_score = Scoring.consensus_score(
                 criteria, request, valid_miner_responses
             )
