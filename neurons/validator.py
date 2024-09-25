@@ -533,7 +533,7 @@ class Validator(BaseNeuron):
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores
+        self.scores: torch.Tensor = alpha * rewards + (1 - alpha) * self.scores
         logger.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):
