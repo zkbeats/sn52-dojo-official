@@ -26,14 +26,20 @@ def scoring_module():
     # ensure we import them depending on mock_env_var so the ValueError doesn't
     # get raised
     from commons.scoring import Scoring
-    from template.protocol import CodeAnswer, MultiScoreCriteria, Response
+    from template.protocol import (
+        CodeAnswer,
+        CompletionResponses,
+        FeedbackRequest,
+        MultiScoreCriteria,
+        TaskType,
+    )
 
     return (
         Scoring,
         FeedbackRequest,
         CodeAnswer,
         MultiScoreCriteria,
-        Response,
+        CompletionResponses,
         TaskType,
     )
 
@@ -47,9 +53,9 @@ def mock_response(
     cid: str = "",
     rank_id: int = 0,
 ):
-    from template.protocol import CodeAnswer, FileObject, Response
+    from template.protocol import CodeAnswer, CompletionResponses, FileObject
 
-    return Response(
+    return CompletionResponses(
         model=model,
         completion=CodeAnswer(
             files=[FileObject(filename=filename, content=content, language=language)],
@@ -96,7 +102,7 @@ def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
         criteria_types=[
             MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
         ],
-        responses=responses,
+        completion_responses=responses,
     )
 
 

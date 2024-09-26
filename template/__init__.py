@@ -35,6 +35,13 @@ __spec_version__ = (
 VALIDATOR_MIN_STAKE = 99
 TASK_DEADLINE = 8 * 60 * 60
 
+# Define the time intervals for various tasks.
+VALIDATOR_RUN = 60
+VALIDATOR_HEARTBEAT = 300
+VALIDATOR_UPDATE_SCORE = 60
+VALIDATOR_STATUS = 20
+DOJO_TASK_MONITORING = 60
+
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if DOJO_API_BASE_URL is None:
     raise ValueError("DOJO_API_BASE_URL is not set in the environment")

@@ -3,6 +3,7 @@ volumes:
   redis-volume:
   testnet-lite-volume:
   dojo-pip-cache:
+  postgres-volume-dojo:
 
 networks:
   external:
@@ -51,6 +52,28 @@ services:
       - 5432
     volumes:
       - postgres-volume:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  postgres-service-validator:
+    env_file:
+      - .env
+    image: postgres:15.7
+    environment:
+      POSTGRES_DB: ${DB_NAME_VALIDATOR}
+      POSTGRES_USER: ${DB_USERNAME_VALIDATOR}
+      POSTGRES_PASSWORD: ${DB_PASSWORD_VALIDATOR}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME_VALIDATOR}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5532:5432"
+    expose:
+      - 5532
+    volumes:
+      - postgres-volume-dojo:/var/lib/postgresql/data-dojo
     networks:
       - internal
 

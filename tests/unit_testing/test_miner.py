@@ -12,10 +12,9 @@ from commons.utils import get_epoch_time
 from neurons.miner import Miner
 from template import VALIDATOR_MIN_STAKE
 from template.protocol import (
+    CompletionResponses,
     FeedbackRequest,
     MultiScoreCriteria,
-    Response,
-    ScoringMethod,
     ScoringResult,
     TaskType,
 )
@@ -28,7 +27,9 @@ valid_feedback_request = FeedbackRequest(
     criteria_types=[
         MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
     ],
-    responses=[Response(model="test_model", completion="test_completion")],
+    completion_responses=[
+        CompletionResponses(model="test_model", completion="test_completion")
+    ],
 )
 
 invalid_feedback_request = FeedbackRequest(
@@ -39,7 +40,7 @@ invalid_feedback_request = FeedbackRequest(
     criteria_types=[
         MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
     ],
-    responses=[],  # Invalid because responses list is empty
+    completion_responses=[],  # Invalid because responses list is empty
 )
 
 MOCK_HOTKEYS: list[str] = [
@@ -75,7 +76,6 @@ def mock_miner(mock_initialise):
         miner.metagraph.hotkeys = MOCK_HOTKEYS
         miner.dendrite = mock_dendrite
         miner.config = mock_wallet.config
-        miner.config.scoring_method = ScoringMethod.DOJO
 
         yield miner
 
@@ -163,21 +163,6 @@ async def test_forward_feedback_request_dojo_method(
     assert response == synapse
     assert response.dojo_task_id == "task_id"
     mock_create_task.assert_called_once_with(synapse)
-
-
-@pytest.mark.asyncio
-async def test_forward_feedback_request_unrecognized_scoring_method(
-    mock_miner: Miner, caplog
-):
-    """Test the case where the scoring method is unrecognized."""
-    synapse = valid_feedback_request
-    mock_miner.hotkey_to_request = {"mock_hotkey": synapse}
-    mock_miner.config.scoring_method = "UNKNOWN_METHOD"
-
-    with caplog.at_level(logging.ERROR):
-        response = await mock_miner.forward_feedback_request(synapse)
-    assert response == synapse
-    assert "Unrecognized scoring method!" in caplog.text
 
 
 @pytest.mark.asyncio

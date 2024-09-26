@@ -16,7 +16,6 @@ from template.base.miner import BaseMinerNeuron
 from template.protocol import (
     FeedbackRequest,
     Heartbeat,
-    ScoringMethod,
     ScoringResult,
     TaskResultRequest,
 )
@@ -99,21 +98,16 @@ class Miner(BaseMinerNeuron):
 
             logger.info(f"Miner received request id: {synapse.request_id}")
 
-            if not synapse.responses:
+            if not synapse.completion_responses:
                 logger.error("Invalid synapse: response field is None.")
                 return synapse
 
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
-            scoring_method = self.config.scoring_method
-            if scoring_method.casefold() == ScoringMethod.DOJO:
-                synapse.scoring_method = ScoringMethod.DOJO
-                task_ids = await DojoAPI.create_task(synapse)
-                assert len(task_ids) == 1
-                synapse.dojo_task_id = task_ids[0]
+            task_ids = await DojoAPI.create_task(synapse)
+            assert len(task_ids) == 1
+            synapse.dojo_task_id = task_ids[0]
 
-            else:
-                logger.error("Unrecognized scoring method!")
         except Exception:
             logger.error(
                 f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
@@ -149,7 +143,7 @@ class Miner(BaseMinerNeuron):
     ) -> Tuple[bool, str]:
         logger.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
-        if caller_hotkey not in self.metagraph.hotkeys:
+        if caller_hotkey is None or caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
             logger.warning(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"

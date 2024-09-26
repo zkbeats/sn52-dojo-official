@@ -68,13 +68,6 @@ CriteriaType = (
 )
 
 
-class ScoringMethod(StrEnum):
-    HF_MODEL = "hf_model"
-    LLM_API = "llm_api"
-    AWS_MTURK = "aws_mturk"
-    DOJO = "dojo"
-
-
 class FileObject(BaseModel):
     filename: str = Field(description="Name of the file")
     content: str = Field(description="Content of the file which can be code or json")
@@ -99,7 +92,7 @@ class DialogueItem(BaseModel):
     message: str
 
 
-class Response(BaseModel):
+class CompletionResponses(BaseModel):
     model: str = Field(description="Model that generated the completion")
     completion: CodeAnswer | List[DialogueItem] | str | None = Field(
         description="Completion from the model"
@@ -116,7 +109,7 @@ class Response(BaseModel):
 
 class SyntheticQA(BaseModel):
     prompt: str
-    responses: List[Response]
+    responses: List[CompletionResponses]
     ground_truth: dict[str, int] = Field(
         description="Mapping of unique identifiers to their ground truth values",
         default_factory=dict,
@@ -135,22 +128,20 @@ class FeedbackRequest(bt.Synapse):
     prompt: str = Field(
         description="Prompt or query from the user sent the LLM",
     )
-    responses: List[Response] = Field(
+    completion_responses: List[CompletionResponses] = Field(
         description="List of completions for the prompt",
     )
     task_type: str = Field(description="Type of task")
     criteria_types: List[CriteriaType] = Field(
         description="Types of criteria for the task",
     )
-    scoring_method: str | None = Field(
-        description="Method to use for scoring completions",
-        default=None,
-    )
+    # task id from miner
     dojo_task_id: str | None = Field(
         description="Dojo task ID for the request", default=None
     )
     expire_at: str | None = Field(
-        description="Expired time for Dojo task", default=None
+        description="Expired time for Dojo task which will be used by miner to create task",
+        default=None,
     )
     ground_truth: dict[str, int] = Field(
         description="Mapping of unique identifiers to their ground truth values",

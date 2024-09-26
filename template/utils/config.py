@@ -113,8 +113,6 @@ def configure_logging(config: bt.config):
 
 
 def add_args(parser):
-    from template.protocol import ScoringMethod
-
     """
     Adds relevant arguments to the parser for operation.
     """

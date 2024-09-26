@@ -12,7 +12,7 @@ from commons.data_manager import DataManager
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from neurons.validator import Validator
-from template.protocol import Response, SyntheticQA
+from template.protocol import CompletionResponses, SyntheticQA
 
 
 def generate_unique_hotkey():
@@ -66,7 +66,7 @@ def validator(mock_initialise, tmp_path):
 @pytest.mark.asyncio
 async def test_validator_querying_miners_dojo(mock_get_qa, validator):
     """
-    Test the validator's handling of miners' responses with scoring_method == DOJO.
+    Test the validator's handling of miners' responses.
 
     Specifically, this test verifies that:
     1. The DojoTaskTracker's internal state is updated with the new tasks.
@@ -91,7 +91,7 @@ async def test_validator_querying_miners_dojo(mock_get_qa, validator):
         synthetic_qa_mock = SyntheticQA(
             prompt="synthetic_prompt",
             responses=[
-                Response(
+                CompletionResponses(
                     model="synthetic_model",
                     completion="This is a synthetic response",
                     completion_id=generate_unique_hotkey(),
@@ -135,7 +135,7 @@ async def test_validator_querying_miners_dojo(mock_get_qa, validator):
 
         # Verify that model ids are not obfuscated in saved data
         for response in data[0].miner_responses:
-            for model_response in response.responses:
+            for model_response in response.completion_responses:
                 assert (
                     model_response.model == "synthetic_model"
                 ), "Model ID should not be obfuscated in saved data"

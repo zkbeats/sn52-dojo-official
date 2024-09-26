@@ -64,7 +64,7 @@ class DojoAPI:
             task=str(data.task_type).upper(),
             criteria=[],
         )
-        for c in data.responses:
+        for c in data.completion_responses:
             completion_dict = {}
             completion_dict["model"] = c.model
             if isinstance(c.completion, list):  # handling the case for DIALOGUE
