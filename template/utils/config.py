@@ -103,13 +103,6 @@ def add_args(parser):
     )
 
     parser.add_argument(
-        "--neuron.events_retention_size",
-        type=str,
-        help="Events retention size.",
-        default="2 GB",
-    )
-
-    parser.add_argument(
         "--api.port",
         type=int,
         help="FastAPI port for uvicorn to run on, should be different from axon.port as these will serve external requests.",
@@ -125,20 +118,6 @@ def add_args(parser):
         )
 
         parser.add_argument(
-            "--evaluation.num_batches",
-            type=int,
-            help="Number of batches from dataset to use when evaluating.",
-            default=10,
-        )
-
-        parser.add_argument(
-            "--evaluation.batch_size",
-            type=int,
-            help="Number of rows of data from dataset to use when evaluating.",
-            default=32,
-        )
-
-        parser.add_argument(
             "--neuron.sample_size",
             type=int,
             help="The number of miners to query per dendrite call.",
@@ -150,6 +129,14 @@ def add_args(parser):
             type=float,
             help="Moving average alpha parameter, how much to add of the new observation.",
             default=0.3,
+        )
+
+        wandb_project_names = ["dojo-devnet", "dojo-testnet", "dojo-mainnet"]
+        parser.add_argument(
+            "--wandb.project_name",
+            type=str,
+            choices=wandb_project_names,
+            help="Name of the wandb project to use.",
         )
 
     elif neuron_type == "miner":

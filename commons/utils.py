@@ -63,6 +63,7 @@ def hide_sensitive_path(path):
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     # Ensure paths are decoupled
     import template
+    from commons.objects import ObjectManager
 
     # Deep copy of the config
     config = copy.deepcopy(config)
@@ -72,19 +73,12 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     config.data_manager = copy.deepcopy(config.data_manager)
 
     project_name = None
-    if "localhost" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-devnet"
-    elif "tensorplex.dev" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-devnet"
-    elif (
-        "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL
-        or "worker-api" in template.DOJO_API_BASE_URL
-    ):
-        project_name = "dojo-testnet"
-    elif "dojo-api.tensorplex.ai" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-mainnet"
-    else:
-        raise ValueError("Unable to infer wandb project name")
+
+    config = ObjectManager.get_config()
+
+    project_name = config.wandb.project_name
+    if project_name not in ["dojo-devnet", "dojo-testnet", "dojo-mainnet"]:
+        raise ValueError("Invalid wandb project name")
 
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
 
