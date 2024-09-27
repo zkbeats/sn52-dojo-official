@@ -181,7 +181,7 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["miner"]
+    command: ["miner-testnet"]
     depends_on:
       worker-api:
         condition: service_healthy
@@ -202,7 +202,42 @@ services:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["miner"]
+    command: ["miner-testnet"]
+    networks:
+      - internal
+      - external
+
+  miner-mainnet-decentralised:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["miner-mainnet"]
+    depends_on:
+      worker-api:
+        condition: service_healthy
+      worker-ui:
+        condition: service_healthy
+    ports:
+      - ${AXON_PORT}:${AXON_PORT}
+    networks:
+      - internal
+      - external
+
+  miner-mainnet-centralised:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["miner-mainnet"]
     networks:
       - internal
       - external
@@ -236,12 +271,27 @@ services:
     image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     env_file:
-     - .env
+      - .env
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
-    command: ["validator"]
+    command: ["validator-testnet"]
+    depends_on:
+      synthetic-api:
+        condition: service_healthy
+    network_mode: host
+
+  validator-mainnet:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    working_dir: /app
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+      - dojo-pip-cache:/root/.cache/pip
+    command: ["validator-mainnet"]
     depends_on:
       synthetic-api:
         condition: service_healthy
