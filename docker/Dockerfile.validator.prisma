@@ -1,0 +1,23 @@
+# Use Python 3.11 as the base image
+FROM python:3.11
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Set Prisma to use the Node.js binary
+ENV PRISMA_USE_NODEJS_BIN=true
+
+# Install necessary dependencies, like OpenSSL
+RUN apt-get update && \
+    apt-get install -y openssl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the Prisma schema file into the container
+COPY ./schema.prisma /app/schema.prisma
+
+# Install Prisma
+RUN pip install prisma
+
+
+CMD prisma generate --schema=/app/schema.prisma && \
+    prisma db push --schema=/app/schema.prisma

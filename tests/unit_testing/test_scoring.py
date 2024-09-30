@@ -331,8 +331,8 @@ def mock_request_spm(
         axon=axon,
         prompt=prompt,
         task_type=task_type,
-        criteria_types=[RankingCriteria(type="rank", options=[], min=0, max=3)],
-        responses=responses,
+        criteria_types=[RankingCriteria(type="rank", options=[])],
+        completion_responses=responses,
         ground_truth=ground_truth,
     )
 

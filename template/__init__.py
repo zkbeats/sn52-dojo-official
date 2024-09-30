@@ -45,3 +45,9 @@ DOJO_TASK_MONITORING = 60
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if DOJO_API_BASE_URL is None:
     raise ValueError("DOJO_API_BASE_URL is not set in the environment")
+
+DB_USER = os.getenv("DB_USERNAME_VALIDATOR")
+DB_PW = os.getenv("DB_PASSWORD_VALIDATOR")
+DB_HOST = os.getenv("DB_HOST_VALIDATOR")
+
+TEST_DB_NAME = "test-db"

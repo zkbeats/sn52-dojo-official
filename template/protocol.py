@@ -1,11 +1,15 @@
 from datetime import datetime
-from typing import Dict, List
+from typing import DefaultDict, Dict, List
 
 import bittensor as bt
 from pydantic import BaseModel, ConfigDict, Field
 from strenum import StrEnum
 
 from commons.utils import get_epoch_time, get_new_uuid
+
+RidToHotKeyToTaskId = DefaultDict[str, DefaultDict[str, str]]
+TaskExpiryDict = DefaultDict[str, str]
+RidToModelMap = DefaultDict[str, Dict[str, str]]
 
 
 class TaskType(StrEnum):

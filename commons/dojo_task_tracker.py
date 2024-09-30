@@ -17,6 +17,9 @@ from template.protocol import (
     CriteriaTypeEnum,
     MultiScoreCriteria,
     RankingCriteria,
+    RidToHotKeyToTaskId,
+    RidToModelMap,
+    TaskExpiryDict,
     TaskResult,
     TaskResultRequest,
 )
@@ -25,11 +28,11 @@ from template.protocol import (
 class DojoTaskTracker:
     _instance = None
     # request id -> miner hotkey -> task id
-    _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
+    _rid_to_mhotkey_to_task_id: RidToHotKeyToTaskId = defaultdict(
         lambda: defaultdict(str)
     )
-    _rid_to_model_map: Dict[str, Dict[str, str]] = defaultdict(lambda: defaultdict(str))
-    _task_to_expiry: Dict[str, str] = defaultdict(str)
+    _rid_to_model_map: RidToModelMap = defaultdict(lambda: defaultdict(str))
+    _task_to_expiry: TaskExpiryDict = defaultdict(str)
     _lock = asyncio.Lock()
     _should_exit: bool = False
 

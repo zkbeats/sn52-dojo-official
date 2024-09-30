@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import List
 
@@ -22,7 +23,13 @@ from database.prisma.models import (
     ValidatorStateModel,
 )
 from database.prisma.types import ScoreModelCreateInput, ValidatorStateModelCreateInput
-from template.protocol import DendriteQueryResponse, FeedbackRequest
+from template.protocol import (
+    DendriteQueryResponse,
+    FeedbackRequest,
+    RidToHotKeyToTaskId,
+    RidToModelMap,
+    TaskExpiryDict,
+)
 
 
 class ValidatorStateKeys(StrEnum):
@@ -213,7 +220,11 @@ class DataManager:
 
     @classmethod
     async def validator_save(
-        cls, scores, requestid_to_mhotkey_to_task_id, model_map, task_to_expiry
+        cls,
+        scores: torch.Tensor,
+        requestid_to_mhotkey_to_task_id: RidToHotKeyToTaskId,
+        model_map: RidToModelMap,
+        task_to_expiry: TaskExpiryDict,
     ):
         """Saves the state of the validator to the database."""
         logger.debug("Attempting to save validator state.")
@@ -277,19 +288,24 @@ class DataManager:
                 return None
 
             # Query the scores
-            score_record = await ScoreModel.prisma().find_first(order={"id": "desc"})
+            score_record = await ScoreModel.prisma().find_first(
+                order={"created_at": "desc"}
+            )
 
             if not score_record:
                 logger.error("Score record not found.")
                 return None
 
             # Deserialize the data
-            scores = torch.tensor(json.loads(score_record.score))
+            scores: torch.Tensor = torch.tensor(json.loads(score_record.score))
 
             # TODO - Refactor this to use a more efficient data structure
-            dojo_tasks_to_track: dict[str, dict[str, str]] = {}
-            model_map: dict[str, dict[str, str]] = {}
-            task_to_expiry: dict[str, str] = {}
+            # Initialize the dictionaries with the correct types and default factories
+            dojo_tasks_to_track: RidToHotKeyToTaskId = defaultdict(
+                lambda: defaultdict(str)
+            )
+            model_map: RidToModelMap = defaultdict(dict)
+            task_to_expiry: TaskExpiryDict = defaultdict(str)
 
             for state in states:
                 if state.request_id not in dojo_tasks_to_track:

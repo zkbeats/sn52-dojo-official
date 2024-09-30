@@ -10,29 +10,29 @@ db = None
 prisma = Prisma(auto_register=True)
 
 
-async def connect_db(retries: int = 5, delay: int = 2, attempt: int = 1) -> None:
+async def connect_db(retries: int = 5, delay: int = 2) -> None:
     global db
+    attempt = 1
 
-    if attempt > retries:
-        logger.critical("Exceeded maximum retry attempts to connect to the database.")
-        raise ConnectionError(
-            "Failed to connect to the database after multiple attempts."
-        )
+    while attempt <= retries:
+        try:
+            if not prisma.is_connected():
+                await prisma.connect()
+                db = prisma
+                logger.success("Successfully connected to the database.")
+            else:
+                db = prisma
+                logger.info("Already connected to the database.")
+            return  # Exit the function if connection is successful
+        except Exception as e:
+            logger.error(
+                f"Failed to connect to the database (Attempt {attempt}/{retries}): {e}"
+            )
+            await asyncio.sleep(delay**attempt)
+            attempt += 1
 
-    try:
-        if not prisma.is_connected():
-            await prisma.connect()
-            db = prisma
-            logger.success("Successfully connected to the database:")
-        else:
-            db = prisma
-            logger.info("Already connected to the database.")
-    except Exception as e:
-        logger.error(
-            f"Failed to connect to the database (Attempt {attempt}/{retries}): {e}"
-        )
-        await asyncio.sleep(delay**attempt)
-        await connect_db(retries, delay, attempt + 1)
+    logger.critical("Exceeded maximum retry attempts to connect to the database.")
+    raise ConnectionError("Failed to connect to the database after multiple attempts.")
 
 
 async def disconnect_db():

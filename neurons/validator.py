@@ -2,7 +2,7 @@ import asyncio
 import copy
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from traceback import print_exception
 from typing import List
 
@@ -283,6 +283,8 @@ class Validator(BaseNeuron):
         if not len(axons):
             logger.warning("No axons to query ... skipping")
             return
+
+        obfuscated_model_to_model = {}
 
         if synapse is None:
             data = await SyntheticAPI.get_qa()

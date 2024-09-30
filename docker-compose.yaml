@@ -3,7 +3,8 @@ volumes:
   redis-volume:
   testnet-lite-volume:
   dojo-pip-cache:
-  postgres-volume-dojo:
+  prisma-pip-cache:
+  postgres-validator-volume:
 
 networks:
   external:
@@ -38,7 +39,6 @@ services:
       - .env
     image: postgres:15.7
     environment:
-      POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     healthcheck:
@@ -52,28 +52,6 @@ services:
       - 5432
     volumes:
       - postgres-volume:/var/lib/postgresql/data
-    networks:
-      - internal
-
-  postgres-service-validator:
-    env_file:
-      - .env
-    image: postgres:15.7
-    environment:
-      POSTGRES_DB: ${DB_NAME_VALIDATOR}
-      POSTGRES_USER: ${DB_USERNAME_VALIDATOR}
-      POSTGRES_PASSWORD: ${DB_PASSWORD_VALIDATOR}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME_VALIDATOR}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "5532:5432"
-    expose:
-      - 5532
-    volumes:
-      - postgres-volume-dojo:/var/lib/postgresql/data-dojo
     networks:
       - internal
 
@@ -105,7 +83,7 @@ services:
     expose:
       - 8081
     healthcheck:
-      # jank as fuck since no curl
+      # jank since no curl
       test:
         [
           "CMD",
@@ -176,7 +154,7 @@ services:
     # TODO @dev change back after testing
     image: ghcr.io/tensorplex-labs/dojo:dev
     volumes:
-      - ./:/app
+      - ./:app/
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
     command: ["btcli"]
@@ -318,4 +296,53 @@ services:
     depends_on:
       synthetic-api:
         condition: service_healthy
-    network_mode: host
+      postgres-vali:
+        condition: service_healthy
+      prisma-setup-vali:
+        condition: service_completed_successfully
+
+    networks:
+      - internal
+      - external
+
+  postgres-vali:
+    env_file:
+      - .env
+    image: postgres:15.7
+    environment:
+      POSTGRES_USER: ${DB_USERNAME_VALIDATOR}
+      POSTGRES_PASSWORD: ${DB_PASSWORD_VALIDATOR}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5532:5432"
+    expose:
+      - 5532
+    volumes:
+      - postgres-validator-volume:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  prisma-setup-vali:
+    platform: linux/amd64
+    env_file:
+      - .env
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.validator.prisma
+    environment:
+      DB_USERNAME_VALIDATOR: ${DB_USERNAME_VALIDATOR}
+      DB_PASSWORD_VALIDATOR: ${DB_PASSWORD_VALIDATOR}
+      DB_NAME_VALIDATOR: ${DB_NAME_VALIDATOR}
+      DB_HOST_VALIDATOR: ${DB_HOST_VALIDATOR}
+      DATABASE_URL_VALIDATOR: postgresql://${DB_USERNAME_VALIDATOR}:${DB_PASSWORD_VALIDATOR}@${DB_HOST_VALIDATOR}/${DB_NAME_VALIDATOR}
+    working_dir: /app
+    volumes:
+      - prisma-pip-cache:/root/.cache/pip
+    depends_on:
+      - postgres-vali
+    networks:
+      - internal

@@ -1,18 +1,12 @@
-import copy
 import random
 import string
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
-import bittensor as bt
 import pytest
 import torch
 from loguru import logger
 
-from commons.data_manager import DataManager
-from commons.dataset.synthetic import SyntheticAPI
-from commons.dojo_task_tracker import DojoTaskTracker
 from neurons.validator import Validator
-from template.protocol import CompletionResponses, SyntheticQA
 
 
 def generate_unique_hotkey():
@@ -62,82 +56,84 @@ def validator(mock_initialise, tmp_path):
     logger.info("Validator fixture setup complete.")
 
 
-@patch.object(SyntheticAPI, "get_qa", new_callable=AsyncMock)
-@pytest.mark.asyncio
-async def test_validator_querying_miners_dojo(mock_get_qa, validator):
-    """
-    Test the validator's handling of miners' responses.
+# TODO Implement with test database envrioment
 
-    Specifically, this test verifies that:
-    1. The DojoTaskTracker's internal state is updated with the new tasks.
-    2. The dendrite response is saved correctly with non-obfuscated model IDs.
-    3. The saved data includes the correct prompt and model IDs.
-    """
+# @patch.object(SyntheticAPI, "get_qa", new_callable=AsyncMock)
+# @pytest.mark.asyncio
+# async def test_validator_querying_miners_dojo(mock_get_qa, validator):
+#     """
+#     Test the validator's handling of miners' responses.
 
-    # Mock get_config to return a valid configuration
-    with patch("neurons.validator.get_config", return_value=MockConfig):
-        # Mock axons and add them to the metagraph
-        mock_axons = [MagicMock(spec=bt.AxonInfo) for _ in range(5)]
-        for i, axon in enumerate(mock_axons):
-            axon.hotkey = f"hotkey_{i}"
-            axon.ip = "127.0.0.1"
-            axon.port = 8091
-            axon.is_serving = True  # Ensure the axons are marked as serving
+#     Specifically, this test verifies that:
+#     1. The DojoTaskTracker's internal state is updated with the new tasks.
+#     2. The dendrite response is saved correctly with non-obfuscated model IDs.
+#     3. The saved data includes the correct prompt and model IDs.
+#     """
 
-        validator.metagraph.axons = mock_axons
-        validator.metagraph.n = torch.tensor([len(mock_axons)])
+#     # Mock get_config to return a valid configuration
+#     with patch("neurons.validator.get_config", return_value=MockConfig):
+#         # Mock axons and add them to the metagraph
+#         mock_axons = [MagicMock(spec=bt.AxonInfo) for _ in range(5)]
+#         for i, axon in enumerate(mock_axons):
+#             axon.hotkey = f"hotkey_{i}"
+#             axon.ip = "127.0.0.1"
+#             axon.port = 8091
+#             axon.is_serving = True  # Ensure the axons are marked as serving
 
-        # Mock SyntheticAPI.get_qa to return synthetic data
-        synthetic_qa_mock = SyntheticQA(
-            prompt="synthetic_prompt",
-            responses=[
-                CompletionResponses(
-                    model="synthetic_model",
-                    completion="This is a synthetic response",
-                    completion_id=generate_unique_hotkey(),
-                )
-            ],
-        )
+#         validator.metagraph.axons = mock_axons
+#         validator.metagraph.n = torch.tensor([len(mock_axons)])
 
-        mock_get_qa.return_value = synthetic_qa_mock
+#         # Mock SyntheticAPI.get_qa to return synthetic data
+#         synthetic_qa_mock = SyntheticQA(
+#             prompt="synthetic_prompt",
+#             responses=[
+#                 CompletionResponses(
+#                     model="synthetic_model",
+#                     completion="This is a synthetic response",
+#                     cid=generate_unique_hotkey(),
+#                 )
+#             ],
+#         )
 
-        # Verify initial state
-        initial_rid_to_mhotkey_to_task_id = copy.deepcopy(
-            DojoTaskTracker._rid_to_mhotkey_to_task_id
-        )
-        initial_task_to_expiry = copy.deepcopy(DojoTaskTracker._task_to_expiry)
-        initial_rid_to_model_map = copy.deepcopy(DojoTaskTracker._rid_to_model_map)
+#         mock_get_qa.return_value = synthetic_qa_mock
 
-        logger.info("Calling send_request method.")
-        # Call send_request method
-        await validator.send_request()
+#         # Verify initial state
+#         initial_rid_to_mhotkey_to_task_id = copy.deepcopy(
+#             DojoTaskTracker._rid_to_mhotkey_to_task_id
+#         )
+#         initial_task_to_expiry = copy.deepcopy(DojoTaskTracker._task_to_expiry)
+#         initial_rid_to_model_map = copy.deepcopy(DojoTaskTracker._rid_to_model_map)
 
-        assert (
-            DojoTaskTracker._rid_to_mhotkey_to_task_id
-            != initial_rid_to_mhotkey_to_task_id
-        ), "DojoTaskTracker's _rid_to_mhotkey_to_task_id was not updated"
-        assert (
-            DojoTaskTracker._task_to_expiry != initial_task_to_expiry
-        ), "DojoTaskTracker's _task_to_expiry was not updated"
-        assert (
-            DojoTaskTracker._rid_to_model_map != initial_rid_to_model_map
-        ), "DojoTaskTracker's _rid_to_model_map was not updated"
+#         logger.info("Calling send_request method.")
+#         # Call send_request method
+#         await validator.send_request()
 
-        # Verify that the data was actually saved
-        data_path = DataManager.get_requests_data_path()
-        assert data_path.exists(), "Data file does not exist"
+#         assert (
+#             DojoTaskTracker._rid_to_mhotkey_to_task_id
+#             != initial_rid_to_mhotkey_to_task_id
+#         ), "DojoTaskTracker's _rid_to_mhotkey_to_task_id was not updated"
+#         assert (
+#             DojoTaskTracker._task_to_expiry != initial_task_to_expiry
+#         ), "DojoTaskTracker's _task_to_expiry was not updated"
+#         assert (
+#             DojoTaskTracker._rid_to_model_map != initial_rid_to_model_map
+#         ), "DojoTaskTracker's _rid_to_model_map was not updated"
 
-        data = await DataManager._load_without_lock(path=data_path)
+#         # Verify that the data was actually saved
+#         data_path = DataManager.get_requests_data_path()
+#         assert data_path.exists(), "Data file does not exist"
 
-        assert data, "Data was not saved"
-        assert len(data) > 0, "No data found in saved file"
-        assert data[0].request.prompt == "synthetic_prompt", "Saved data is incorrect"
+#         data = await DataManager._load_without_lock(path=data_path)
 
-        # Verify that model ids are not obfuscated in saved data
-        for response in data[0].miner_responses:
-            for model_response in response.completion_responses:
-                assert (
-                    model_response.model == "synthetic_model"
-                ), "Model ID should not be obfuscated in saved data"
+#         assert data, "Data was not saved"
+#         assert len(data) > 0, "No data found in saved file"
+#         assert data[0].request.prompt == "synthetic_prompt", "Saved data is incorrect"
 
-        logger.info("Completed test_validator_querying_miners_dojo.")
+#         # Verify that model ids are not obfuscated in saved data
+#         for response in data[0].miner_responses:
+#             for model_response in response.completion_responses:
+#                 assert (
+#                     model_response.model == "synthetic_model"
+#                 ), "Model ID should not be obfuscated in saved data"
+
+#         logger.info("Completed test_validator_querying_miners_dojo.")
