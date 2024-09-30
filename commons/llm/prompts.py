@@ -54,7 +54,8 @@ class PromptBuilder:
             raise ValueError("Cannot build prompt without any completions")
 
         completion_prompts = [
-            completion_item_prompt.format(idx=c.cid, text=c.json()) for c in completions
+            completion_item_prompt.format(idx=c.completion_id, text=c.json())
+            for c in completions
         ]
         formatted_prompt = user_score_completion_prompt.format(
             prompt=prompt,

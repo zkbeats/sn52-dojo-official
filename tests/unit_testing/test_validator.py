@@ -94,7 +94,7 @@ async def test_validator_querying_miners_dojo(mock_get_qa, validator):
                 Response(
                     model="synthetic_model",
                     completion="This is a synthetic response",
-                    cid=generate_unique_hotkey(),
+                    completion_id=generate_unique_hotkey(),
                 )
             ],
         )

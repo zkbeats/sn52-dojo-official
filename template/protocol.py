@@ -104,7 +104,7 @@ class Response(BaseModel):
     completion: CodeAnswer | List[DialogueItem] | str | None = Field(
         description="Completion from the model"
     )
-    cid: str = Field(
+    completion_id: str = Field(
         default_factory=get_new_uuid,
         description="Unique identifier for the completion",
     )
