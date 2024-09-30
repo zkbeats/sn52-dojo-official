@@ -328,7 +328,8 @@ class Scoring:
         for response in miner_responses:
             curr_miner_outputs = []
             for completion in sorted(
-                response.responses, key=lambda response: gt_keys.index(response.cid)
+                response.responses,
+                key=lambda response: gt_keys.index(response.completion_id),
             ):
                 curr_miner_outputs.append(
                     _get_miner_response_by_criteria(criteria, completion)

@@ -227,7 +227,7 @@ class DojoTaskTracker:
                                 type = result_data.type
                                 value = result_data.value
                                 if type == CriteriaTypeEnum.RANKING_CRITERIA:
-                                    for rank, model_id in value.items():
+                                    for model_id, rank in value.items():
                                         real_model_id = cls._rid_to_model_map.get(
                                             request_id
                                         ).get(model_id)

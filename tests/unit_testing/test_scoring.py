@@ -58,7 +58,7 @@ def mock_response(
         ),
         score=score,
         rank_id=rank_id,
-        cid=cid,
+        completion_id=cid,
     )
 
 

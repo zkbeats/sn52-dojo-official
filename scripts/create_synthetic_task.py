@@ -19,11 +19,11 @@ async def main():
         )
         for index, response in enumerate(data.responses):
             response.model = f"{response.model}_{index}"
-            if data.ground_truth and response.cid in data.ground_truth.keys():
-                ground_truth_rank = data.ground_truth[response.cid]
+            if data.ground_truth and response.completion_id in data.ground_truth.keys():
+                ground_truth_rank = data.ground_truth[response.completion_id]
                 response.model = f"{response.model}_{ground_truth_rank}"
             else:
-                response.cid = f"{response.cid}_{index}"
+                response.completion_id = f"{response.completion_id}_{index}"
 
     synapse = FeedbackRequest(
         task_type=str(TaskType.CODE_GENERATION),
