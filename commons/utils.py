@@ -15,8 +15,8 @@ import jsonref
 import requests
 import torch
 import wandb
+from bittensor.btlogging import logging as logger
 from Crypto.Hash import keccak
-from loguru import logger
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 
@@ -48,11 +48,9 @@ def hide_sensitive_path(path):
     If 'logs' is not found, return the path starting from the first directory after '~'.
     """
 
-    logger.info(f"Masking sensitive path: {path}")
     path = str(path)
 
     home_directory = os.path.expanduser("~")
-    print(f"home_directory: {home_directory}")
     # Replace home directory with '~'
     if path.startswith(home_directory):
         path = path.replace(home_directory, "~")

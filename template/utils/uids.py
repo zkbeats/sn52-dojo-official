@@ -6,7 +6,7 @@ from typing import List
 
 import bittensor as bt
 import torch
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 from commons.utils import keccak256_hash
 

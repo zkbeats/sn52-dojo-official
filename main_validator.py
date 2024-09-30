@@ -3,10 +3,10 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 import wandb
+from bittensor.btlogging import logging as logger
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
 
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router

@@ -2,8 +2,8 @@ import functools
 import os
 
 import aiohttp
+from bittensor.btlogging import logging as logger
 from dotenv import load_dotenv
-from loguru import logger
 from tenacity import AsyncRetrying, RetryError, stop_after_attempt
 
 from commons.utils import log_retry_info

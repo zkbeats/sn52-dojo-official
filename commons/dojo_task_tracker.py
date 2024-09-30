@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Dict, List
 
 import bittensor as bt
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 import template
 from commons.data_manager import DataManager

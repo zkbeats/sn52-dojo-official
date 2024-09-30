@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, List
 
 import torch
-from loguru import logger
+from bittensor.btlogging import logging as logger
 from strenum import StrEnum
 
 from commons.objects import ObjectManager

@@ -1,9 +1,8 @@
 import argparse
 import subprocess
-import sys
 import time
 
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 from template import __version__
 
@@ -37,9 +36,6 @@ CONFIG = {
         "images": ["dojo-worker-api", "dojo-ui"],
     },
 }
-
-logger.remove()
-logger.add(sys.stdout, colorize=True)
 
 
 def get_latest_remote_tag():

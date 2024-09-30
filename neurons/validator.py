@@ -9,8 +9,8 @@ import bittensor as bt
 import numpy as np
 import torch
 import wandb
+from bittensor.btlogging import logging as logger
 from fastapi.encoders import jsonable_encoder
-from loguru import logger
 from torch.nn import functional as F
 
 import template
