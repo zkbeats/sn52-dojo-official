@@ -18,6 +18,5 @@ COPY ./schema.prisma /app/schema.prisma
 # Install Prisma
 RUN pip install prisma
 
-
-CMD prisma generate --schema=/app/schema.prisma && \
-    prisma db push --schema=/app/schema.prisma
+# Generate Prisma client and Push the database schema and start the service
+CMD prisma generate && prisma db push

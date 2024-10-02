@@ -42,7 +42,7 @@ model MinerResponseModel {
 
 model CompletionResponseModel {
     id                String             @id @default(uuid())
-    cid               String             @unique
+    completion_id     String             @unique
     model             String
     completion        Json
     rank_id           Int?

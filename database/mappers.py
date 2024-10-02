@@ -98,7 +98,7 @@ def map_completion_response_to_model(
 ) -> CompletionResponseModelCreateInput:
     try:
         result = CompletionResponseModelCreateInput(
-            cid=response.cid,
+            completion_id=response.completion_id,
             model=response.model,
             # completion=cast(Json, json.dumps(response.completion)),
             completion=Json(json.dumps(response.completion, default=vars)),
@@ -166,7 +166,7 @@ def map_model_to_dendrite_query_response(
         if model.miner_responses is not None:
             completions = [
                 CompletionResponses(
-                    cid=completion.cid,
+                    completion_id=completion.completion_id,
                     model=completion.model,
                     completion=completion.completion,
                     rank_id=completion.rank_id,
@@ -198,7 +198,7 @@ def map_model_to_dendrite_query_response(
                 expire_at=miner_response.expire_at,
                 completion_responses=[
                     CompletionResponses(
-                        cid=completion.cid,
+                        completion_id=completion.completion_id,
                         model=completion.model,
                         completion=completion.completion,
                         rank_id=completion.rank_id,

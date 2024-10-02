@@ -22,7 +22,11 @@ from database.prisma.models import (
     ScoreModel,
     ValidatorStateModel,
 )
-from database.prisma.types import ScoreModelCreateInput, ValidatorStateModelCreateInput
+from database.prisma.types import (
+    ScoreModelCreateInput,
+    ScoreModelUpdateInput,
+    ValidatorStateModelCreateInput,
+)
 from template.protocol import (
     DendriteQueryResponse,
     FeedbackRequest,
@@ -74,7 +78,7 @@ class DataManager:
             return result
 
         except Exception as e:
-            logger.trace(f"Failed to load data from database: {e}")
+            logger.error(f"Failed to load data from database: {e}")
             return None
 
     @classmethod
@@ -263,11 +267,19 @@ class DataManager:
             )
 
             # Save scores as a single record
-            await ScoreModel.prisma().create(
-                data=ScoreModelCreateInput(
-                    score=Json(json.dumps(scores_list)),
+            score_model = await ScoreModel.prisma().find_first()
+
+            if score_model:
+                await ScoreModel.prisma().update(
+                    where={"id": score_model.id},
+                    data=ScoreModelUpdateInput(score=Json(json.dumps(scores_list))),
                 )
-            )
+            else:
+                await ScoreModel.prisma().create(
+                    data=ScoreModelCreateInput(
+                        score=Json(json.dumps(scores_list)),
+                    )
+                )
 
             logger.success(
                 f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} requests"
@@ -328,7 +340,7 @@ class DataManager:
             }
 
         except Exception as e:
-            logger.trace(f"Unexpected error: {e}")
+            logger.error(f"Unexpected error: {e}")
             return None
 
     @staticmethod
