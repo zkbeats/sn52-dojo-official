@@ -47,7 +47,8 @@ dependencies = [
   "torch==2.3.1; sys_platform == 'darwin'",
   "uvicorn==0.22.0",
   "wandb==0.17.4",
-  "redis==5.0.7"
+  "redis==5.0.7",
+  "prisma==0.15.0"
 ]
 
 [project.optional-dependencies]
@@ -95,7 +96,8 @@ exclude = [
   "node_modules",
   "site-packages",
   "venv",
-  "wandb"
+  "wandb",
+  "database/prisma"
 ]
 show-fixes = true
 output-format = "full"

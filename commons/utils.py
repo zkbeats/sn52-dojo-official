@@ -349,7 +349,7 @@ def set_expire_time(expire_in_seconds: int) -> str:
         str: The expiration time in ISO 8601 format with 'Z' as the UTC indicator.
     """
     return (
-        (datetime.utcnow() + timedelta(seconds=expire_in_seconds))
+        (datetime.now(timezone.utc) + timedelta(seconds=expire_in_seconds))
         .replace(microsecond=0, tzinfo=timezone.utc)
         .isoformat()
         .replace("+00:00", "Z")

@@ -1,4 +1,4 @@
-.env.*
+.env
 .aider*
 package.json
 package-lock.json
@@ -176,3 +176,9 @@ cython_debug/
 #.idea/
 
 testing/
+
+# cursor
+.cursorrules
+
+# prisma
+database/prisma/

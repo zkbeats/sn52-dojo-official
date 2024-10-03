@@ -5,8 +5,6 @@ from typing import List  # noqa: UP035
 
 import bittensor as bt
 
-from template.protocol import ScoringMethod
-
 
 class MockSubtensor(bt.MockSubtensor):
     def __init__(self, netuid, n=16, wallet=None, network="mock"):
@@ -104,7 +102,6 @@ class MockDendrite(bt.dendrite):
                     # s.dummy_output = s.dummy_input * 2
                     s.dendrite.status_code = 200
                     s.dendrite.status_message = "OK"
-                    s.scoring_method = ScoringMethod.DOJO
                     s.dojo_task_id = "mock_dojo_task_id"
                     synapse.dendrite.process_time = str(process_time)
                 else:
@@ -112,7 +109,6 @@ class MockDendrite(bt.dendrite):
                     s.dendrite.status_code = 408
                     s.dendrite.status_message = "Timeout"
                     synapse.dendrite.process_time = str(timeout)
-                    s.scoring_method = ScoringMethod.DOJO
                     s.dojo_task_id = "mock_dojo_task_id"
 
                 # Return the updated synapse object after deserializing if requested

@@ -1,16 +1,39 @@
-import asyncio
 import json
-import pickle
-from pathlib import Path
-from typing import Any, List
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import List
 
 import torch
 from bittensor.btlogging import logging as logger
 from strenum import StrEnum
 
-from commons.objects import ObjectManager
-from commons.utils import get_current_utc_time_iso
-from template.protocol import DendriteQueryResponse, FeedbackRequest
+from database.client import transaction
+from database.mappers import (
+    map_completion_response_to_model,
+    map_criteria_type_to_model,
+    map_feedback_request_to_model,
+    map_miner_response_to_model,
+    map_model_to_dendrite_query_response,
+)
+from database.prisma._fields import Json
+from database.prisma.models import (
+    Feedback_Request_Model,
+    Miner_Response_Model,
+    Score_Model,
+    Validator_State_Model,
+)
+from database.prisma.types import (
+    Score_ModelCreateInput,
+    Score_ModelUpdateInput,
+    Validator_State_ModelCreateInput,
+)
+from template.protocol import (
+    DendriteQueryResponse,
+    FeedbackRequest,
+    RidToHotKeyToTaskId,
+    RidToModelMap,
+    TaskExpiryDict,
+)
 
 
 class ValidatorStateKeys(StrEnum):
@@ -21,239 +44,358 @@ class ValidatorStateKeys(StrEnum):
 
 
 class DataManager:
-    _lock = asyncio.Lock()
-    _validator_lock = asyncio.Lock()
     _instance = None
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._ensure_paths_exist()
         return cls._instance
 
     @classmethod
-    def _ensure_paths_exist(cls):
-        cls.get_validator_state_filepath().parent.mkdir(parents=True, exist_ok=True)
-        cls.get_requests_data_path().parent.mkdir(parents=True, exist_ok=True)
-
-    @staticmethod
-    def get_requests_data_path() -> Path:
-        config = ObjectManager.get_config()
-        base_path = config.data_manager.base_path
-        return base_path / "data" / "requests.pkl"
-
-    @staticmethod
-    def get_validator_state_filepath() -> Path:
-        config = ObjectManager.get_config()
-        base_path = config.data_manager.base_path
-        return base_path / "data" / "validator_state.pt"
-
-    @classmethod
-    async def _load_without_lock(cls, path) -> List[DendriteQueryResponse] | None:
+    async def load(cls) -> List[DendriteQueryResponse] | None:
         try:
-            with open(str(path), "rb") as file:
-                return pickle.load(file)
-        except FileNotFoundError as e:
-            logger.error(f"File not found at {path}... , exception:{e}")
-            return None
-        except pickle.PickleError as e:
-            logger.error(f"Pickle error: {e}")
-            return None
-        except Exception:
-            logger.error("Failed to load existing ranking data from file.")
-            return None
-
-    @classmethod
-    async def load(cls, path):
-        # Load the list of Pydantic objects from the pickle file
-        async with cls._lock:
-            return await cls._load_without_lock(path)
-
-    @classmethod
-    async def _save_without_lock(cls, path, data: Any):
-        try:
-            with open(str(path), "wb") as file:
-                pickle.dump(data, file)
-                logger.success(f"Saved data to {path}")
-                return True
-        except Exception as e:
-            logger.error(f"Failed to save data to file: {e}")
-            return False
-
-    @classmethod
-    async def save(cls, path, data: Any):
-        try:
-            async with cls._lock:
-                with open(str(path), "wb") as file:
-                    pickle.dump(data, file)
-                    logger.success(f"Saved data to {path}")
-                    return True
-        except Exception as e:
-            logger.error(f"Failed to save data to file: {e}")
-            return False
-
-    @classmethod
-    async def save_dendrite_response(cls, response: DendriteQueryResponse):
-        path = DataManager.get_requests_data_path()
-        async with cls._lock:
-            # ensure parent path exists
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
-
-            data = await DataManager._load_without_lock(path=path)
-            if not data:
-                # store initial data
-                success = await DataManager._save_without_lock(path, [response])
-                logger.debug(
-                    f"Storing initial data for responses from dendrite query, is successful ? {success}"
-                )
-                return success
-
-            # append our data, if the existing data exists
-            assert isinstance(data, list)
-            data.append(response)
-            success = await DataManager._save_without_lock(path, data)
-            logger.debug(
-                f"Storing appended data for responses from dendrite query, is successful ? {success}"
+            feedback_requests = await Feedback_Request_Model.prisma().find_many(
+                include={
+                    "criteria_types": True,
+                    "miner_responses": {"include": {"completions": True}},
+                }
             )
-            return success
+
+            logger.info(f"Loaded feedback requests: {len(feedback_requests)}")
+
+            if not feedback_requests or len(feedback_requests) == 0:
+                logger.error("No Feedback_Request_Model data found.")
+                return None
+
+            result = [
+                map_model_to_dendrite_query_response(r) for r in feedback_requests
+            ]
+
+            logger.info(
+                f"Loaded Mapped FeedbackRequest {len(result)}, and type: {type(result)}"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to load data from database: {e}")
+            return None
+
+    @classmethod
+    async def save_dendrite_response(
+        cls, response: DendriteQueryResponse
+    ) -> Feedback_Request_Model | None:
+        try:
+            async with transaction() as tx:
+                logger.info(
+                    f"Saving dendrite query response for request_id: {response.request.request_id}"
+                )
+                # Create the main feedback request record
+                feedback_request_model: Feedback_Request_Model = (
+                    await tx.feedback_request_model.create(
+                        data=map_feedback_request_to_model(response.request)
+                    )
+                )
+
+                # Create related criteria types
+                for criteria in response.request.criteria_types:
+                    criteria_model = map_criteria_type_to_model(
+                        criteria, feedback_request_model.request_id
+                    )
+                    await tx.criteria_type_model.create(data=criteria_model)
+
+                miner_responses: list[Miner_Response_Model] = []
+                # Create related miner responses and their completion responses
+                for miner_response in response.miner_responses:
+                    miner_response_data = map_miner_response_to_model(
+                        miner_response,
+                        feedback_request_model.request_id,  # Use feedback_request_model.request_id
+                    )
+                    if not miner_response_data.get("dojo_task_id"):
+                        logger.error("Dojo task id is required")
+                        raise ValueError("Dojo task id is required")
+
+                    miner_response_model = await tx.miner_response_model.create(
+                        data=miner_response_data
+                    )
+
+                    miner_responses.append(miner_response_model)
+
+                    # Create related completions for miner responses
+                    for completion in miner_response.completion_responses:
+                        await tx.completion_response_model.create(
+                            data=map_completion_response_to_model(
+                                completion, miner_response_model.id
+                            )
+                        )
+                feedback_request_model.miner_responses = miner_responses
+                return feedback_request_model
+        except Exception as e:
+            logger.error(f"Failed to save dendrite query response: {e}")
+            return None
 
     @classmethod
     async def overwrite_miner_responses_by_request_id(
         cls, request_id: str, miner_responses: List[FeedbackRequest]
-    ):
-        async with cls._lock:
-            _path = DataManager.get_requests_data_path()
-            data = await cls._load_without_lock(path=_path)
-            found_idx = next(
-                (i for i, x in enumerate(data) if x.request.request_id == request_id),
-                None,
-            )
-            data[found_idx].miner_responses = miner_responses
-            # overwrite the data
-            is_saved = await cls._save_without_lock(_path, data)
-            return is_saved
+    ) -> bool:
+        try:
+            # TODO can improve this
+            async with transaction() as tx:
+                # Delete existing completion responses for the given request_id
+                await tx.completion_response_model.delete_many(
+                    where={"miner_response": {"is": {"request_id": request_id}}}
+                )
 
-    @classmethod
-    async def get_by_request_id(cls, request_id):
-        async with cls._lock:
-            _path = DataManager.get_requests_data_path()
-            data = await cls._load_without_lock(path=_path)
-            found_response = next(
-                (x for x in data if x.request.request_id == request_id),
-                None,
-            )
-            return found_response
+                # Delete existing miner responses for the given request_id
+                await tx.miner_response_model.delete_many(
+                    where={"request_id": request_id}
+                )
 
-    @classmethod
-    async def remove_responses(
-        cls, responses: List[DendriteQueryResponse]
-    ) -> DendriteQueryResponse | None:
-        path = DataManager.get_requests_data_path()
-        async with cls._lock:
-            data = await DataManager._load_without_lock(path=path)
-            assert isinstance(data, list)
-
-            if data is None:
-                logger.info("No data found to remove responses...")
-                return
-
-            new_data = []
-
-            for d in data:
-                if d in responses:
-                    logger.debug(
-                        f"Found response to remove with request id: {d.request.request_id}"
+                # Create new miner responses
+                for miner_response in miner_responses:
+                    miner_response_model = await tx.miner_response_model.create(
+                        data=map_miner_response_to_model(miner_response, request_id)
                     )
-                    continue
-                new_data.append(d)
 
-            await DataManager._save_without_lock(path, new_data)
+                    # Create related completions for miner responses
+                    for completion in miner_response.completion_responses:
+                        await tx.completion_response_model.create(
+                            data=map_completion_response_to_model(
+                                completion, miner_response_model.id
+                            )
+                        )
+
+                logger.success(
+                    f"Overwritten miner responses for requestId: {request_id}"
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Failed to overwrite miner responses: {e}")
+            return False
+
+    @classmethod
+    async def get_by_request_id(cls, request_id: str) -> DendriteQueryResponse | None:
+        try:
+            feedback_request = await Feedback_Request_Model.prisma().find_first(
+                where={"request_id": request_id},
+                include={
+                    "criteria_types": True,
+                    "miner_responses": {"include": {"completions": True}},
+                },
+            )
+            if feedback_request:
+                return map_model_to_dendrite_query_response(feedback_request)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get feedback request by request_id: {e}")
+            return None
+
+    @classmethod
+    async def remove_responses(cls, responses: List[DendriteQueryResponse]) -> bool:
+        try:
+            async with transaction() as tx:
+                for response in responses:
+                    request_id = response.request.request_id
+
+                    # Delete completion responses associated with the miner responses
+                    await tx.completion_response_model.delete_many(
+                        where={"miner_response": {"is": {"request_id": request_id}}}
+                    )
+
+                    # Delete miner responses associated with the feedback request
+                    await tx.miner_response_model.delete_many(
+                        where={"request_id": request_id}
+                    )
+
+                    # Delete criteria types associated with the feedback request
+                    await tx.criteria_type_model.delete_many(
+                        where={"request_id": request_id}
+                    )
+
+                    # Delete the feedback request itself
+                    await tx.feedback_request_model.delete_many(
+                        where={"request_id": request_id}
+                    )
+
+                logger.success("Successfully removed specified responses.")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to remove responses: {e}")
+            return False
 
     @classmethod
     async def validator_save(
-        cls, scores, requestid_to_mhotkey_to_task_id, model_map, task_to_expiry
+        cls,
+        scores: torch.Tensor,
+        requestid_to_mhotkey_to_task_id: RidToHotKeyToTaskId,
+        model_map: RidToModelMap,
+        task_to_expiry: TaskExpiryDict,
     ):
-        """Saves the state of the validator to a file."""
+        """Saves the state of the validator to the database."""
         logger.debug("Attempting to save validator state.")
-        async with cls._validator_lock:
-            cls._ensure_paths_exist()
+        try:
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
+            logger.info(f"Saving validator dojo_task_data: {dojo_task_data}")
             if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
                 raise ValueError("Dojo task data and scores are empty. Skipping save.")
 
-            torch.save(
+            logger.debug(f"Saving validator dojo_task_data: {dojo_task_data}")
+            logger.debug(f"Saving validator score: {scores}")
+
+            # Convert tensors to lists for JSON serialization
+            scores_list = scores.tolist()
+
+            logger.debug(f"before saving validator dojo_task_data: {scores_list}")
+
+            # Prepare nested data for creating the validator state
+            validator_state_data: list[Validator_State_ModelCreateInput] = [
                 {
-                    ValidatorStateKeys.SCORES: scores,
-                    ValidatorStateKeys.DOJO_TASKS_TO_TRACK: json.loads(
-                        json.dumps(requestid_to_mhotkey_to_task_id)
-                    ),
-                    ValidatorStateKeys.MODEL_MAP: json.loads(json.dumps(model_map)),
-                    ValidatorStateKeys.TASK_TO_EXPIRY: json.loads(
-                        json.dumps(task_to_expiry)
-                    ),
-                },
-                cls.get_validator_state_filepath(),
+                    "request_id": request_id,
+                    "miner_hotkey": miner_hotkey,
+                    "task_id": task_id,
+                    "expire_at": task_to_expiry[task_id],
+                    "obfuscated_model": obfuscated_model,
+                    "real_model": real_model,
+                }
+                for request_id, hotkey_to_task in dojo_task_data.items()
+                for miner_hotkey, task_id in hotkey_to_task.items()
+                for obfuscated_model, real_model in model_map[request_id].items()
+            ]
+
+            # Save the validator state
+            await Validator_State_Model.prisma().create_many(
+                data=validator_state_data, skip_duplicates=True
             )
+
+            # Save scores as a single record
+            score_model = await Score_Model.prisma().find_first()
+
+            if score_model:
+                await Score_Model.prisma().update(
+                    where={"id": score_model.id},
+                    data=Score_ModelUpdateInput(score=Json(json.dumps(scores_list))),
+                )
+            else:
+                await Score_Model.prisma().create(
+                    data=Score_ModelCreateInput(
+                        score=Json(json.dumps(scores_list)),
+                    )
+                )
 
             logger.success(
-                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} request"
+                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} requests"
             )
+        except Exception as e:
+            logger.error(f"Failed to save validator state: {e}")
 
     @classmethod
-    async def validator_load(cls):
-        """Loads the state of the validator from a file."""
-        logger.info("Loading validator state.")
-        async with cls._validator_lock:
-            cls._ensure_paths_exist()
-            try:
-                state = torch.load(cls.get_validator_state_filepath())
-                return state
-            except FileNotFoundError:
-                logger.error("Validator state file not found.")
+    async def validator_load(cls) -> dict | None:
+        try:
+            # Query the latest validator state
+            states: List[
+                Validator_State_Model
+            ] = await Validator_State_Model.prisma().find_many()
+
+            if not states:
+                logger.error("Validator state not found.")
                 return None
-            except Exception as e:
-                logger.error(f"Unexpected error: {e}")
+
+            # Query the scores
+            score_record = await Score_Model.prisma().find_first(
+                order={"created_at": "desc"}
+            )
+
+            if not score_record:
+                logger.error("Score record not found.")
                 return None
+
+            # Deserialize the data
+            scores: torch.Tensor = torch.tensor(json.loads(score_record.score))
+
+            # Initialize the dictionaries with the correct types and default factories
+            dojo_tasks_to_track: RidToHotKeyToTaskId = defaultdict(
+                lambda: defaultdict(str)
+            )
+            model_map: RidToModelMap = defaultdict(dict)
+            task_to_expiry: TaskExpiryDict = defaultdict(str)
+
+            for state in states:
+                if (
+                    state.request_id not in dojo_tasks_to_track
+                ):  # might not need to check
+                    dojo_tasks_to_track[state.request_id] = {}
+                dojo_tasks_to_track[state.request_id][state.miner_hotkey] = (
+                    state.task_id
+                )
+
+                if state.request_id not in model_map:
+                    model_map[state.request_id] = {}
+                model_map[state.request_id][state.obfuscated_model] = state.real_model
+
+                task_to_expiry[state.task_id] = state.expire_at
+
+            return {
+                "scores": scores,
+                "dojo_tasks_to_track": dojo_tasks_to_track,
+                "model_map": model_map,
+                "task_to_expiry": task_to_expiry,
+            }
+
+        except Exception as e:
+            logger.error(f"Unexpected error: {e}")
+            return None
 
     @staticmethod
     async def remove_expired_tasks_from_storage():
-        # Load the current state
-        state_data = await DataManager.validator_load()
-        if not state_data:
-            logger.error("Failed to load validator state data for cleanup.")
-            return
+        try:
+            # Load the current state
+            state_data = await DataManager.validator_load()
+            if not state_data:
+                logger.error("Failed to load validator state data for cleanup.")
+                return
 
-        # Identify expired tasks
-        current_time = get_current_utc_time_iso()
-        task_to_expiry = state_data.get(ValidatorStateKeys.TASK_TO_EXPIRY, {})
-        expired_tasks = [
-            task_id
-            for task_id, expiry_time in task_to_expiry.items()
-            if expiry_time < current_time
-        ]
+            # Identify expired tasks
+            current_time = datetime.now(timezone.utc)
+            task_to_expiry = state_data.get(ValidatorStateKeys.TASK_TO_EXPIRY, {})
+            expired_tasks = [
+                task_id
+                for task_id, expiry_time in task_to_expiry.items()
+                if datetime.fromisoformat(expiry_time) < current_time
+            ]
 
-        # Remove expired tasks
-        for task_id in expired_tasks:
-            for request_id, hotkeys in list(
-                state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK].items()
-            ):
-                for hotkey, t_id in list(hotkeys.items()):
-                    if t_id == task_id:
+            # Remove expired tasks from the database
+            for task_id in expired_tasks:
+                await Validator_State_Model.prisma().delete_many(
+                    where={"task_id": task_id}
+                )
+
+            # Update the in-memory state
+            for task_id in expired_tasks:
+                for request_id, hotkeys in list(
+                    state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK].items()
+                ):
+                    for hotkey, t_id in list(hotkeys.items()):
+                        if t_id == task_id:
+                            del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][
+                                request_id
+                            ][hotkey]
+                    if not state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][
+                        request_id
+                    ]:
                         del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][
                             request_id
-                        ][hotkey]
-                if not state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][request_id]:
-                    del state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK][request_id]
-            del task_to_expiry[task_id]
+                        ]
+                del task_to_expiry[task_id]
 
-        # Save the updated state
-        state_data[ValidatorStateKeys.TASK_TO_EXPIRY] = task_to_expiry
-        await DataManager.validator_save(
-            state_data[ValidatorStateKeys.SCORES],
-            state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK],
-            state_data[ValidatorStateKeys.MODEL_MAP],
-            task_to_expiry,
-        )
+            # Save the updated state
+            state_data[ValidatorStateKeys.TASK_TO_EXPIRY] = task_to_expiry
+            await DataManager.validator_save(
+                state_data[ValidatorStateKeys.SCORES],
+                state_data[ValidatorStateKeys.DOJO_TASKS_TO_TRACK],
+                state_data[ValidatorStateKeys.MODEL_MAP],
+                task_to_expiry,
+            )
 
-        logger.info(f"Removed {len(expired_tasks)} expired tasks from DataManager.")
+            logger.info(f"Removed {len(expired_tasks)} expired tasks from DataManager.")
+        except Exception as e:
+            logger.error(f"Failed to remove expired tasks: {e}")

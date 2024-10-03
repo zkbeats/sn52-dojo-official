@@ -28,8 +28,7 @@ if [ "$1" = 'miner-testnet' ]; then
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --axon.port ${AXON_PORT} \
-    --neuron.type miner \
-    --scoring_method dojo
+    --neuron.type miner
 fi
 
 if [ "$1" = 'miner-mainnet' ]; then

@@ -35,7 +35,7 @@ async def main():
             ),
         ],
         prompt=data.prompt,
-        responses=data.responses,
+        completion_responses=data.responses,
     )
 
     task_response = await DojoAPI.create_task(synapse)

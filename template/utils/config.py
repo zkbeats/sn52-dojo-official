@@ -113,8 +113,6 @@ def configure_logging(config: bt.config):
 
 
 def add_args(parser):
-    from template.protocol import ScoringMethod
-
     """
     Adds relevant arguments to the parser for operation.
     """
@@ -190,11 +188,7 @@ def add_args(parser):
         )
 
     elif neuron_type == "miner":
-        parser.add_argument(
-            "--scoring_method",
-            help="Method to use for scoring completions.",
-            choices=[str(method) for method in ScoringMethod],
-        )
+        pass
 
 
 def get_config():

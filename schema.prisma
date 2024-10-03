@@ -1,0 +1,86 @@
+generator client {
+    provider             = "prisma-client-py"
+    recursive_type_depth = -1
+    output               = "./database/prisma"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL_VALIDATOR")
+}
+
+enum Criteria_Type_Enum_Model {
+    RANKING_CRITERIA
+    MULTI_SCORE
+    SCORE
+    MULTI_SELECT
+}
+
+model Feedback_Request_Model {
+    id              String                 @id @default(uuid())
+    request_id      String                 @unique
+    task_type       String
+    prompt          String
+    ground_truth    Json
+    criteria_types  Criteria_Type_Model[]
+    miner_responses Miner_Response_Model[]
+    created_at      DateTime               @default(now())
+    updated_at      DateTime               @updatedAt
+}
+
+model Miner_Response_Model {
+    id               String                      @id @default(uuid())
+    request_id       String
+    miner_hotkey     String
+    dojo_task_id     String
+    expire_at        String
+    completions      Completion_Response_Model[]
+    feedback_request Feedback_Request_Model      @relation(fields: [request_id], references: [request_id])
+    created_at       DateTime                    @default(now())
+    updated_at       DateTime                    @updatedAt
+}
+
+model Completion_Response_Model {
+    id                String               @id @default(uuid())
+    completion_id     String               @unique
+    model             String
+    completion        Json
+    rank_id           Int?
+    score             Float?
+    miner_response_id String
+    miner_response    Miner_Response_Model @relation(fields: [miner_response_id], references: [id])
+    created_at        DateTime             @default(now())
+    updated_at        DateTime             @updatedAt
+}
+
+model Criteria_Type_Model {
+    id               String                   @id @default(uuid())
+    type             Criteria_Type_Enum_Model
+    options          Json?
+    min              Float?
+    max              Float?
+    request_id       String
+    feedback_request Feedback_Request_Model   @relation(fields: [request_id], references: [request_id])
+    created_at       DateTime                 @default(now())
+    updated_at       DateTime                 @updatedAt
+}
+
+// request_id, miner_hotkey, task_id are composite key
+model Validator_State_Model {
+    id               String   @id @default(uuid())
+    request_id       String
+    miner_hotkey     String
+    task_id          String
+    expire_at        String
+    obfuscated_model String
+    real_model       String
+    created_at       DateTime @default(now())
+    updated_at       DateTime @updatedAt
+}
+
+model Score_Model {
+    id         String   @id @default(uuid())
+    score      Json
+    created_at DateTime @default(now())
+    updated_at DateTime @updatedAt
+}
