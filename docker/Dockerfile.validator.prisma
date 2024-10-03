@@ -1,22 +1,27 @@
-# Use Python 3.11 as the base image
 FROM python:3.11
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Set Prisma to use the Node.js binary
+# Create directory for Prisma binary cache and set permissions
+RUN mkdir -p /root/prisma-python
+
+# Install OpenSSL and other dependencies
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# # Set Prisma to use the Node.js binary
 ENV PRISMA_USE_NODEJS_BIN=true
 
-# Install necessary dependencies, like OpenSSL
-RUN apt-get update && \
-    apt-get install -y openssl && \
-    rm -rf /var/lib/apt/lists/*
+# Set Prisma binary platform explicitly
+ENV PRISMA_BINARY_PLATFORM=debian-openssl-3.0.x
 
-# Copy the Prisma schema file into the container
+# Specify where Prisma should cache the binary
+ENV PRISMA_BINARY_CACHE_DIR=/root/prisma-python
+
+# Copy the Prisma schema file
 COPY ./schema.prisma /app/schema.prisma
 
-# Install Prisma
 RUN pip install prisma
+RUN prisma generate
 
-# Generate Prisma client and Push the database schema and start the service
-CMD prisma generate && prisma db push
+# Push Prisma schema to the database
+CMD ["prisma", "db", "push"]

@@ -1,4 +1,4 @@
-.env.*
+.env
 .aider*
 package.json
 package-lock.json

@@ -5,6 +5,7 @@ volumes:
   dojo-pip-cache:
   prisma-pip-cache:
   postgres-validator-volume:
+  prisma-binary:
 
 networks:
   external:
@@ -214,6 +215,7 @@ services:
     working_dir: /app
     volumes:
       - prisma-pip-cache:/root/.cache/pip
+      - prisma-binary:/root/prisma-python
     depends_on:
       - postgres-vali
     networks:
@@ -225,7 +227,7 @@ services:
     # TODO @dev change back after testing
     image: ghcr.io/tensorplex-labs/dojo:dev
     volumes:
-      - ./:app/
+      - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
     command: ["btcli"]
@@ -282,12 +284,15 @@ services:
   validator-testnet:
     image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
+    environment:
+      PRISMA_QUERY_ENGINE_BINARY: /root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
     env_file:
       - .env
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
+      - prisma-binary:/root/prisma-python
     command: ["validator-testnet"]
     depends_on:
       synthetic-api:
@@ -296,7 +301,6 @@ services:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
-
     networks:
       - internal
       - external
@@ -307,7 +311,7 @@ services:
     # TODO @dev change back after testing
     image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
-      - ./:app/
+      - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
     command: ["btcli"]
@@ -364,12 +368,15 @@ services:
   validator-mainnet:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
+    environment:
+      PRISMA_QUERY_ENGINE_BINARY: /root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
     env_file:
       - .env
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
       - dojo-pip-cache:/root/.cache/pip
+      - prisma-binary:/root/prisma-python
     command: ["validator-mainnet"]
     depends_on:
       synthetic-api:
