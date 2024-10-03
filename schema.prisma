@@ -9,64 +9,64 @@ datasource db {
     url      = env("DATABASE_URL_VALIDATOR")
 }
 
-enum CriteriaTypeEnumModel {
+enum Criteria_Type_Enum_Model {
     RANKING_CRITERIA
     MULTI_SCORE
     SCORE
     MULTI_SELECT
 }
 
-model FeedbackRequestModel {
-    id              String               @id @default(uuid())
-    request_id      String               @unique
+model Feedback_Request_Model {
+    id              String                 @id @default(uuid())
+    request_id      String                 @unique
     task_type       String
     prompt          String
     ground_truth    Json
-    criteria_types  CriteriaTypeModel[]
-    miner_responses MinerResponseModel[]
-    created_at      DateTime             @default(now())
-    updated_at      DateTime             @updatedAt
+    criteria_types  Criteria_Type_Model[]
+    miner_responses Miner_Response_Model[]
+    created_at      DateTime               @default(now())
+    updated_at      DateTime               @updatedAt
 }
 
-model MinerResponseModel {
-    id               String                    @id @default(uuid())
+model Miner_Response_Model {
+    id               String                      @id @default(uuid())
     request_id       String
     miner_hotkey     String
     dojo_task_id     String
     expire_at        String
-    completions      CompletionResponseModel[]
-    feedback_request FeedbackRequestModel      @relation(fields: [request_id], references: [request_id])
-    created_at       DateTime                  @default(now())
-    updated_at       DateTime                  @updatedAt
+    completions      Completion_Response_Model[]
+    feedback_request Feedback_Request_Model      @relation(fields: [request_id], references: [request_id])
+    created_at       DateTime                    @default(now())
+    updated_at       DateTime                    @updatedAt
 }
 
-model CompletionResponseModel {
-    id                String             @id @default(uuid())
-    completion_id     String             @unique
+model Completion_Response_Model {
+    id                String               @id @default(uuid())
+    completion_id     String               @unique
     model             String
     completion        Json
     rank_id           Int?
     score             Float?
     miner_response_id String
-    miner_response    MinerResponseModel @relation(fields: [miner_response_id], references: [id])
-    created_at        DateTime           @default(now())
-    updated_at        DateTime           @updatedAt
+    miner_response    Miner_Response_Model @relation(fields: [miner_response_id], references: [id])
+    created_at        DateTime             @default(now())
+    updated_at        DateTime             @updatedAt
 }
 
-model CriteriaTypeModel {
-    id               String                @id @default(uuid())
-    type             CriteriaTypeEnumModel
+model Criteria_Type_Model {
+    id               String                   @id @default(uuid())
+    type             Criteria_Type_Enum_Model
     options          Json?
     min              Float?
     max              Float?
     request_id       String
-    feedback_request FeedbackRequestModel  @relation(fields: [request_id], references: [request_id])
-    created_at       DateTime              @default(now())
-    updated_at       DateTime              @updatedAt
+    feedback_request Feedback_Request_Model   @relation(fields: [request_id], references: [request_id])
+    created_at       DateTime                 @default(now())
+    updated_at       DateTime                 @updatedAt
 }
 
 // request_id, miner_hotkey, task_id are composite key
-model ValidatorStateModel {
+model Validator_State_Model {
     id               String   @id @default(uuid())
     request_id       String
     miner_hotkey     String
@@ -78,7 +78,7 @@ model ValidatorStateModel {
     updated_at       DateTime @updatedAt
 }
 
-model ScoreModel {
+model Score_Model {
     id         String   @id @default(uuid())
     score      Json
     created_at DateTime @default(now())

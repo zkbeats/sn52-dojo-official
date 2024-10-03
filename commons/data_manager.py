@@ -17,15 +17,15 @@ from database.mappers import (
 )
 from database.prisma._fields import Json
 from database.prisma.models import (
-    FeedbackRequestModel,
-    MinerResponseModel,
-    ScoreModel,
-    ValidatorStateModel,
+    Feedback_Request_Model,
+    Miner_Response_Model,
+    Score_Model,
+    Validator_State_Model,
 )
 from database.prisma.types import (
-    ScoreModelCreateInput,
-    ScoreModelUpdateInput,
-    ValidatorStateModelCreateInput,
+    Score_ModelCreateInput,
+    Score_ModelUpdateInput,
+    Validator_State_ModelCreateInput,
 )
 from template.protocol import (
     DendriteQueryResponse,
@@ -54,7 +54,7 @@ class DataManager:
     @classmethod
     async def load(cls) -> List[DendriteQueryResponse] | None:
         try:
-            feedback_requests = await FeedbackRequestModel.prisma().find_many(
+            feedback_requests = await Feedback_Request_Model.prisma().find_many(
                 include={
                     "criteria_types": True,
                     "miner_responses": {"include": {"completions": True}},
@@ -64,7 +64,7 @@ class DataManager:
             logger.info(f"Loaded feedback requests: {len(feedback_requests)}")
 
             if not feedback_requests or len(feedback_requests) == 0:
-                logger.error("No FeedbackRequestModel data found.")
+                logger.error("No Feedback_Request_Model data found.")
                 return None
 
             result = [
@@ -84,15 +84,15 @@ class DataManager:
     @classmethod
     async def save_dendrite_response(
         cls, response: DendriteQueryResponse
-    ) -> FeedbackRequestModel | None:
+    ) -> Feedback_Request_Model | None:
         try:
             async with transaction() as tx:
                 logger.info(
                     f"Saving dendrite query response for request_id: {response.request.request_id}"
                 )
                 # Create the main feedback request record
-                feedback_request_model: FeedbackRequestModel = (
-                    await tx.feedbackrequestmodel.create(
+                feedback_request_model: Feedback_Request_Model = (
+                    await tx.feedback_request_model.create(
                         data=map_feedback_request_to_model(response.request)
                     )
                 )
@@ -102,9 +102,9 @@ class DataManager:
                     criteria_model = map_criteria_type_to_model(
                         criteria, feedback_request_model.request_id
                     )
-                    await tx.criteriatypemodel.create(data=criteria_model)
+                    await tx.criteria_type_model.create(data=criteria_model)
 
-                miner_responses: list[MinerResponseModel] = []
+                miner_responses: list[Miner_Response_Model] = []
                 # Create related miner responses and their completion responses
                 for miner_response in response.miner_responses:
                     miner_response_data = map_miner_response_to_model(
@@ -115,7 +115,7 @@ class DataManager:
                         logger.error("Dojo task id is required")
                         raise ValueError("Dojo task id is required")
 
-                    miner_response_model = await tx.minerresponsemodel.create(
+                    miner_response_model = await tx.miner_response_model.create(
                         data=miner_response_data
                     )
 
@@ -123,7 +123,7 @@ class DataManager:
 
                     # Create related completions for miner responses
                     for completion in miner_response.completion_responses:
-                        await tx.completionresponsemodel.create(
+                        await tx.completion_response_model.create(
                             data=map_completion_response_to_model(
                                 completion, miner_response_model.id
                             )
@@ -139,26 +139,27 @@ class DataManager:
         cls, request_id: str, miner_responses: List[FeedbackRequest]
     ) -> bool:
         try:
+            # TODO can improve this
             async with transaction() as tx:
                 # Delete existing completion responses for the given request_id
-                await tx.completionresponsemodel.delete_many(
+                await tx.completion_response_model.delete_many(
                     where={"miner_response": {"is": {"request_id": request_id}}}
                 )
 
                 # Delete existing miner responses for the given request_id
-                await tx.minerresponsemodel.delete_many(
+                await tx.miner_response_model.delete_many(
                     where={"request_id": request_id}
                 )
 
                 # Create new miner responses
                 for miner_response in miner_responses:
-                    miner_response_model = await tx.minerresponsemodel.create(
+                    miner_response_model = await tx.miner_response_model.create(
                         data=map_miner_response_to_model(miner_response, request_id)
                     )
 
                     # Create related completions for miner responses
                     for completion in miner_response.completion_responses:
-                        await tx.completionresponsemodel.create(
+                        await tx.completion_response_model.create(
                             data=map_completion_response_to_model(
                                 completion, miner_response_model.id
                             )
@@ -175,7 +176,7 @@ class DataManager:
     @classmethod
     async def get_by_request_id(cls, request_id: str) -> DendriteQueryResponse | None:
         try:
-            feedback_request = await FeedbackRequestModel.prisma().find_first(
+            feedback_request = await Feedback_Request_Model.prisma().find_first(
                 where={"request_id": request_id},
                 include={
                     "criteria_types": True,
@@ -197,22 +198,22 @@ class DataManager:
                     request_id = response.request.request_id
 
                     # Delete completion responses associated with the miner responses
-                    await tx.completionresponsemodel.delete_many(
+                    await tx.completion_response_model.delete_many(
                         where={"miner_response": {"is": {"request_id": request_id}}}
                     )
 
                     # Delete miner responses associated with the feedback request
-                    await tx.minerresponsemodel.delete_many(
+                    await tx.miner_response_model.delete_many(
                         where={"request_id": request_id}
                     )
 
                     # Delete criteria types associated with the feedback request
-                    await tx.criteriatypemodel.delete_many(
+                    await tx.criteria_type_model.delete_many(
                         where={"request_id": request_id}
                     )
 
                     # Delete the feedback request itself
-                    await tx.feedbackrequestmodel.delete_many(
+                    await tx.feedback_request_model.delete_many(
                         where={"request_id": request_id}
                     )
 
@@ -247,7 +248,7 @@ class DataManager:
             logger.debug(f"before saving validator dojo_task_data: {scores_list}")
 
             # Prepare nested data for creating the validator state
-            validator_state_data: list[ValidatorStateModelCreateInput] = [
+            validator_state_data: list[Validator_State_ModelCreateInput] = [
                 {
                     "request_id": request_id,
                     "miner_hotkey": miner_hotkey,
@@ -262,21 +263,21 @@ class DataManager:
             ]
 
             # Save the validator state
-            await ValidatorStateModel.prisma().create_many(
+            await Validator_State_Model.prisma().create_many(
                 data=validator_state_data, skip_duplicates=True
             )
 
             # Save scores as a single record
-            score_model = await ScoreModel.prisma().find_first()
+            score_model = await Score_Model.prisma().find_first()
 
             if score_model:
-                await ScoreModel.prisma().update(
+                await Score_Model.prisma().update(
                     where={"id": score_model.id},
-                    data=ScoreModelUpdateInput(score=Json(json.dumps(scores_list))),
+                    data=Score_ModelUpdateInput(score=Json(json.dumps(scores_list))),
                 )
             else:
-                await ScoreModel.prisma().create(
-                    data=ScoreModelCreateInput(
+                await Score_Model.prisma().create(
+                    data=Score_ModelCreateInput(
                         score=Json(json.dumps(scores_list)),
                     )
                 )
@@ -292,15 +293,15 @@ class DataManager:
         try:
             # Query the latest validator state
             states: List[
-                ValidatorStateModel
-            ] = await ValidatorStateModel.prisma().find_many()
+                Validator_State_Model
+            ] = await Validator_State_Model.prisma().find_many()
 
             if not states:
                 logger.error("Validator state not found.")
                 return None
 
             # Query the scores
-            score_record = await ScoreModel.prisma().find_first(
+            score_record = await Score_Model.prisma().find_first(
                 order={"created_at": "desc"}
             )
 
@@ -311,7 +312,6 @@ class DataManager:
             # Deserialize the data
             scores: torch.Tensor = torch.tensor(json.loads(score_record.score))
 
-            # TODO - Refactor this to use a more efficient data structure
             # Initialize the dictionaries with the correct types and default factories
             dojo_tasks_to_track: RidToHotKeyToTaskId = defaultdict(
                 lambda: defaultdict(str)
@@ -320,7 +320,9 @@ class DataManager:
             task_to_expiry: TaskExpiryDict = defaultdict(str)
 
             for state in states:
-                if state.request_id not in dojo_tasks_to_track:
+                if (
+                    state.request_id not in dojo_tasks_to_track
+                ):  # might not need to check
                     dojo_tasks_to_track[state.request_id] = {}
                 dojo_tasks_to_track[state.request_id][state.miner_hotkey] = (
                     state.task_id
@@ -363,7 +365,7 @@ class DataManager:
 
             # Remove expired tasks from the database
             for task_id in expired_tasks:
-                await ValidatorStateModel.prisma().delete_many(
+                await Validator_State_Model.prisma().delete_many(
                     where={"task_id": task_id}
                 )
 

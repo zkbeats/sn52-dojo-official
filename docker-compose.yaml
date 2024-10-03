@@ -154,7 +154,7 @@ services:
       - external
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
     ports:
       - "127.0.0.1:5003:5003"
     env_file:
@@ -166,7 +166,6 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_USER=${REDIS_USERNAME}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - E2B_API_KEY=${E2B_API_KEY}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
       interval: 10s
@@ -221,11 +220,9 @@ services:
     networks:
       - internal
 
-# ============== TEST NET ============== #
-
   btcli:
     # TODO @dev change back after testing
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -235,7 +232,7 @@ services:
     stdin_open: true
 
   dojo-cli:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -246,8 +243,10 @@ services:
     networks:
       - internal
 
+# ============== TEST NET ============== #
+
   miner-testnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env
@@ -268,7 +267,7 @@ services:
       - external
 
   miner-testnet-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env
@@ -282,7 +281,7 @@ services:
       - external
 
   validator-testnet:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     environment:
       PRISMA_QUERY_ENGINE_BINARY: /root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
@@ -306,29 +305,6 @@ services:
       - external
 
 # ============== MAIN NET ============== #
-
-  btcli-mainnet:
-    # TODO @dev change back after testing
-    image: ghcr.io/tensorplex-labs/dojo:main
-    volumes:
-      - ./:/app
-      - $HOME/.bittensor:/root/.bittensor
-      - dojo-pip-cache:/root/.cache/pip
-    command: ["btcli"]
-    tty: true
-    stdin_open: true
-
-  dojo-cli-mainnet:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    volumes:
-      - ./:/app
-      - $HOME/.bittensor:/root/.bittensor
-      - dojo-pip-cache:/root/.cache/pip
-    command: ["dojo-cli"]
-    tty: true
-    stdin_open: true
-    networks:
-      - internal
 
   miner-mainnet-decentralised:
     image: ghcr.io/tensorplex-labs/dojo:main

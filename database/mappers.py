@@ -7,13 +7,13 @@ from loguru import logger
 import template
 from commons.utils import is_valid_expiry, set_expire_time
 from database.prisma import Json
-from database.prisma.enums import CriteriaTypeEnumModel
-from database.prisma.models import CriteriaTypeModel, FeedbackRequestModel
+from database.prisma.enums import Criteria_Type_Enum_Model
+from database.prisma.models import Criteria_Type_Model, Feedback_Request_Model
 from database.prisma.types import (
-    CompletionResponseModelCreateInput,
-    CriteriaTypeModelCreateInput,
-    FeedbackRequestModelCreateInput,
-    MinerResponseModelCreateInput,
+    Completion_Response_ModelCreateInput,
+    Criteria_Type_ModelCreateInput,
+    Feedback_Request_ModelCreateInput,
+    Miner_Response_ModelCreateInput,
 )
 from template.protocol import (
     CompletionResponses,
@@ -29,31 +29,31 @@ from template.protocol import (
 
 def map_criteria_type_to_model(
     criteria: CriteriaType, request_id: str
-) -> CriteriaTypeModelCreateInput:
+) -> Criteria_Type_ModelCreateInput:
     try:
         if isinstance(criteria, RankingCriteria):
-            return CriteriaTypeModelCreateInput(
-                type=CriteriaTypeEnumModel.RANKING_CRITERIA,
+            return Criteria_Type_ModelCreateInput(
+                type=Criteria_Type_Enum_Model.RANKING_CRITERIA,
                 request_id=request_id,
                 # options=cast(Json, json.dumps(criteria.options)),
                 options=Json(json.dumps(criteria.options)),
             )
         elif isinstance(criteria, ScoreCriteria):
-            return CriteriaTypeModelCreateInput(
-                type=CriteriaTypeEnumModel.SCORE,
+            return Criteria_Type_ModelCreateInput(
+                type=Criteria_Type_Enum_Model.SCORE,
                 request_id=request_id,
                 min=criteria.min,
                 max=criteria.max,
             )
         elif isinstance(criteria, MultiSelectCriteria):
-            return CriteriaTypeModelCreateInput(
-                type=CriteriaTypeEnumModel.MULTI_SELECT,
+            return Criteria_Type_ModelCreateInput(
+                type=Criteria_Type_Enum_Model.MULTI_SELECT,
                 request_id=request_id,
                 options=Json(json.dumps(criteria.options)),
             )
         elif isinstance(criteria, MultiScoreCriteria):
-            return CriteriaTypeModelCreateInput(
-                type=CriteriaTypeEnumModel.MULTI_SCORE,
+            return Criteria_Type_ModelCreateInput(
+                type=Criteria_Type_Enum_Model.MULTI_SCORE,
                 request_id=request_id,
                 options=Json(json.dumps(criteria.options)),
                 min=criteria.min,
@@ -65,22 +65,24 @@ def map_criteria_type_to_model(
         raise ValueError(f"Failed to map criteria type to model {e}")
 
 
-def map_criteria_type_model_to_criteria_type(model: CriteriaTypeModel) -> CriteriaType:
+def map_criteria_type_model_to_criteria_type(
+    model: Criteria_Type_Model,
+) -> CriteriaType:
     try:
-        if model.type == CriteriaTypeEnumModel.RANKING_CRITERIA:
+        if model.type == Criteria_Type_Enum_Model.RANKING_CRITERIA:
             return RankingCriteria(
                 options=json.loads(model.options) if model.options else []
             )
-        elif model.type == CriteriaTypeEnumModel.SCORE:
+        elif model.type == Criteria_Type_Enum_Model.SCORE:
             return ScoreCriteria(
                 min=model.min if model.min is not None else 0.0,
                 max=model.max if model.max is not None else 0.0,
             )
-        elif model.type == CriteriaTypeEnumModel.MULTI_SELECT:
+        elif model.type == Criteria_Type_Enum_Model.MULTI_SELECT:
             return MultiSelectCriteria(
                 options=json.loads(model.options) if model.options else []
             )
-        elif model.type == CriteriaTypeEnumModel.MULTI_SCORE:
+        elif model.type == Criteria_Type_Enum_Model.MULTI_SCORE:
             return MultiScoreCriteria(
                 options=json.loads(model.options) if model.options else [],
                 min=model.min if model.min is not None else 0.0,
@@ -95,9 +97,9 @@ def map_criteria_type_model_to_criteria_type(model: CriteriaTypeModel) -> Criter
 
 def map_completion_response_to_model(
     response: CompletionResponses, miner_response_id: str
-) -> CompletionResponseModelCreateInput:
+) -> Completion_Response_ModelCreateInput:
     try:
-        result = CompletionResponseModelCreateInput(
+        result = Completion_Response_ModelCreateInput(
             completion_id=response.completion_id,
             model=response.model,
             # completion=cast(Json, json.dumps(response.completion)),
@@ -113,7 +115,7 @@ def map_completion_response_to_model(
 
 def map_miner_response_to_model(
     response: FeedbackRequest, request_id: str
-) -> MinerResponseModelCreateInput:
+) -> Miner_Response_ModelCreateInput:
     try:
         # Ensure expire_at is set and is reasonable, this will prevent exploits where miners can set their own expiry times
         expire_at = response.expire_at
@@ -123,7 +125,7 @@ def map_miner_response_to_model(
         if response.dojo_task_id is None:
             raise ValueError("Dojo task id is required")
 
-        result = MinerResponseModelCreateInput(
+        result = Miner_Response_ModelCreateInput(
             request_id=request_id,
             miner_hotkey=response.axon.hotkey
             if response.axon and response.axon.hotkey
@@ -139,9 +141,9 @@ def map_miner_response_to_model(
 
 def map_feedback_request_to_model(
     request: FeedbackRequest,
-) -> FeedbackRequestModelCreateInput:
+) -> Feedback_Request_ModelCreateInput:
     try:
-        result = FeedbackRequestModelCreateInput(
+        result = Feedback_Request_ModelCreateInput(
             request_id=request.request_id,
             task_type=request.task_type,
             prompt=request.prompt,
@@ -154,7 +156,7 @@ def map_feedback_request_to_model(
 
 
 def map_model_to_dendrite_query_response(
-    model: FeedbackRequestModel,
+    model: Feedback_Request_Model,
 ) -> DendriteQueryResponse:
     try:
         criteria_types = [

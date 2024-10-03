@@ -12,7 +12,7 @@ import template
 from commons.data_manager import DataManager
 from commons.objects import ObjectManager
 from commons.utils import get_epoch_time
-from database.prisma.models import FeedbackRequestModel, MinerResponseModel
+from database.prisma.models import Feedback_Request_Model, Miner_Response_Model
 from template.protocol import (
     CriteriaTypeEnum,
     MultiScoreCriteria,
@@ -45,7 +45,7 @@ class DojoTaskTracker:
     async def update_task_map(
         cls,
         request_id: str,
-        fb_request_model: FeedbackRequestModel,
+        fb_request_model: Feedback_Request_Model,
         obfuscated_model_to_model: Dict,
     ):
         dojo_responses = fb_request_model.miner_responses
@@ -55,7 +55,7 @@ class DojoTaskTracker:
 
         logger.debug("update_task_map attempting to acquire lock")
         async with cls._lock:
-            valid_responses: list[MinerResponseModel] = list(
+            valid_responses: list[Miner_Response_Model] = list(
                 filter(
                     lambda r: r.request_id == request_id
                     and r.miner_hotkey
