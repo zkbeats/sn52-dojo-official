@@ -392,7 +392,7 @@ WANDB_API_KEY="<wandb_key>"
 
 # for dojo-synthetic-api
 REDIS_PASSWORD=
-REDIS_USER=
+REDIS_USERNAME=
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
 E2B_API_KEY=
 
