@@ -16,7 +16,7 @@ networks:
     driver: bridge
 
 services:
-# ============== COMMON SERVICES ============== #
+  # ============== COMMON SERVICES ============== #
 
   redis-service:
     env_file:
@@ -215,6 +215,7 @@ services:
     volumes:
       - prisma-pip-cache:/root/.cache/pip
       - prisma-binary:/root/prisma-python
+      - ./:/app
     depends_on:
       - postgres-vali
     networks:
@@ -243,7 +244,7 @@ services:
     networks:
       - internal
 
-# ============== TEST NET ============== #
+  # ============== TEST NET ============== #
 
   miner-testnet-decentralised:
     image: ghcr.io/tensorplex-labs/dojo:dev
@@ -304,7 +305,7 @@ services:
       - internal
       - external
 
-# ============== MAIN NET ============== #
+  # ============== MAIN NET ============== #
 
   miner-mainnet-decentralised:
     image: ghcr.io/tensorplex-labs/dojo:main
