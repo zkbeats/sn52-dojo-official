@@ -50,7 +50,10 @@ class Miner(BaseMinerNeuron):
         self.hotkey_to_request: Dict[str, FeedbackRequest] = {}
 
     async def ack_heartbeat(self, synapse: Heartbeat) -> Heartbeat:
-        logger.debug("Received heartbeat synapse")
+        caller_hotkey = (
+            synapse.dendrite.hotkey if synapse.dendrite else "unknown hotkey"
+        )
+        logger.debug(f"Received heartbeat synapse from {caller_hotkey}")
         if not synapse:
             logger.error("Invalid synapse object")
             return synapse
