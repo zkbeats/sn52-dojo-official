@@ -37,17 +37,19 @@
   - [Benefits to participants contributing through Dojo](#benefits-to-participants-contributing-through-dojo)
 - [Prerequisites](#prerequisites)
   - [Validator](#validator)
+    - [Required Software](#required-software)
+    - [System Requirements](#system-requirements)
   - [Miner](#miner)
-- [System Requirements](#system-requirements)
-  - [Miner](#miner-1)
-  - [Validator](#validator-1)
+    - [Required Software](#required-software-1)
+    - [System Requirements](#system-requirements-1)
 - [Getting Started](#getting-started)
   - [Mining](#mining)
-    - [Option 1: Self-hosting the miner backend services](#option-1-self-hosting-the-miner-backend-services)
-    - [Option 2: Using our hosted Tensorplex backend](#option-2-using-our-hosted-tensorplex-backend)
+    - [Option 1: Centralised Method](#option-1-centralised-method)
+    - [Option 2: Decentralised Method](#option-2-decentralised-method)
     - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
 - [Dojo CLI](#dojo-cli)
+- [For Dojo devs](#for-dojo-devs)
 - [License](#license)
 
 </details>
@@ -92,57 +94,44 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 
 ## Validator
 
-- Python >=3.10
-- PM2
-- Docker
-- Third party API Keys **(Validators Only)**
-  - OpenRouter
-  - wandb
-  - Together **(Optional)**
-  - OpenAI **(Optional)**
+### Required Software
 
-## Miner
+- pm2
+- docker
+- openrouter api key
+- wandb api key
 
-- Python >=3.10
-- PM2
-- Docker
-
-# System Requirements
-
-## Miner
-
-- 2 cores
-- 4 GB RAM
-- 32GB SSD
-
-## Validator
+### System Requirements
 
 - 4 cores
 - 8 GB RAM
 - 256 SSD
 
+## Miner
+
+### Required Software
+
+- pm2
+- docker
+
+### System Requirements
+
+- 2 cores
+- 4 GB RAM
+- 32GB SSD
+
 # Getting Started
 
-To get started as a miner or validator, these are the common steps both a miner and validator have to go through.
-
-> The following guide is tailored for distributions utilizing APT as the package manager. Adjust the installation steps as per the requirements of your system.
+> [!IMPORTANT]
 >
-> We will utilize ~/opt directory as our preferred location in this guide.
+> This setup guide uses specific tools to ensure a smooth installation process:
+>
+> - [fnm](https://github.com/Schniz/fnm) for managing Node.js & npm versions (required for PM2)
+> - [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/)
 
-Install PM2 (**If not already installed**)
+> Please ensure these prerequisites are installed on your system before proceeding with the installation steps, these are needed by both **validators and miners**.
 
-```bash
-cd dojo/scripts/setup/
-./install_pm2.sh
-```
-
-Install Docker (**If not already installed**)
-
-```bash
-./install_docker.sh
-```
-
-Clone the project, set up and configure python virtual environment
+1. Clone the project, set up and configure python virtual environment
 
 ```bash
 # In this guide, we will utilize the ~/opt directory as our preferred location.
@@ -151,115 +140,225 @@ cd ~/opt
 # Clone the project
 git clone https://github.com/tensorplex-labs/dojo.git
 cd dojo/
+```
 
-# Set up python virtual environment and pip packages
-# Here we use venv for managing python versions
+2. Install PM2 through fnm
 
-python3 -m venv env
-source env/bin/activate
-pip install -e .
-# for developers, install the extras
-pip install -e ".[dev]"
+```bash
+# for linux, a convenience script is available
+./dojo/scripts/setup/install_pm2.sh
+
+# for mac/linux (if you do not trust the bash script)
+curl -fsSL https://fnm.vercel.app/install | bash
+# for windows, choose 1 of the following,
+# based on https://github.com/Schniz/fnm?#manually
+cargo install fnm
+choco install fnm
+scoop install fnm
+winget install Schniz.fnm
+
+# run any post-install shell setup scripts
+# based on https://github.com/Schniz/fnm?#shell-setup
+
+# assuming we are using zsh
+echo 'eval "$(fnm env --use-on-cd --shell zsh)"' >> ~/.zshrc
+# you can tell what shell you're using by running:
+echo $0
+
+# verify fnm installation
+fnm --version
+
+# get npm & node, and verify npm installation
+fnm install lst/iron && npm --version
+
+# install pm2 and verify installation
+npm install -g pm2 && pm2 --version
+```
+
+3. Install Docker & Docker Compose
+
+For Docker installation, see https://docs.docker.com/engine/install/ for instructions
+
+For Docker Compose installation, see https://docs.docker.com/compose/install/linux for instructions
+
+```bash
+# for linux, a convenience script is available
+./dojo/scripts/setup/install_docker.sh
+
+# verify both docker and docker compose are installed
+docker --version
+docker compose version
+```
+
+4. Build the dojo base image
+
+```bash
+docker build -t dojo-base:latest -f ./docker/Dockerfile .
+```
+
+5. Create your wallets if they aren't created yet
+
+```bash
+# run btcli
+docker compose run --rm btcli
+# create your wallets
+btcli wallet new_coldkey
+btcli wallet new_hotkey
+```
+
+6. Get some TAO and ensure you have enough TAO to cover the registration cost
+
+```bash
+# for Testnet
+btcli s list --subtensor.network test
+# output from the `btcli s list ...` command
+NETUID    N    MAX_N   EMISSION  TEMPO  RECYCLE        POW       SUDO
+ 0      128   128.00   0.00%     10    τ1.00000     10.00 M     5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
+...
+ 98     17    256.00   0.00%     360   τ0.00001  18446744.07 T  5GTAfh3YTcokxWdGc3DgLV5y3hHB4Bs5PQGqw9fEn1WrcwWP
+...
+```
+
+> [!NOTE]
+> the "RECYCLE" column represents the subnet registration cost
+
+7. Register to our subnet
+
+```bash
+# register your wallet to our subnet
+# Testnet
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
 
 ## Mining
 
-### Option 1: Self-hosting the miner backend services
+### Option 1: Centralised Method
 
-Activate the python virtual environment
-
-```bash
-source env/bin/activate
-```
-
-Create your wallets and register them to our subnet
-
-```bash
-# create your wallets
-btcli wallet new_coldkey
-btcli wallet new_hotkey
-
-# register your wallet to our subnet
-# Testnet
-btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
-```
-
-Create .env file with the following values first
-
-```bash
-# copy .env.miner.example
-cp .env.miner.example .env
-# fill in the following vars
-DOJO_API_BASE_URL="http://localhost:8080"
-WALLET_COLDKEY=your coldkey wallet name
-WALLET_HOTKEY=your hotkey wallet name
-AXON_PORT=port to serve requests over the public network for validators to call
-```
-
-Start the worker api which will be connected to the CLI later.
-
-```bash
-docker compose up -d worker-api
-```
-
-Now activate the python environment and run the CLI to generate an API key and subscription key, see [Dojo CLI](#dojo-cli) for usage.
-
-```bash
-source env/bin/activate
-dojo
-```
-
-Grab the API key and add it to your .env file
-
-Now, run the full miner service.
-
-```bash
-docker compose up -d miner-testnet
-```
-
-### Option 2: Using our hosted Tensorplex backend
-
-Activate the python virtual environment
-
-```bash
-source env/bin/activate
-```
-
-Create your wallets and register them to our subnet
-
-```bash
-# create your wallets
-btcli wallet new_coldkey
-btcli wallet new_hotkey
-
-# register your wallet to our subnet
-# Testnet
-btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
-```
-
-Create .env file with the following values first.
+1. Create .env file with the following values first.
 
 ```bash
 # copy .env.miner.example
 cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
-DOJO_API_KEY="sk-<KEY>"
+# for testnet
+SUBTENSOR_NETWORK=test
+SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+WALLET_COLDKEY=# the name of the coldkey
+WALLET_HOTKEY=# the name of the hotkey
+AXON_PORT=8888 # port to serve requests over the public network for validators to call
 ```
 
-Retrieve the API Key and Subscription Key with Dojo CLI, see [Dojo CLI](#dojo-cli) for usage.
+2. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
 
-Start the miner by running the following commands:
+```bash
+docker compose run --rm dojo-cli
+```
+
+3. Complete the .env file with the variables below:
+
+```bash
+DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+TOKENIZERS_PARALLELISM=true
+DOJO_API_KEY=# api key from earlier
+```
+
+4. Start the miner by running the following commands:
 
 ```bash
 # For Testnet
-docker compose up -d miner-testnet
+docker compose up -d miner-testnet-centralised
 ```
+
+### Option 2: Decentralised Method
+
+1. Create .env file with the following values first.
+
+```bash
+# copy .env.miner.example
+cp .env.miner.example .env
+
+# ENV's that needs to be filled for miners:
+# for testnet
+SUBTENSOR_NETWORK=test
+SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
+DOJO_API_BASE_URL="http://worker-api:8080" # use this value
+WALLET_COLDKEY=# the name of the coldkey
+WALLET_HOTKEY=# the name of the hotkey
+AXON_PORT=8888 # port to serve requests over the public network for validators to call
+
+# for dojo-worker-api
+REDIS_USERNAME=
+REDIS_PASSWORD=
+
+# postgres details
+DB_HOST=postgres-service:5432 # use this value
+DB_NAME=
+DB_USERNAME=
+DB_PASSWORD=
+
+# aws credentials for S3
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_S3_BUCKET_NAME=
+S3_PUBLIC_URL=
+
+JWT_SECRET=# generate a random JWT key
+ETHEREUM_NODE=# get an ethereum endpoint URL from Infura
+```
+
+2. Start the worker api which will be connected to the CLI later.
+
+```bash
+docker compose up -d worker-api
+```
+
+3. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
+
+```bash
+docker compose run --rm dojo-cli
+```
+
+4. Grab the API key and add it to your .env file
+
+```bash
+DOJO_API_KEY=# api key from earlier
+```
+
+5. Now, run the full miner service.
+
+```bash
+docker compose up -d miner-testnet-decentralised
+
+# monitor the services
+docker compose ps --all
+# you should see something like this
+# NAME                                 IMAGE                                             COMMAND                  SERVICE                       CREATED         STATUS                          PORTS
+# dojo-miner-testnet-decentralised-1   dojo-base:latest                                  "entrypoints.sh miner"   miner-testnet-decentralised   2 minutes ago   Up About a minute
+# dojo-postgres-service-1              postgres:15.7                                     "docker-entrypoint.s…"   postgres-service              2 hours ago     Up 2 hours (healthy)            0.0.0.0:5432->5432/tcp
+# dojo-prisma-setup-1                  dojo-prisma-setup                                 "/bin/sh -c 'go run …"   prisma-setup                  2 hours ago     Exited (0) About a minute ago
+# dojo-redis-service-1                 redis/redis-stack-server:7.4.0-v0                 "/entrypoint.sh"         redis-service                 2 hours ago     Up 2 hours (healthy)            6379/tcp
+# dojo-sidecar-1                       docker.io/parity/substrate-api-sidecar:v19.0.2    "docker-entrypoint.s…"   sidecar                       2 hours ago     Up 2 hours (healthy)            8080-8081/tcp
+# dojo-worker-api-1                    ghcr.io/tensorplex-labs/dojo-worker-api:main      "/dojo-api/entrypoin…"   worker-api                    2 hours ago     Up 2 hours (healthy)            0.0.0.0:8080->8080/tcp
+# dojo-worker-ui-1                     ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod   "/dojo-ui/entrypoint…"   worker-ui                     2 minutes ago   Up 2 minutes (healthy)          0.0.0.0:3000->3000/tcp
+# node-subtensor-testnet               ghcr.io/opentensor/subtensor:pr-720               "/bin/bash -c 'node-…"   node-subtensor-testnet        2 hours ago     Up 2 hours (healthy)            0.0.0.0:9933->9933/tcp, 0.0.0.0:9944->9944/tcp, 0.0.0.0:30333->30333/tcp
+
+# read miner logs using the following:
+docker compose logs -f miner-testnet-decentralised
+```
+
+> [!IMPORTANT]
+>
+> Don't be alarmed that the status of the `prisma-setup` service shows exit code 0. This means it ran successfully.
+>
+> Other services should also be healthy in order for the `miner-testnet-decentralised` service to run successfully.
 
 ### Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring
 
 Note: URLs are different for testnet and mainnet. Please refer to [docs](https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet/official-links).
+
+TODO guide for decentralised flow
 
 1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
 
@@ -283,6 +382,9 @@ Copy the validator .env file and set up the .env file
 cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
+# for testnet
+SUBTENSOR_NETWORK=test
+SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 SYNTHETIC_API_URL="http://127.0.0.1:5003"
 TOKENIZERS_PARALLELISM=true
@@ -290,9 +392,16 @@ WANDB_API_KEY="<wandb_key>"
 
 # for dojo-synthetic-api
 REDIS_PASSWORD=
-REDIS_USER=
+REDIS_USERNAME=
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
 E2B_API_KEY=
+
+#postgres details for validator
+DB_HOST_VALIDATOR=postgres-vali:5432
+DB_NAME_VALIDATOR=
+DB_USERNAME_VALIDATOR=
+DB_PASSWORD_VALIDATOR=
+DATABASE_URL_VALIDATOR=postgresql://${DB_USERNAME_VALIDATOR}:${DB_PASSWORD_VALIDATOR}@${DB_HOST_VALIDATOR}/${DB_NAME_VALIDATOR}
 
 # Other LLM API providers, Optional or if you've chosen it
 TOGETHER_API_KEY=
@@ -327,6 +436,14 @@ Features:
 - Tab completion
 - Prefix matching wallets
 
+You may use the dockerized version of the CLI using
+
+```bash
+docker compose run --rm dojo-cli
+```
+
+Alternatively you can simply run the CLI inside of a virtual environment
+
 ```bash
 # Start the dojo cli tool
 # Upon starting the CLI it will ask if you wanna use the default path for bittensor wallets, which is `~/.bittensor/wallets/`.
@@ -357,6 +474,37 @@ subscription_key list
 # You can also delete your keys with the following commands.
 api_key delete
 subscription_key delete
+```
+
+# For Dojo devs
+
+You most likely won't be running a dockerized version of the subnet code as you ship. Use the following guide to get up and running
+
+1. Get uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2. Make sure you have a python version >=3.10
+
+```bash
+uv python list
+```
+
+3. Create a virtualenv
+
+```bash
+# i'm using 3.11 here, but you may use any >=3.10 version
+uv venv dojo_venv --python=$(uv python find 3.11)
+# if you wish to follow
+```
+
+4. Activate virtualenv
+
+```bash
+# follows python-venv syntax
+source dojo_venv/bin/activate
 ```
 
 # License

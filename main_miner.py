@@ -1,8 +1,8 @@
 import asyncio
 
 import wandb
+from bittensor.btlogging import logging as logger
 from dotenv import load_dotenv
-from loguru import logger
 
 from commons.objects import ObjectManager
 

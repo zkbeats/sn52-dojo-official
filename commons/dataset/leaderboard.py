@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 import numpy as np
 import requests
-from loguru import logger
+from bittensor.btlogging import logging as logger
 from strenum import StrEnum
 
 from commons.utils import keccak256_hash, ttl_cache

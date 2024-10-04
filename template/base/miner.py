@@ -2,7 +2,7 @@ import asyncio
 import threading
 import traceback
 
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 from commons.utils import serve_axon
 from template.base.neuron import BaseNeuron

@@ -1,7 +1,7 @@
+from bittensor.btlogging import logging as logger
 from dotenv import load_dotenv
 from fastapi import APIRouter, Header, Request, responses
 from fastapi.encoders import jsonable_encoder
-from loguru import logger
 from pydantic.error_wrappers import ValidationError
 
 from commons.cache import RedisCache

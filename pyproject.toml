@@ -43,10 +43,12 @@ dependencies = [
   "scipy==1.14.0",
   "StrEnum==0.4.15",
   "tenacity==8.5.0",
-  "torch==2.3.1",
+  "torch==2.3.1+cpu; sys_platform == 'linux'",
+  "torch==2.3.1; sys_platform == 'darwin'",
   "uvicorn==0.22.0",
   "wandb==0.17.4",
-  "redis==5.0.7"
+  "redis==5.0.7",
+  "prisma==0.15.0"
 ]
 
 [project.optional-dependencies]
@@ -93,7 +95,9 @@ exclude = [
   "dist",
   "node_modules",
   "site-packages",
-  "venv"
+  "venv",
+  "wandb",
+  "database/prisma"
 ]
 show-fixes = true
 output-format = "full"
@@ -145,6 +149,10 @@ ignore = [
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
 unfixable = []
+
+[tool.ruff.lint.isort]
+# this explicitly tells isort to treat wandb as a third-party package
+known-third-party = ["wandb"]
 
 [tool.setuptools]
 packages = {find = {}}

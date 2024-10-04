@@ -6,17 +6,18 @@ import pandas as pd
 import pingouin as pg
 import torch
 from attr import define, field
-from loguru import logger
+from bittensor.btlogging import logging as logger
 from pydantic import BaseModel, Field
+from scipy.stats import spearmanr
 from torch.nn import functional as F
 
 from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
+    CompletionResponses,
     CriteriaType,
     FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
-    Response,
 )
 
 
@@ -58,7 +59,7 @@ class Score(BaseModel):
     )
 
 
-def _get_miner_response_by_criteria(criteria, response: Response):
+def _get_miner_response_by_criteria(criteria, response: CompletionResponses):
     if isinstance(criteria, RankingCriteria):
         return response.rank_id
     elif isinstance(criteria, MultiScoreCriteria):
@@ -102,7 +103,7 @@ class Scoring:
         if isinstance(criteria, RankingCriteria):
             logger.debug("consensus scoring for ranking criteria")
             for response in miner_responses:
-                for completion in response.responses:
+                for completion in response.completion_responses:
                     # if completion.model_id not in model_id_to_average_rank:
                     #     model_id_to_average_rank[completion.model_id] = []
                     model_id_to_avg_rank[completion.model].append(completion.rank_id)
@@ -120,7 +121,8 @@ class Scoring:
                 [
                     _get_miner_response_by_criteria(criteria, x)
                     for x in sorted(
-                        response.responses, key=lambda x: model_id_to_avg_rank[x.model]
+                        response.completion_responses,
+                        key=lambda x: model_id_to_avg_rank[x.model],
                     )
                 ]
                 for response in miner_responses
@@ -132,7 +134,7 @@ class Scoring:
             logger.debug("consensus scoring for multi-score criteria")
             # calculate average score per model
             for response in miner_responses:
-                for completion in response.responses:
+                for completion in response.completion_responses:
                     model_id_to_scores[completion.model].append(completion.score)
             # for each model calculate the average score
             # USE DICT BECAUSE WE NEED TO ENSURE CORRECT ORDERING
@@ -148,7 +150,7 @@ class Scoring:
                     [
                         completion.score
                         for completion in sorted(
-                            response.responses,
+                            response.completion_responses,
                             key=lambda x: model_id_to_avg_score[x.model],
                         )
                     ]
@@ -173,7 +175,7 @@ class Scoring:
         # create df with the original number of completions
         df = pd.DataFrame(
             {
-                "subject": [i for i in range(len(request.responses))],
+                "subject": [i for i in range(len(request.completion_responses))],
             }
         )
         # prepare dataframe for calculating ICC
@@ -182,7 +184,7 @@ class Scoring:
             ordered_scores = [
                 x.score
                 for x in sorted(
-                    response.responses,
+                    response.completion_responses,
                     key=lambda x: model_id_to_avg_score[x.model]
                     if criteria == MultiScoreCriteria
                     else model_id_to_avg_rank[x.model],
@@ -261,7 +263,7 @@ class Scoring:
     ):
         # determine the ground truth ordering based on request
         model_score_tuples = get_leaderboard_scores(
-            [completion.model for completion in request.responses]
+            [completion.model for completion in request.completion_responses]
         )
         model_with_score_sorted = sorted(
             model_score_tuples, key=lambda x: (x[1] is not None, x[1]), reverse=True
@@ -273,14 +275,15 @@ class Scoring:
         # log miner models to check
         miner_models = []
         for r in miner_responses:
-            for completion in r.responses:
+            for completion in r.completion_responses:
                 miner_models.append(completion.model)
 
         miner_outputs = []
         for response in miner_responses:
             curr_miner_outputs = []
             for completion in sorted(
-                response.responses, key=lambda r: model_ids_sorted.index(r.model)
+                response.completion_responses,
+                key=lambda r: model_ids_sorted.index(r.model),
             ):
                 curr_miner_outputs.append(
                     _get_miner_response_by_criteria(criteria, completion)
@@ -310,6 +313,52 @@ class Scoring:
         )
 
     @staticmethod
+    def spm_ground_truth(
+        criteria: CriteriaType,
+        request: FeedbackRequest,
+        miner_responses: List[FeedbackRequest],
+    ):
+        """
+        Calculate Spearman Correlation between miner outputs and ground truth using 'cid'.
+        """
+
+        gt_keys = list(request.ground_truth.keys())
+        gt_values = list(request.ground_truth.values())
+
+        # Gather miner outputs based on their responses
+        miner_outputs = []
+        for response in miner_responses:
+            curr_miner_outputs = []
+            for completion in sorted(
+                response.completion_responses,
+                key=lambda response: gt_keys.index(response.completion_id),
+            ):
+                curr_miner_outputs.append(
+                    _get_miner_response_by_criteria(criteria, completion)
+                )
+            miner_outputs.append(curr_miner_outputs)
+
+        # Convert miner outputs to numpy array for easier processing
+        miner_outputs = np.array(miner_outputs)
+
+        # Calculate Spearman correlation for each miner's output against the ground truth
+        spearman_scores = [
+            spearmanr(miner_output, gt_values).correlation
+            for miner_output in miner_outputs
+        ]
+
+        # Convert the Spearman correlation scores into rewards
+        spearman_scores = torch.tensor(
+            np.nan_to_num(spearman_scores), dtype=torch.float32
+        )  # Handle NaN values
+        gt_reward = F.softmax(torch.tensor(spearman_scores, dtype=torch.float32), dim=0)
+
+        return GroundTruthScore(
+            score=gt_reward,
+            raw_scores_by_miner=spearman_scores,
+        )
+
+    @staticmethod
     def calculate_score(
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
@@ -324,7 +373,7 @@ class Scoring:
             for response in miner_responses:
                 values = [
                     _get_miner_response_by_criteria(criteria, completion)
-                    for completion in response.responses
+                    for completion in response.completion_responses
                 ]
                 if any(v is None for v in values):
                     logger.error(
@@ -340,7 +389,6 @@ class Scoring:
                             f"Detected all default values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
                         )
                         continue
-
                 valid_miner_responses.append(response)
 
             if len(valid_miner_responses) < 2:
@@ -352,9 +400,15 @@ class Scoring:
 
                 continue
 
-            gt_score = Scoring.cmp_ground_truth(
-                criteria, request, valid_miner_responses
-            )
+            if isinstance(criteria, RankingCriteria):
+                gt_score = Scoring.spm_ground_truth(
+                    criteria, request, valid_miner_responses
+                )
+            else:
+                gt_score = Scoring.cmp_ground_truth(
+                    criteria, request, valid_miner_responses
+                )
+
             consensus_score = Scoring.consensus_score(
                 criteria, request, valid_miner_responses
             )
@@ -378,7 +432,7 @@ def _calculate_average_rank_by_model(
 ) -> Dict[str, float]:
     model_id_to_average_rank = defaultdict(list)
     for request in responses:
-        for completion in request.responses:
+        for completion in request.completion_responses:
             # if completion.model_id not in model_id_to_average_rank:
             #     model_id_to_average_rank[completion.model_id] = []
             model_id_to_average_rank[completion.model].append(completion.rank_id)

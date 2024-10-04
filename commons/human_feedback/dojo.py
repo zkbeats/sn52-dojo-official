@@ -2,16 +2,12 @@ import json
 from typing import Dict, List
 
 import httpx
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 import template
 from commons.utils import loaddotenv, set_expire_time
 from template import DOJO_API_BASE_URL
-from template.protocol import (
-    FeedbackRequest,
-    MultiScoreCriteria,
-    RankingCriteria,
-)
+from template.protocol import FeedbackRequest, MultiScoreCriteria, RankingCriteria
 
 # Set to True to enable debug mode
 # TODO could possible setup with logger to enable debug mode
@@ -68,7 +64,7 @@ class DojoAPI:
             task=str(data.task_type).upper(),
             criteria=[],
         )
-        for c in data.responses:
+        for c in data.completion_responses:
             completion_dict = {}
             completion_dict["model"] = c.model
             if isinstance(c.completion, list):  # handling the case for DIALOGUE

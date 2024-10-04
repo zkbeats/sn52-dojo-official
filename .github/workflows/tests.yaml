@@ -32,7 +32,12 @@ jobs:
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: uv pip install nox pytest
+        run: uv pip install nox pytest prisma
+
+      - name: Generate Prisma client
+        run: |
+          # Add the command to generate the Prisma client here
+          prisma generate
 
       - name: Get latest git tag
         id: get_tag

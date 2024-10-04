@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 import bittensor as bt
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 from commons.objects import ObjectManager
 from commons.utils import initialise, ttl_get_block

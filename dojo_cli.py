@@ -153,7 +153,6 @@ class State:
 
 
 def get_session_cookies(wallet):
-    info("Grabbing wallet hotkey from keypair file... please input your password")
     kp = wallet.hotkey
     hotkey = str(wallet.hotkey.ss58_address)
 
@@ -171,6 +170,12 @@ def get_session_cookies(wallet):
     except Exception as e:
         error(f"Failed to get session cookies due to exception: {e}")
         pass
+    return
+
+
+def clear_session_cookies(state: State):
+    state.cookies = None
+    success("Successfully :skull: session cookies :cookie:")
     return
 
 
@@ -194,6 +199,7 @@ nested_actions: Dict[str, Callable] = {
     "authenticate": get_session_cookies,
     "api_key": api_key_actions,
     "subscription_key": subscription_key_actions,
+    "clear_cookies": clear_session_cookies,
 }
 
 
@@ -318,6 +324,8 @@ def main():
             if action:
                 if action == get_session_cookies:
                     state.cookies = action(state.wallet)
+                elif action == clear_session_cookies:
+                    action(state)
                 else:
                     if state.cookies is None:
                         warning("No session found, please authenticate first.")

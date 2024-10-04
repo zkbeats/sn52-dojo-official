@@ -7,13 +7,18 @@ from datetime import datetime
 from typing import Dict, Tuple
 
 import bittensor as bt
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
 from template import VALIDATOR_MIN_STAKE
 from template.base.miner import BaseMinerNeuron
-from template.protocol import FeedbackRequest, Heartbeat, ScoringMethod, ScoringResult
+from template.protocol import (
+    FeedbackRequest,
+    Heartbeat,
+    ScoringResult,
+    TaskResultRequest,
+)
 from template.utils.uids import is_miner
 
 
@@ -33,6 +38,9 @@ class Miner(BaseMinerNeuron):
             priority_fn=self.priority_ranking,
         ).attach(forward_fn=self.forward_result).attach(forward_fn=self.ack_heartbeat)
 
+        # Attach a handler for TaskResultRequest to return task results
+        self.axon.attach(forward_fn=self.forward_task_result_request)
+
         # Instantiate runners
         self.should_exit: bool = False
         self.is_running: bool = False
@@ -47,8 +55,8 @@ class Miner(BaseMinerNeuron):
             logger.error("Invalid synapse object")
             return synapse
 
-        logger.debug("Responding to heartbeat synapse")
         synapse.ack = True
+        logger.debug(f"Respondng to heartbeat synapse: {synapse}")
         return synapse
 
     async def forward_result(self, synapse: ScoringResult) -> ScoringResult:
@@ -82,6 +90,7 @@ class Miner(BaseMinerNeuron):
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
         try:
+            logger.debug("Received feedback request")
             # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
             if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
                 logger.error("Invalid synapse: dendrite or dendrite.hotkey is None.")
@@ -89,21 +98,16 @@ class Miner(BaseMinerNeuron):
 
             logger.info(f"Miner received request id: {synapse.request_id}")
 
-            if not synapse.responses:
+            if not synapse.completion_responses:
                 logger.error("Invalid synapse: response field is None.")
                 return synapse
 
             self.hotkey_to_request[synapse.dendrite.hotkey] = synapse
 
-            scoring_method = self.config.scoring_method
-            if scoring_method.casefold() == ScoringMethod.DOJO:
-                synapse.scoring_method = ScoringMethod.DOJO
-                task_ids = await DojoAPI.create_task(synapse)
-                assert len(task_ids) == 1
-                synapse.dojo_task_id = task_ids[0]
+            task_ids = await DojoAPI.create_task(synapse)
+            assert len(task_ids) == 1
+            synapse.dojo_task_id = task_ids[0]
 
-            else:
-                logger.error("Unrecognized scoring method!")
         except Exception:
             logger.error(
                 f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
@@ -111,12 +115,35 @@ class Miner(BaseMinerNeuron):
 
         return synapse
 
+    async def forward_task_result_request(
+        self, synapse: TaskResultRequest
+    ) -> TaskResultRequest:
+        """Handle a TaskResultRequest from a validator, fetching the task result from the DojoAPI."""
+        try:
+            logger.info(f"Received TaskResultRequest for task id: {synapse.task_id}")
+            if not synapse or not synapse.task_id:
+                logger.error("Invalid TaskResultRequest: missing task_id")
+                return synapse
+
+            # Fetch task results from DojoAPI using task_id
+            task_results = await DojoAPI.get_task_results_by_task_id(synapse.task_id)
+            if not task_results:
+                logger.debug(f"No task result found for task id: {synapse.task_id}")
+                return synapse
+
+            synapse.task_results = task_results
+            return synapse
+
+        except Exception as e:
+            logger.error(f"Error handling TaskResultRequest: {e}")
+            return synapse
+
     async def blacklist_feedback_request(
         self, synapse: FeedbackRequest
     ) -> Tuple[bool, str]:
         logger.info("checking blacklist function")
         caller_hotkey = synapse.dendrite.hotkey
-        if caller_hotkey not in self.metagraph.hotkeys:
+        if caller_hotkey is None or caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
             logger.warning(
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"

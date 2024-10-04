@@ -2,38 +2,37 @@ import asyncio
 import copy
 import traceback
 from collections import defaultdict
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import Dict
 
 import bittensor as bt
-from loguru import logger
+from bittensor.btlogging import logging as logger
 
 import template
 from commons.data_manager import DataManager
-from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
-from commons.utils import (
-    get_current_utc_time_iso,
-    get_epoch_time,
-    is_valid_expiry,
-    set_expire_time,
-)
+from commons.utils import get_epoch_time
+from database.prisma.models import Feedback_Request_Model, Miner_Response_Model
 from template.protocol import (
     CriteriaTypeEnum,
-    FeedbackRequest,
     MultiScoreCriteria,
     RankingCriteria,
-    ScoringMethod,
+    RidToHotKeyToTaskId,
+    RidToModelMap,
+    TaskExpiryDict,
+    TaskResult,
+    TaskResultRequest,
 )
 
 
 class DojoTaskTracker:
     _instance = None
     # request id -> miner hotkey -> task id
-    _rid_to_mhotkey_to_task_id: Dict[str, Dict[str, str]] = defaultdict(
+    _rid_to_mhotkey_to_task_id: RidToHotKeyToTaskId = defaultdict(
         lambda: defaultdict(str)
     )
-    _rid_to_model_map: Dict[str, Dict[str, str]] = defaultdict(lambda: defaultdict(str))
-    _task_to_expiry: Dict[str, str] = defaultdict(str)
+    _rid_to_model_map: RidToModelMap = defaultdict(lambda: defaultdict(str))
+    _task_to_expiry: TaskExpiryDict = defaultdict(str)
     _lock = asyncio.Lock()
     _should_exit: bool = False
 
@@ -42,29 +41,24 @@ class DojoTaskTracker:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    @staticmethod
-    def filter_dojo_responses(
-        responses: List[FeedbackRequest],
-    ) -> List[FeedbackRequest]:
-        return list(filter(lambda r: r.scoring_method == ScoringMethod.DOJO, responses))
-
     @classmethod
     async def update_task_map(
         cls,
         request_id: str,
-        dojo_responses: List[FeedbackRequest],
+        fb_request_model: Feedback_Request_Model,
         obfuscated_model_to_model: Dict,
     ):
-        if not dojo_responses:
+        dojo_responses = fb_request_model.miner_responses
+        if dojo_responses is None or len(dojo_responses) == 0:
             logger.warning("No Dojo responses found")
             return
 
         logger.debug("update_task_map attempting to acquire lock")
         async with cls._lock:
-            valid_responses: List[FeedbackRequest] = list(
+            valid_responses: list[Miner_Response_Model] = list(
                 filter(
                     lambda r: r.request_id == request_id
-                    and r.axon.hotkey
+                    and r.miner_hotkey
                     and r.dojo_task_id,
                     dojo_responses,
                 )
@@ -77,16 +71,11 @@ class DojoTaskTracker:
                 cls._rid_to_mhotkey_to_task_id[request_id] = {}
 
             for r in valid_responses:
-                cls._rid_to_mhotkey_to_task_id[request_id][r.axon.hotkey] = (
+                cls._rid_to_mhotkey_to_task_id[request_id][r.miner_hotkey] = (
                     r.dojo_task_id
                 )
 
-                # Ensure expire_at is set and is reasonable
-                expire_at = r.expire_at
-                if expire_at is None or is_valid_expiry(expire_at) is not True:
-                    expire_at = set_expire_time(template.TASK_DEADLINE)
-
-                cls._task_to_expiry[r.dojo_task_id] = expire_at
+                cls._task_to_expiry[r.dojo_task_id] = r.expire_at
 
             cls._rid_to_model_map[request_id] = obfuscated_model_to_model
         logger.debug("released lock for task tracker")
@@ -95,11 +84,11 @@ class DojoTaskTracker:
     @classmethod
     async def remove_expired_tasks(cls):
         # Identify expired tasks
-        current_time = get_current_utc_time_iso()
+        current_time = datetime.now(timezone.utc)
         expired_tasks = [
             task_id
             for task_id, expiry_time in cls._task_to_expiry.items()
-            if expiry_time < current_time
+            if datetime.fromisoformat(expiry_time) < current_time
         ]
 
         async with cls._lock:
@@ -109,7 +98,9 @@ class DojoTaskTracker:
                     for hotkey, t_id in list(hotkeys.items()):
                         if t_id == task_id:
                             del cls._rid_to_mhotkey_to_task_id[request_id][hotkey]
-                    if not cls._rid_to_mhotkey_to_task_id[request_id]:
+                    if not cls._rid_to_mhotkey_to_task_id[
+                        request_id
+                    ]:  # This means no more hotkeys for this request, so remove the request
                         del cls._rid_to_mhotkey_to_task_id[request_id]
                 # Remove from _task_to_expiry
                 del cls._task_to_expiry[task_id]
@@ -117,9 +108,57 @@ class DojoTaskTracker:
         logger.info(f"Removed {len(expired_tasks)} expired tasks from DojoTaskTracker.")
 
     @classmethod
+    async def get_task_results_from_miner(
+        cls, miner_hotkey: str, task_id: str
+    ) -> list[TaskResult]:
+        """Fetch task results from the miner's Axon using Dendrite."""
+        try:
+            logger.info(
+                f"Fetching task result from miner {miner_hotkey} for task {task_id}"
+            )
+
+            validator = ObjectManager.get_validator()
+
+            dendrite: bt.dendrite = validator.dendrite
+            metagraph = validator.metagraph
+
+            if not dendrite:
+                raise ValueError("Dendrite not initialized")
+
+            # Prepare the synapse (data request) that will be sent via Dendrite
+            task_synapse = TaskResultRequest(task_id=task_id)
+
+            # Use Dendrite to communicate with the Axon
+            miner_axon = metagraph.axons[metagraph.hotkeys.index(miner_hotkey)]
+            if not miner_axon:
+                raise ValueError(f"Miner Axon not found for hotkey: {miner_hotkey}")
+
+            # Send the request via Dendrite and get the response
+            response = await dendrite.forward(
+                axons=[miner_axon], synapse=task_synapse, deserialize=False
+            )
+
+            logger.debug(f"TaskResult Response from miner {miner_hotkey}: {response}")
+
+            if response and response[0]:
+                logger.info(
+                    f"Received task result from miner {miner_hotkey} for task {task_id}"
+                )
+                return response[0].task_results
+            else:
+                logger.warning(
+                    f"No task results found from miner {miner_hotkey} for task {task_id}"
+                )
+                return []
+
+        except Exception as e:
+            logger.error(f"Error fetching task result from miner {miner_hotkey}: {e}")
+            return []
+
+    @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
-        await asyncio.sleep(60)
+        await asyncio.sleep(template.DOJO_TASK_MONITORING)
 
         while not cls._should_exit:
             try:
@@ -154,10 +193,11 @@ class DojoTaskTracker:
                             )
                             continue
 
-                        task_results = await DojoAPI.get_task_results_by_task_id(
-                            task_id
+                        task_results = await cls.get_task_results_from_miner(
+                            miner_hotkey, task_id
                         )
-                        if not task_results:
+
+                        if not task_results and not len(task_results) > 0:
                             logger.warning(
                                 f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
                             )
@@ -173,11 +213,11 @@ class DojoTaskTracker:
                         # keep track so we average across the miner's worker pool
                         num_ranks_by_workers, num_scores_by_workers = 0, 0
                         for result in task_results:
-                            for result_data in result["result_data"]:
-                                type = result_data["type"]
-                                value = result_data["value"]
+                            for result_data in result.result_data:
+                                type = result_data.type
+                                value = result_data.value
                                 if type == CriteriaTypeEnum.RANKING_CRITERIA:
-                                    for rank, model_id in value.items():
+                                    for model_id, rank in value.items():
                                         real_model_id = cls._rid_to_model_map.get(
                                             request_id
                                         ).get(model_id)

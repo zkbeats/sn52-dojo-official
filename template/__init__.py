@@ -32,8 +32,15 @@ __spec_version__ = (
 # Import all submodules.
 
 # TODO @dev change before live
-VALIDATOR_MIN_STAKE = 99
+VALIDATOR_MIN_STAKE = 20000
 TASK_DEADLINE = 8 * 60 * 60
+
+# Define the time intervals for various tasks.
+VALIDATOR_RUN = 300
+VALIDATOR_HEARTBEAT = 60
+VALIDATOR_UPDATE_SCORE = 60
+VALIDATOR_STATUS = 20
+DOJO_TASK_MONITORING = 60
 
 DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
 if DOJO_API_BASE_URL is None:
