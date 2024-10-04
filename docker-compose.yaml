@@ -107,7 +107,7 @@ services:
     volumes:
       - ./.env:/dojo-api/.env
     platform: linux/amd64
-    image: ghcr.io/tensorplex-labs/dojo-worker-api:main
+    image: ghcr.io/tensorplex-labs/dojo-worker-api:dev
     environment:
       RUNTIME_ENV: local
       SERVER_PORT: 8080
@@ -154,7 +154,7 @@ services:
       - external
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
     ports:
       - "127.0.0.1:5003:5003"
     env_file:
@@ -222,7 +222,7 @@ services:
 
   btcli:
     # TODO @dev change back after testing
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: ghcr.io/tensorplex-labs/dojo:dev
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -232,7 +232,7 @@ services:
     stdin_open: true
 
   dojo-cli:
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: ghcr.io/tensorplex-labs/dojo:dev
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
@@ -246,7 +246,7 @@ services:
 # ============== TEST NET ============== #
 
   miner-testnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     env_file:
       - .env
@@ -267,7 +267,7 @@ services:
       - external
 
   miner-testnet-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     env_file:
       - .env
@@ -281,7 +281,7 @@ services:
       - external
 
   validator-testnet:
-    image: ghcr.io/tensorplex-labs/dojo:main
+    image: ghcr.io/tensorplex-labs/dojo:dev
     working_dir: /app
     environment:
       PRISMA_QUERY_ENGINE_BINARY: /root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
