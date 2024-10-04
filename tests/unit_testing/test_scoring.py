@@ -58,9 +58,7 @@ def mock_response(
     return CompletionResponses(
         model=model,
         completion=CodeAnswer(
-            files=[FileObject(filename=filename, content=content, language=language)],
-            additional_notes=None,
-            installation_commands="",
+            files=[FileObject(filename=filename, content=content, language=language)]
         ),
         score=score,
         rank_id=rank_id,

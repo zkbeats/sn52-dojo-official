@@ -80,13 +80,6 @@ class FileObject(BaseModel):
 
 class CodeAnswer(BaseModel):
     files: List[FileObject] = Field(description="List of FileObjects")
-    installation_commands: str = Field(
-        description="Terminal commands for the code to be able to run to install any third-party packages for the code to be able to run"
-    )
-    additional_notes: str | None = Field(
-        default=None,
-        description="Any additional notes or comments about the code solution",
-    )
 
 
 class DialogueItem(BaseModel):
