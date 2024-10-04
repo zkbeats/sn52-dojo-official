@@ -261,7 +261,7 @@ services:
       worker-ui:
         condition: service_healthy
     ports:
-      - ${AXON_PORT}:${AXON_PORT}
+      - ${AXON_PORT:-8888}:${AXON_PORT:-8888}
     networks:
       - internal
       - external
@@ -322,7 +322,7 @@ services:
       worker-ui:
         condition: service_healthy
     ports:
-      - ${AXON_PORT}:${AXON_PORT}
+      - ${AXON_PORT:-8888}:${AXON_PORT:-8888}
     networks:
       - internal
       - external
