@@ -3,6 +3,7 @@ import inspect
 import logging
 import os
 import site
+from functools import lru_cache
 from pathlib import Path
 
 import bittensor as bt
@@ -191,6 +192,7 @@ def add_args(parser):
         pass
 
 
+@lru_cache(maxsize=1)
 def get_config():
     """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
