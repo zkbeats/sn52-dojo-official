@@ -119,6 +119,7 @@ services:
       TOKEN_EXPIRY: 24
       REDIS_HOST: redis-miner
       REDIS_PORT: 6379
+      VALIDATOR_MIN_STAKE: 20000
     ports:
       - "8080:8080"
     expose:
