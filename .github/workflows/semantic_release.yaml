@@ -16,14 +16,15 @@ jobs:
         uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '18.17.0'
+          node-version: "18.17.0"
       - name: Action For Semantic Release
-        uses: cycjimmy/semantic-release-action@v4.1.0
+        uses: cycjimmy/semantic-release-action@v4.1.1
         with:
           branch: main
           extra_plugins: |
             @semantic-release/changelog
             @semantic-release/git
             @semantic-release/github
+            conventional-changelog-conventionalcommits
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
