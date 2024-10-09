@@ -1,0 +1,168 @@
+volumes:
+  postgres-validator-volume:
+  redis-validator-volume:
+  prisma-pip-cache:
+  prisma-binary:
+
+networks:
+  external:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+  internal:
+    driver: bridge
+
+services:
+  # ============== COMMON SERVICES ============== #
+  redis-service:
+    image: redis/redis-stack-server:7.4.0-v0
+    env_file:
+      - .env.validator
+    expose:
+      - 6379
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-validator-volume:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  synthetic-api:
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
+    env_file:
+      - .env.validator
+    environment:
+      # leave env vars that'll never change down here, don't source any env vars
+      # here because we're not looking in .env and variable substitution will
+      # happen too early
+      - REDIS_HOST=redis-service
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+    ports:
+      - "127.0.0.1:5003:5003"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://synthetic-api:5003/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      redis-service:
+        condition: service_healthy
+    # allow docker commands inside container
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  postgres-vali:
+    image: postgres:15.7
+    env_file:
+      - .env.validator
+    # looks strange, but double $ (i.e. $$) for variable substitution
+    command: >
+      bash -c "
+        export POSTGRES_USER=$${DB_USERNAME}
+        export POSTGRES_PASSWORD=$${DB_PASSWORD}
+        export POSTGRES_DB=$${DB_NAME}
+        docker-entrypoint.sh postgres
+      "
+    expose:
+      - 5432
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-validator-volume:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test:
+        # looks strange, but double $ (i.e. $$) for variable substitution
+        ["CMD-SHELL", "pg_isready -h postgres-vali -U $${DB_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prisma-setup-vali:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.validator.prisma
+    env_file:
+      - .env.validator
+    working_dir: /app
+    volumes:
+      - prisma-pip-cache:/root/.cache/pip
+      - prisma-binary:/root/prisma-python
+      - ./:/app
+    networks:
+      - internal
+    depends_on:
+      - postgres-vali
+
+  # ============== TEST NET ============== #
+
+  validator-testnet:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    working_dir: /app
+    env_file:
+      - .env.validator
+    environment:
+      - SYNTHETIC_API_URL=http://synthetic-api:5003
+      - WANDB_PROJECT_NAME=dojo-testnet
+      - NETUID=98
+      - SUBTENSOR_NETWORK=test
+      - SUBTENSOR_ENDPOINT=ws://test.finney.opentensor.ai
+      - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
+    volumes:
+      - ./:/app
+      - ./.env.validator:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+      - prisma-binary:/root/prisma-python
+    command: ["validator"]
+    networks:
+      - internal
+      - external
+    depends_on:
+      synthetic-api:
+        condition: service_healthy
+      postgres-vali:
+        condition: service_healthy
+      prisma-setup-vali:
+        condition: service_completed_successfully
+
+  # ============== MAIN NET ============== #
+
+  validator-mainnet:
+    image: ghcr.io/tensorplex-labs/dojo:main
+    working_dir: /app
+    env_file:
+      - .env.validator
+    environment:
+      - SYNTHETIC_API_URL=http://synthetic-api:5003
+      - WANDB_PROJECT_NAME=dojo-mainnet
+      - NETUID=52
+      - SUBTENSOR_NETWORK=finney
+      - SUBTENSOR_ENDPOINT=***REMOVED***
+      - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
+    volumes:
+      - ./:/app
+      - ./.env.validator:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+      - prisma-binary:/root/prisma-python
+    command: ["validator"]
+    networks:
+      - internal
+      - external
+    depends_on:
+      synthetic-api:
+        condition: service_healthy
+      postgres-vali:
+        condition: service_healthy
+      prisma-setup-vali:
+        condition: service_completed_successfully

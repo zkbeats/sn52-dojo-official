@@ -189,9 +189,11 @@ def restart_docker(service_name):
     logger.info(f"Restarting Docker services for: {service_name}.")
 
     # Stop the services in a single command
+    # TODO change based on miner/validator services
     subprocess.run(["docker", "compose", "stop"] + services_to_restart, check=True)
 
     # Start the services in a single command
+    # TODO change based on miner/validator services
     subprocess.run(["docker", "compose", "up", "-d", main_service], check=True)
 
 

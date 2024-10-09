@@ -1,0 +1,10 @@
+services:
+  btcli:
+    # TODO @dev change back after testing
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    volumes:
+      - ./:/app
+      - $HOME/.bittensor:/root/.bittensor
+    command: ["btcli"]
+    tty: true
+    stdin_open: true

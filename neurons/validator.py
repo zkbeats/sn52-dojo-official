@@ -6,12 +6,14 @@ from datetime import datetime, timezone
 from traceback import print_exception
 from typing import List
 
+import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
 import wandb
 from bittensor.btlogging import logging as logger
 from fastapi.encoders import jsonable_encoder
+from tenacity import RetryError
 from torch.nn import functional as F
 
 import template
@@ -109,7 +111,7 @@ class Validator(BaseNeuron):
                         request=d.request,
                         miner_responses=d.miner_responses,
                     )
-                    logger.debug(f"Got hotkey to score: {hotkey_to_score}")
+                    logger.trace(f"Got hotkey to score: {hotkey_to_score}")
 
                     if not hotkey_to_score:
                         request_id = d.request.request_id
@@ -123,7 +125,7 @@ class Validator(BaseNeuron):
                         await DataManager.remove_responses([d])
                         continue
 
-                    logger.debug(
+                    logger.trace(
                         f"Initially had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
                     )
 
@@ -216,9 +218,10 @@ class Validator(BaseNeuron):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
             await asyncio.sleep(template.VALIDATOR_HEARTBEAT)
+            self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
+                logger.debug(f"⬆️ Sending heartbeats to {len(all_miner_uids)} miners")
                 axons: List[bt.AxonInfo] = [
                     self.metagraph.axons[uid]
                     for uid in all_miner_uids
@@ -238,7 +241,7 @@ class Validator(BaseNeuron):
                 async with self._lock:
                     self._active_miner_uids = set(active_uids)
                 logger.debug(
-                    f"Sent heartbeats at time: {get_epoch_time()}, active miners: {sorted(active_uids)}"
+                    f"⬇️ Heartbeats acknowledged by active miners: {sorted(active_uids)}"
                 )
             except Exception as e:
                 logger.error(
@@ -256,7 +259,10 @@ class Validator(BaseNeuron):
         # initially will seed it with some data for miners to get started
 
         # ensure we consider only active miners
-        logger.info(f"Sending request to miners {self._active_miner_uids}")
+
+        if len(self._active_miner_uids) == 0:
+            logger.warning("🤷 No active miners to send request to... skipping")
+            return
 
         request_id = get_new_uuid()
         async with self._lock:
@@ -267,7 +273,7 @@ class Validator(BaseNeuron):
                     if self.scores[uid] > self._threshold
                 ]
                 logger.debug(
-                    f"External user request, number of miners with scores above threshold: {len(sel_miner_uids)}"
+                    f"🌍 External user request, number of miners with scores above threshold: {len(sel_miner_uids)}"
                 )
             else:
                 sel_miner_uids = MinerUidSelector(
@@ -281,21 +287,36 @@ class Validator(BaseNeuron):
             != self.wallet.hotkey.ss58_address.casefold()
         ]
         if not len(axons):
-            logger.warning("No axons to query ... skipping")
+            logger.warning("🤷 No axons to query ... skipping")
             return
 
         obfuscated_model_to_model = {}
 
         if synapse is None:
-            data = await SyntheticAPI.get_qa()
+            try:
+                data = await SyntheticAPI.get_qa()
+            except RetryError as e:
+                logger.error(
+                    f"Exhausted all retry attempts for synthetic data generation: {e}"
+                )
+                return
+            except ValueError as e:
+                logger.error(f"Invalid response from synthetic data API: {e}")
+                return
+            except aiohttp.ClientError as e:
+                logger.error(f"Network error when calling synthetic data API: {e}")
+                return
+            except Exception as e:
+                logger.error(f"Unexpected error during synthetic data generation: {e}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
+                return
+
             if not data:
-                logger.error("Failed to generate data from synthetic gen API")
+                logger.error("No data returned from synthetic data API")
                 return
 
             obfuscated_model_to_model = self.obfuscate_model_names(data.responses)
-
             expire_at = set_expire_time(template.TASK_DEADLINE)
-
             synapse = FeedbackRequest(
                 request_id=request_id,
                 task_type=str(TaskType.CODE_GENERATION),
@@ -316,15 +337,13 @@ class Validator(BaseNeuron):
             )
 
         logger.info(
-            f"Sending synapse off to miners, request id: {synapse.request_id}, miner uids: {sel_miner_uids}"
+            f"⬆️ Sending feedback request for request id: {synapse.request_id}, miners uids:{sel_miner_uids}"
         )
 
         miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
 
-        # map obfuscated model names back to the original model names
-        logger.debug(f"Obfuscated model map: {obfuscated_model_to_model}")
         valid_miner_responses: List[FeedbackRequest] = []
         try:
             for miner_response in miner_responses:
@@ -363,7 +382,7 @@ class Validator(BaseNeuron):
             logger.error(f"Failed to map obfuscated model to original model: {e}")
             pass
 
-        logger.debug(f"Got valid miner responses: {len(valid_miner_responses)}")
+        logger.info(f"⬇️ Got {len(valid_miner_responses)} valid responses")
 
         if valid_miner_responses is None or len(valid_miner_responses) == 0:
             logger.warning("No valid miner responses to process... skipping")
@@ -585,7 +604,6 @@ class Validator(BaseNeuron):
             logger.error("Failed to load validator state data")
             return
 
-        logger.success("Loaded validator state successfully")
         self.scores = state_data[ValidatorStateKeys.SCORES]
         DojoTaskTracker._rid_to_mhotkey_to_task_id = state_data[
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
@@ -594,10 +612,6 @@ class Validator(BaseNeuron):
         DojoTaskTracker._task_to_expiry = state_data[ValidatorStateKeys.TASK_TO_EXPIRY]
 
         logger.info(f"Scores state: {self.scores}")
-        logger.info(
-            f"Dojo Tasks to track: {DojoTaskTracker._rid_to_mhotkey_to_task_id}"
-        )
-        logger.info(f"Task to expiry {DojoTaskTracker._task_to_expiry}")
 
     @classmethod
     async def log_validator_status(cls):

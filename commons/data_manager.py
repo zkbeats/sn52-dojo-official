@@ -71,10 +71,6 @@ class DataManager:
                 map_model_to_dendrite_query_response(r) for r in feedback_requests
             ]
 
-            logger.info(
-                f"Loaded Mapped FeedbackRequest {len(result)}, and type: {type(result)}"
-            )
-
             return result
 
         except Exception as e:
@@ -235,17 +231,14 @@ class DataManager:
         logger.debug("Attempting to save validator state.")
         try:
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
-            logger.info(f"Saving validator dojo_task_data: {dojo_task_data}")
             if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
                 raise ValueError("Dojo task data and scores are empty. Skipping save.")
 
-            logger.debug(f"Saving validator dojo_task_data: {dojo_task_data}")
-            logger.debug(f"Saving validator score: {scores}")
+            logger.trace(f"Saving validator dojo_task_data: {dojo_task_data}")
+            logger.trace(f"Saving validator score: {scores}")
 
             # Convert tensors to lists for JSON serialization
             scores_list = scores.tolist()
-
-            logger.debug(f"before saving validator dojo_task_data: {scores_list}")
 
             # Prepare nested data for creating the validator state
             validator_state_data: list[Validator_State_ModelCreateInput] = [
@@ -283,7 +276,7 @@ class DataManager:
                 )
 
             logger.success(
-                f"Saving validator state with scores: {scores}, and for {len(dojo_task_data)} requests"
+                f"📦 Saved validator state with scores: {scores}, and for {len(dojo_task_data)} requests"
             )
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")

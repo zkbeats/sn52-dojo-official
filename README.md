@@ -142,7 +142,7 @@ git clone https://github.com/tensorplex-labs/dojo.git
 cd dojo/
 ```
 
-2. Install PM2 through fnm
+2. Install PM2, one way is through fnm
 
 ```bash
 # for linux, a convenience script is available
@@ -190,23 +190,17 @@ docker --version
 docker compose version
 ```
 
-4. Build the dojo base image
-
-```bash
-docker build -t dojo-base:latest -f ./docker/Dockerfile .
-```
-
-5. Create your wallets if they aren't created yet
+4. Create your wallets if they aren't created yet
 
 ```bash
 # run btcli
-docker compose run --rm btcli
+make btcli
 # create your wallets
 btcli wallet new_coldkey
 btcli wallet new_hotkey
 ```
 
-6. Get some TAO and ensure you have enough TAO to cover the registration cost
+5. Get some TAO and ensure you have enough TAO to cover the registration cost
 
 ```bash
 # for Testnet
@@ -242,9 +236,8 @@ cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
 # for testnet
-SUBTENSOR_NETWORK=test
-SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+DOJO_API_KEY= # blank for now
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 AXON_PORT=8888 # port to serve requests over the public network for validators to call
@@ -253,14 +246,13 @@ AXON_PORT=8888 # port to serve requests over the public network for validators t
 2. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
 
 ```bash
-docker compose run --rm dojo-cli
+make btcli
 ```
 
 3. Complete the .env file with the variables below:
 
 ```bash
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
-TOKENIZERS_PARALLELISM=true
 DOJO_API_KEY=# api key from earlier
 ```
 
@@ -268,7 +260,9 @@ DOJO_API_KEY=# api key from earlier
 
 ```bash
 # For Testnet
-docker compose up -d miner-testnet-centralised
+make miner-centralised network=testnet
+# for mainnet
+make miner-centralised network=mainnet
 ```
 
 ### Option 2: Decentralised Method
@@ -281,22 +275,25 @@ cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
 # for testnet
-SUBTENSOR_NETWORK=test
-SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="http://worker-api:8080" # use this value
+DOJO_API_KEY=# blank for now
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 AXON_PORT=8888 # port to serve requests over the public network for validators to call
+
+# for dojo-ui
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
 
 # for dojo-worker-api
 REDIS_USERNAME=
 REDIS_PASSWORD=
 
 # postgres details
-DB_HOST=postgres-service:5432 # use this value
-DB_NAME=
+DB_HOST=postgres-miner:5432 # use this value
+DB_NAME=db
 DB_USERNAME=
 DB_PASSWORD=
+DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
 
 # aws credentials for S3
 AWS_ACCESS_KEY_ID=
@@ -311,13 +308,13 @@ ETHEREUM_NODE=# get an ethereum endpoint URL from Infura
 2. Start the worker api which will be connected to the CLI later.
 
 ```bash
-docker compose up -d worker-api
+make miner-worker-api
 ```
 
 3. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
 
 ```bash
-docker compose run --rm dojo-cli
+make dojo-cli
 ```
 
 4. Grab the API key and add it to your .env file
@@ -329,23 +326,11 @@ DOJO_API_KEY=# api key from earlier
 5. Now, run the full miner service.
 
 ```bash
-docker compose up -d miner-testnet-decentralised
-
-# monitor the services
-docker compose ps --all
-# you should see something like this
-# NAME                                 IMAGE                                             COMMAND                  SERVICE                       CREATED         STATUS                          PORTS
-# dojo-miner-testnet-decentralised-1   dojo-base:latest                                  "entrypoints.sh miner"   miner-testnet-decentralised   2 minutes ago   Up About a minute
-# dojo-postgres-service-1              postgres:15.7                                     "docker-entrypoint.s…"   postgres-service              2 hours ago     Up 2 hours (healthy)            0.0.0.0:5432->5432/tcp
-# dojo-prisma-setup-1                  dojo-prisma-setup                                 "/bin/sh -c 'go run …"   prisma-setup                  2 hours ago     Exited (0) About a minute ago
-# dojo-redis-service-1                 redis/redis-stack-server:7.4.0-v0                 "/entrypoint.sh"         redis-service                 2 hours ago     Up 2 hours (healthy)            6379/tcp
-# dojo-sidecar-1                       docker.io/parity/substrate-api-sidecar:v19.0.2    "docker-entrypoint.s…"   sidecar                       2 hours ago     Up 2 hours (healthy)            8080-8081/tcp
-# dojo-worker-api-1                    ghcr.io/tensorplex-labs/dojo-worker-api:main      "/dojo-api/entrypoin…"   worker-api                    2 hours ago     Up 2 hours (healthy)            0.0.0.0:8080->8080/tcp
-# dojo-worker-ui-1                     ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod   "/dojo-ui/entrypoint…"   worker-ui                     2 minutes ago   Up 2 minutes (healthy)          0.0.0.0:3000->3000/tcp
-# node-subtensor-testnet               ghcr.io/opentensor/subtensor:pr-720               "/bin/bash -c 'node-…"   node-subtensor-testnet        2 hours ago     Up 2 hours (healthy)            0.0.0.0:9933->9933/tcp, 0.0.0.0:9944->9944/tcp, 0.0.0.0:30333->30333/tcp
+# for testnet
+make miner-decentralised network=testnet
 
 # read miner logs using the following:
-docker compose logs -f miner-testnet-decentralised
+make miner-decentralised-logs network=testnet
 ```
 
 > [!IMPORTANT]
@@ -383,27 +368,20 @@ cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
 # for testnet
-SUBTENSOR_NETWORK=test
-SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
-SYNTHETIC_API_URL="http://127.0.0.1:5003"
-TOKENIZERS_PARALLELISM=true
 WANDB_API_KEY="<wandb_key>"
 
 # for dojo-synthetic-api
-REDIS_PASSWORD=
-REDIS_USERNAME=
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
-E2B_API_KEY=
 
 #postgres details for validator
-DB_HOST_VALIDATOR=postgres-vali:5432
-DB_NAME_VALIDATOR=
-DB_USERNAME_VALIDATOR=
-DB_PASSWORD_VALIDATOR=
-DATABASE_URL_VALIDATOR=postgresql://${DB_USERNAME_VALIDATOR}:${DB_PASSWORD_VALIDATOR}@${DB_HOST_VALIDATOR}/${DB_NAME_VALIDATOR}
+DB_HOST=postgres-vali:5432
+DB_NAME=db
+DB_USERNAME=
+DB_PASSWORD=
+DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
 
-# Other LLM API providers, Optional or if you've chosen it
+# Other LLM API providers, Optional or if you've chosen it over Openrouter
 TOGETHER_API_KEY=
 OPENAI_API_KEY=
 ```
@@ -413,7 +391,7 @@ Start the validator
 ```bash
 # start the validator
 # Testnet
-docker compose up -d validator-testnet
+make validator network=testnet
 ```
 
 To start with autoupdate for validators (**optional**)
@@ -439,7 +417,7 @@ Features:
 You may use the dockerized version of the CLI using
 
 ```bash
-docker compose run --rm dojo-cli
+make dojo-cli
 ```
 
 Alternatively you can simply run the CLI inside of a virtual environment

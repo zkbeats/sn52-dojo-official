@@ -63,7 +63,7 @@ class DojoTaskTracker:
                     dojo_responses,
                 )
             )
-            logger.info(
+            logger.debug(
                 f"Got {len(valid_responses)} valid Dojo responses to update task tracker"
             )
 
@@ -165,7 +165,6 @@ class DojoTaskTracker:
                 logger.info(
                     f"Monitoring Dojo Task completions... {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id)} requests"
                 )
-                logger.info(f"print task_to_expiry {cls._task_to_expiry}")
 
                 # Clean up expired tasks before processing
                 await cls.remove_expired_tasks()
@@ -203,7 +202,7 @@ class DojoTaskTracker:
                             )
                             continue
 
-                        logger.info(
+                        logger.trace(
                             f"Request id: {request_id}, miner hotkey: {miner_hotkey}, task id: {task_id}"
                         )
 
@@ -252,11 +251,11 @@ class DojoTaskTracker:
                                     completion.score = model_id_to_avg_score[model_id]
 
                         if model_id_to_avg_rank:
-                            logger.info(
+                            logger.trace(
                                 f"Parsed request with ranks data: {model_id_to_avg_rank}"
                             )
                         if model_id_to_avg_score:
-                            logger.info(
+                            logger.trace(
                                 f"Parsed request with scores data: {model_id_to_avg_score}"
                             )
 
@@ -283,7 +282,7 @@ class DojoTaskTracker:
                                 request_id, data.miner_responses
                             )
                         )
-                        logger.info(
+                        logger.trace(
                             f"Appending Dojo task results for request id: {request_id}, was successful? {status}"
                         )
                         if status:
@@ -292,9 +291,6 @@ class DojoTaskTracker:
                     # determine if we should completely remove the request from the tracker
                     async with cls._lock:
                         if processed_hotkeys == set(miner_to_task_id.keys()):
-                            logger.info(
-                                f"All hotkeys processed for request id {request_id}, removing from tracker"
-                            )
                             del cls._rid_to_mhotkey_to_task_id[request_id]
                             del cls._rid_to_model_map[request_id]
                         else:

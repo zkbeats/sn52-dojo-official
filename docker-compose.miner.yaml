@@ -1,0 +1,262 @@
+volumes:
+  postgres-miner-volume:
+  redis-miner-volume:
+
+networks:
+  external:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+  internal:
+    driver: bridge
+
+services:
+  # ============== COMMON SERVICES ============== #
+
+  redis-miner:
+    image: redis/redis-stack-server:7.4.0-v0
+    env_file:
+      - .env.miner
+    expose:
+      - 6379
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-miner-volume:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  postgres-miner:
+    image: postgres:15.7
+    env_file:
+      - .env.miner
+    # looks strange, but double $ (i.e. $$) for variable substitution
+    command: >
+      bash -c "
+        export POSTGRES_USER=$${DB_USERNAME}
+        export POSTGRES_PASSWORD=$${DB_PASSWORD}
+        export POSTGRES_DB=$${DB_NAME}
+        docker-entrypoint.sh postgres
+      "
+    expose:
+      - 5432
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-miner-volume:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test:
+        # looks strange, but double $ (i.e. $$) for variable substitution
+        ["CMD-SHELL", "pg_isready -h postgres-miner -U $${DB_USERNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  prisma-setup-miner:
+    platform: linux/amd64
+    env_file:
+      - .env.miner
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.prisma
+    environment:
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_HOST: ${DB_HOST}
+      DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+    working_dir: /app
+    depends_on:
+      - postgres-miner
+    networks:
+      - internal
+
+  sidecar:
+    image: docker.io/parity/substrate-api-sidecar:v19.0.2
+    read_only: true
+    environment:
+      SAS_SUBSTRATE_URL: wss://test.finney.opentensor.ai
+      SAS_EXPRESS_PORT: 8081
+    expose:
+      - 8081
+    healthcheck:
+      # jank since no curl
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http = require('http'); const options = { hostname: '127.0.0.1', port: 8081, path: '/blocks/head', method: 'GET' }; const req = http.request(options, (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', (error) => { console.error(error); process.exit(1); }); req.end();",
+        ]
+      interval: 12s
+      timeout: 24s
+      retries: 10
+      start_period: 30s
+    networks:
+      - internal
+
+  worker-api:
+    env_file:
+      - .env.miner
+    volumes:
+      - ./.env.miner:/dojo-api/.env
+    platform: linux/amd64
+    image: ghcr.io/tensorplex-labs/dojo-worker-api:dev
+    environment:
+      RUNTIME_ENV: local
+      SERVER_PORT: 8080
+      SUBNET_UID: 98
+      CORS_ALLOWED_ORIGINS: http://localhost*,http://worker-ui*,http://dojo-cli*
+      SUBSTRATE_API_URL: sidecar:8081
+      # authentication
+      TOKEN_EXPIRY: 24
+      REDIS_HOST: redis-miner
+      REDIS_PORT: 6379
+    ports:
+      - "8080:8080"
+    expose:
+      - 8080
+    depends_on:
+      redis-miner:
+        condition: service_healthy
+      postgres-miner:
+        condition: service_healthy
+      sidecar:
+        condition: service_healthy
+      prisma-setup-miner:
+        condition: service_completed_successfully
+    command: ["./service", "--debug"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal
+
+  worker-ui:
+    image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - internal
+      - external
+
+  dojo-cli:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    volumes:
+      - ./:/app
+      - ./.env.miner:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+    command: ["dojo-cli"]
+    tty: true
+    stdin_open: true
+    networks:
+      - internal
+
+  # ============== TEST NET ============== #
+
+  miner-testnet-decentralised:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    working_dir: /app
+    env_file:
+      - .env.miner
+    volumes:
+      - ./:/app
+      - ./.env.miner:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+    command: ["miner"]
+    environment:
+      - NETUID=98
+      - SUBTENSOR_NETWORK=test
+      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443
+    depends_on:
+      worker-api:
+        condition: service_healthy
+      worker-ui:
+        condition: service_healthy
+    ports:
+      - ${AXON_PORT}:${AXON_PORT}
+    networks:
+      - internal
+      - external
+
+  miner-testnet-centralised:
+    image: ghcr.io/tensorplex-labs/dojo:dev
+    working_dir: /app
+    env_file:
+      - .env.miner
+    volumes:
+      - ./:/app
+      - ./.env.miner:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+    command: ["miner"]
+    ports:
+      - ${AXON_PORT}:${AXON_PORT}
+    environment:
+      - NETUID=98
+      - SUBTENSOR_NETWORK=test
+      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443
+    networks:
+      - internal
+      - external
+
+  # ============== MAIN NET ============== #
+
+  miner-mainnet-decentralised:
+    image: ghcr.io/tensorplex-labs/dojo:main
+    working_dir: /app
+    env_file:
+      - .env.miner
+    volumes:
+      - ./:/app
+      - ./.env.miner:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+    command: ["miner"]
+    environment:
+      - NETUID=52
+      - SUBTENSOR_NETWORK=finney
+      - SUBTENSOR_ENDPOINT=***REMOVED***
+    depends_on:
+      worker-api:
+        condition: service_healthy
+      worker-ui:
+        condition: service_healthy
+    ports:
+      - ${AXON_PORT}:${AXON_PORT}
+    networks:
+      - internal
+      - external
+
+  miner-mainnet-centralised:
+    image: ghcr.io/tensorplex-labs/dojo:main
+    working_dir: /app
+    env_file:
+      - .env.miner
+    volumes:
+      - ./:/app
+      - ./.env.miner:/app/.env
+      - $HOME/.bittensor:/root/.bittensor
+    command: ["miner"]
+    ports:
+      - ${AXON_PORT}:${AXON_PORT}
+    environment:
+      - NETUID=52
+      - SUBTENSOR_NETWORK=finney
+      - SUBTENSOR_ENDPOINT=***REMOVED***
+    networks:
+      - internal
+      - external
