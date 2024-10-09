@@ -1,25 +1,71 @@
 import argparse
+import inspect
+import logging
 import os
+import site
+from functools import lru_cache
 from pathlib import Path
 
 import bittensor as bt
-from loguru import logger
-
-logger_name = "named_logger"
-
-
-def monkeypatch():
-    """Monkeypatches the logger to add a name attribute."""
-    import loguru
-
-    patched_logger = loguru.logger.bind(name=logger_name)
-    loguru.logger = patched_logger
-
-
-monkeypatch()
-
 
 base_path = Path.cwd()
+
+
+def get_caller_info() -> str | None:
+    """jank ass call stack inspection to get same logging format as loguru"""
+    try:
+        stack = inspect.stack()
+        site_packages_path = site.getsitepackages()[0]
+        for i in range(len(stack) - 1, 1, -1):
+            filename = stack[i].filename
+            if os.path.basename(filename) == "loggingmachine.py":
+                # get our actual caller frame
+                prev_frame = stack[i + 1]
+                full_path = prev_frame.filename
+                # ensure `/Users/username/...` stripped
+                full_path = full_path.replace(site_packages_path, "")
+                module_path = (
+                    full_path.replace(os.getcwd() + os.sep, "")
+                    .replace(os.sep, ".")
+                    .lstrip(".")
+                )
+                module_name = module_path.rsplit(".", 1)[0]
+                function_name = prev_frame.function
+                line_no = prev_frame.lineno
+                caller_info = f"{module_name}:{function_name}:{line_no}".rjust(40)
+                return caller_info
+    except Exception:
+        return None
+
+
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        caller_info = get_caller_info()
+        if caller_info is None:
+            # if we fail to inspect stack, default to log_format
+            # log_format = "%(filename)s.%(funcName)s:%(lineno)s - %(message)s"
+            caller_info = f"{record.filename}:{record.funcName}:{record.lineno}".rjust(
+                40
+            )
+        record.caller_info = caller_info
+        return super().format(record)
+
+
+log_format = "%(caller_info)s | %(message)s"
+date_format = "%Y-%m-%d %H:%M:%S"
+custom_formatter = CustomFormatter(fmt=log_format, datefmt=date_format)
+
+
+def apply_custom_logging_format():
+    # Retrieve the existing Bittensor logger
+    bittensor_logger = logging.getLogger(
+        "bittensor"
+    )  # Ensure this matches the logger name you are using
+    # bittensor_logger.setLevel(logging.INFO)  # Set the logging level to INFO
+
+    # Apply the custom formatter to each handler
+    for handler in bittensor_logger.handlers:
+        handler.setFormatter(custom_formatter)
 
 
 def check_config(config: bt.config):
@@ -34,37 +80,45 @@ def check_config(config: bt.config):
     if not os.path.exists(config.neuron.full_path):
         os.makedirs(config.neuron.full_path, exist_ok=True)
 
-    bt.logging.enable_third_party_loggers()
+    # bt.logging.enable_third_party_loggers()
+
+
+def configure_logging(config: bt.config):
+    """
+    Configures logging based on the provided configuration.
+    """
+    # Configure the global logging state from the config
+    bt.logging.set_config(config)
+
+    # Apply logging configurations based on the config
+    bt.logging.on()  # Default state: INFO level
+    try:
+        if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
+            bt.logging.set_trace(True)
+            bt.logging.debug("Trace level logging enabled")
+        elif config.logging.debug:  # pyright: ignore[reportOptionalMemberAccess]
+            bt.logging.set_debug(True)
+            bt.logging.debug("Debug level logging enabled")
+    except Exception:
+        pass
+
+    # Optionally enable file logging if `record_log` and `logging_dir` are provided
+    if config.record_log and config.logging_dir:
+        logging_dir = os.path.expanduser(config.logging_dir)
+        if not os.path.exists(logging_dir):
+            os.makedirs(logging_dir, exist_ok=True)
+
+        bt.logging.set_config(config)
+
+    apply_custom_logging_format()
 
 
 def add_args(parser):
-    from template.protocol import ScoringMethod
-
     """
     Adds relevant arguments to the parser for operation.
     """
     # Netuid Arg: The netuid of the subnet to connect to.
     parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
-
-    import sys
-
-    args, _ = parser.parse_known_args()
-    debug: str = vars(args).get("logging.debug")
-    trace: str = vars(args).get("logging.trace")
-    info: str = vars(args).get("logging.info")
-
-    if trace:
-        logger.remove()
-        logger.add(sys.stderr, level="TRACE")
-    elif debug:
-        logger.remove()
-        logger.add(sys.stderr, level="DEBUG")
-    elif info:
-        logger.remove()
-        logger.add(sys.stderr, level="INFO")
-    else:
-        logger.remove()
-        logger.add(sys.stderr, level="INFO")
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
@@ -98,13 +152,6 @@ def add_args(parser):
     )
 
     parser.add_argument(
-        "--neuron.events_retention_size",
-        type=str,
-        help="Events retention size.",
-        default="2 GB",
-    )
-
-    parser.add_argument(
         "--api.port",
         type=int,
         help="FastAPI port for uvicorn to run on, should be different from axon.port as these will serve external requests.",
@@ -117,20 +164,6 @@ def add_args(parser):
             type=str,
             help="Base path to store data to.",
             default=base_path,
-        )
-
-        parser.add_argument(
-            "--evaluation.num_batches",
-            type=int,
-            help="Number of batches from dataset to use when evaluating.",
-            default=10,
-        )
-
-        parser.add_argument(
-            "--evaluation.batch_size",
-            type=int,
-            help="Number of rows of data from dataset to use when evaluating.",
-            default=32,
         )
 
         parser.add_argument(
@@ -147,23 +180,33 @@ def add_args(parser):
             default=0.3,
         )
 
-    elif neuron_type == "miner":
+        wandb_project_names = ["dojo-devnet", "dojo-testnet", "dojo-mainnet"]
         parser.add_argument(
-            "--scoring_method",
-            help="Method to use for scoring completions.",
-            choices=[str(method) for method in ScoringMethod],
+            "--wandb.project_name",
+            type=str,
+            choices=wandb_project_names,
+            help="Name of the wandb project to use.",
         )
 
+    elif neuron_type == "miner":
+        pass
 
+
+@lru_cache(maxsize=1)
 def get_config():
     """Returns the configuration object specific to this miner or validator after adding relevant arguments."""
     parser = argparse.ArgumentParser()
     bt.wallet.add_args(parser)
-    bt.logging.add_args(parser)
     bt.subtensor.add_args(parser)
     bt.axon.add_args(parser)
     add_args(parser)
-    _config = bt.config(parser)
 
+    # Add logging arguments
+    bt.logging.add_args(parser)
+
+    # Check and validate config
+    _config = bt.config(parser)
     check_config(_config)
+    configure_logging(_config)  # Configure logging using bt.logging
+
     return _config

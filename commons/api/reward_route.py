@@ -1,16 +1,12 @@
-from dotenv import load_dotenv
+from bittensor.btlogging import logging as logger
 from fastapi import APIRouter, Header, Request, responses
 from fastapi.encoders import jsonable_encoder
-from loguru import logger
 from pydantic.error_wrappers import ValidationError
 
 from commons.cache import RedisCache
 from commons.objects import ObjectManager
 from commons.utils import get_new_uuid
 from template.protocol import FeedbackRequest
-
-load_dotenv()
-
 
 reward_router = APIRouter(prefix="/api/reward_model")
 

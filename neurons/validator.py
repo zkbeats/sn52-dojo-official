@@ -2,15 +2,18 @@ import asyncio
 import copy
 import time
 import traceback
+from datetime import datetime, timezone
 from traceback import print_exception
 from typing import List
 
+import aiohttp
 import bittensor as bt
 import numpy as np
 import torch
 import wandb
+from bittensor.btlogging import logging as logger
 from fastapi.encoders import jsonable_encoder
-from loguru import logger
+from tenacity import RetryError
 from torch.nn import functional as F
 
 import template
@@ -21,19 +24,16 @@ from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
 from template.base.neuron import BaseNeuron
 from template.protocol import (
+    CompletionResponses,
     DendriteQueryResponse,
     FeedbackRequest,
     Heartbeat,
     MultiScoreCriteria,
-    ScoringMethod,
     ScoringResult,
     TaskType,
 )
 from template.utils.config import get_config
-from template.utils.uids import (
-    MinerUidSelector,
-    extract_miner_uids,
-)
+from template.utils.uids import MinerUidSelector, extract_miner_uids
 
 
 class Validator(BaseNeuron):
@@ -55,6 +55,7 @@ class Validator(BaseNeuron):
         # manually always register and always sync metagraph when application starts
         self.check_registered()
         self.resync_metagraph()
+
         init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
     async def send_scores(self, synapse: ScoringResult, hotkeys: List[str]):
@@ -76,42 +77,41 @@ class Validator(BaseNeuron):
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(template.VALIDATOR_UPDATE_SCORE)
             try:
                 logger.debug(
                     f"Scheduled update score and send feedback triggered at time: {time.time()}"
                 )
-                data = await DataManager.load(path=DataManager.get_requests_data_path())
+                data: List[DendriteQueryResponse] | None = await DataManager.load()
                 if not data:
                     logger.debug(
                         "Skipping scoring as no feedback data found, this means either all have been processed or you are running the validator for the first time."
                     )
                     continue
 
-                current_time = get_epoch_time()
+                current_time = datetime.now(timezone.utc)
                 # allow enough time for human feedback
-                filtered_data = [
+                non_expired_data: List[DendriteQueryResponse] = [
                     d
                     for d in data
-                    if (current_time - d.request.epoch_timestamp)
-                    >= template.TASK_DEADLINE
+                    if d.request.expire_at
+                    and datetime.fromisoformat(d.request.expire_at) < current_time
                 ]
-                if not filtered_data:
+                if not non_expired_data:
                     logger.warning(
                         "Skipping scoring as no feedback data is due for scoring."
                     )
-                    continue
 
                 logger.info(
-                    f"Got {len(filtered_data)} requests past deadline and ready to score"
+                    f"Got {len(non_expired_data)} requests past deadline and ready to score"
                 )
-                for d in filtered_data:
+                for d in non_expired_data:
                     criteria_to_miner_score, hotkey_to_score = Scoring.calculate_score(
                         criteria_types=d.request.criteria_types,
                         request=d.request,
                         miner_responses=d.miner_responses,
                     )
-                    logger.debug(f"Got hotkey to score: {hotkey_to_score}")
+                    logger.trace(f"Got hotkey to score: {hotkey_to_score}")
 
                     if not hotkey_to_score:
                         request_id = d.request.request_id
@@ -125,7 +125,7 @@ class Validator(BaseNeuron):
                         await DataManager.remove_responses([d])
                         continue
 
-                    logger.debug(
+                    logger.trace(
                         f"Initially had {len(d.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
                     )
 
@@ -182,8 +182,10 @@ class Validator(BaseNeuron):
                                 "task": d.request.task_type,
                                 "criteria": d.request.criteria_types,
                                 "prompt": d.request.prompt,
-                                "completions": jsonable_encoder(d.request.responses),
-                                "num_completions": len(d.request.responses),
+                                "completions": jsonable_encoder(
+                                    d.request.completion_responses
+                                ),
+                                "num_completions": len(d.request.completion_responses),
                                 "scores": score_data,
                                 "num_responses": len(d.miner_responses),
                             }
@@ -191,8 +193,8 @@ class Validator(BaseNeuron):
 
                         wandb.log(wandb_data, commit=True)
 
-                    # loop = asyncio.get_running_loop()
-                    # await loop.run_in_executor(None, log_wandb)
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, log_wandb)
 
                     # once we have scored a response, just remove it
                     await DataManager.remove_responses([d])
@@ -201,10 +203,12 @@ class Validator(BaseNeuron):
                 traceback.print_exc()
                 pass
 
-    def obfuscate_model_names(self, data: FeedbackRequest) -> dict[str, str]:
+    def obfuscate_model_names(
+        self, completion_responses: list[CompletionResponses]
+    ) -> dict[str, str]:
         """Obfuscate model names for both external requests and synthetic requests to prevent miners from knowing the true model names."""
         obfuscated_model_to_model: dict[str, str] = {}
-        for completion in data.responses:
+        for completion in completion_responses:
             new_uuid = get_new_uuid()
             obfuscated_model_to_model[new_uuid] = completion.model
             completion.model = new_uuid
@@ -213,10 +217,11 @@ class Validator(BaseNeuron):
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(template.VALIDATOR_HEARTBEAT)
+            self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
+                logger.debug(f"⬆️ Sending heartbeats to {len(all_miner_uids)} miners")
                 axons: List[bt.AxonInfo] = [
                     self.metagraph.axons[uid]
                     for uid in all_miner_uids
@@ -236,7 +241,7 @@ class Validator(BaseNeuron):
                 async with self._lock:
                     self._active_miner_uids = set(active_uids)
                 logger.debug(
-                    f"Sent heartbeats at time: {get_epoch_time()}, active miners: {sorted(active_uids)}"
+                    f"⬇️ Heartbeats acknowledged by active miners: {sorted(active_uids)}"
                 )
             except Exception as e:
                 logger.error(
@@ -246,7 +251,7 @@ class Validator(BaseNeuron):
 
     async def send_request(
         self,
-        synapse: FeedbackRequest = None,
+        synapse: FeedbackRequest | None = None,
         external_user: bool = False,
     ):
         start = get_epoch_time()
@@ -254,6 +259,11 @@ class Validator(BaseNeuron):
         # initially will seed it with some data for miners to get started
 
         # ensure we consider only active miners
+
+        if len(self._active_miner_uids) == 0:
+            logger.warning("🤷 No active miners to send request to... skipping")
+            return
+
         request_id = get_new_uuid()
         async with self._lock:
             if external_user:
@@ -263,7 +273,7 @@ class Validator(BaseNeuron):
                     if self.scores[uid] > self._threshold
                 ]
                 logger.debug(
-                    f"External user request, number of miners with scores above threshold: {len(sel_miner_uids)}"
+                    f"🌍 External user request, number of miners with scores above threshold: {len(sel_miner_uids)}"
                 )
             else:
                 sel_miner_uids = MinerUidSelector(
@@ -277,19 +287,36 @@ class Validator(BaseNeuron):
             != self.wallet.hotkey.ss58_address.casefold()
         ]
         if not len(axons):
-            logger.warning("No axons to query ... skipping")
+            logger.warning("🤷 No axons to query ... skipping")
             return
 
+        obfuscated_model_to_model = {}
+
         if synapse is None:
-            data = await SyntheticAPI.get_qa()
-            if not data:
-                logger.error("Failed to generate data from synthetic gen API")
+            try:
+                data = await SyntheticAPI.get_qa()
+            except RetryError as e:
+                logger.error(
+                    f"Exhausted all retry attempts for synthetic data generation: {e}"
+                )
+                return
+            except ValueError as e:
+                logger.error(f"Invalid response from synthetic data API: {e}")
+                return
+            except aiohttp.ClientError as e:
+                logger.error(f"Network error when calling synthetic data API: {e}")
+                return
+            except Exception as e:
+                logger.error(f"Unexpected error during synthetic data generation: {e}")
+                logger.debug(f"Traceback: {traceback.format_exc()}")
                 return
 
-            obfuscated_model_to_model = self.obfuscate_model_names(data)
+            if not data:
+                logger.error("No data returned from synthetic data API")
+                return
 
+            obfuscated_model_to_model = self.obfuscate_model_names(data.responses)
             expire_at = set_expire_time(template.TASK_DEADLINE)
-
             synapse = FeedbackRequest(
                 request_id=request_id,
                 task_type=str(TaskType.CODE_GENERATION),
@@ -301,44 +328,45 @@ class Validator(BaseNeuron):
                     ),
                 ],
                 prompt=data.prompt,
-                responses=data.responses,
+                completion_responses=data.responses,
                 expire_at=expire_at,
             )
         elif external_user:
-            obfuscated_model_to_model = self.obfuscate_model_names(synapse)
+            obfuscated_model_to_model = self.obfuscate_model_names(
+                synapse.completion_responses
+            )
 
         logger.info(
-            f"Sending synapse off to miners, request id: {synapse.request_id}, miner uids: {sel_miner_uids}"
+            f"⬆️ Sending feedback request for request id: {synapse.request_id}, miners uids:{sel_miner_uids}"
         )
 
         miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
             axons=axons, synapse=synapse, deserialize=False, timeout=24
         )
-        # map obfuscated model names back to the original model names
-        logger.debug(f"Obfuscated model map: {obfuscated_model_to_model}")
+
         valid_miner_responses: List[FeedbackRequest] = []
         try:
             for miner_response in miner_responses:
+                logger.debug(
+                    f"Received response from miner: {miner_response.axon.hotkey, miner_response.dojo_task_id}"
+                )
                 # map obfuscated model names back to the original model names
                 real_model_ids = []
 
-                for i, completion in enumerate(miner_response.responses):
+                for i, completion in enumerate(miner_response.completion_responses):
                     found_model_id = obfuscated_model_to_model.get(
                         completion.model, None
                     )
                     real_model_ids.append(found_model_id)
                     if found_model_id:
-                        miner_response.responses[i].model = found_model_id
-                        synapse.responses[i].model = found_model_id
+                        miner_response.completion_responses[i].model = found_model_id
+                        synapse.completion_responses[i].model = found_model_id
 
                 if any(c is None for c in real_model_ids):
                     logger.warning("Failed to map obfuscated model to original model")
                     continue
 
-                if (
-                    miner_response.scoring_method == ScoringMethod.DOJO
-                    and miner_response.dojo_task_id is None
-                ):
+                if miner_response.dojo_task_id is None:
                     logger.debug(
                         "Miner must provide the dojo task id for scoring method dojo"
                     )
@@ -354,19 +382,38 @@ class Validator(BaseNeuron):
             logger.error(f"Failed to map obfuscated model to original model: {e}")
             pass
 
-        dojo_responses = DojoTaskTracker.filter_dojo_responses(valid_miner_responses)
-        logger.debug("Attempting to update task map")
-        await DojoTaskTracker.update_task_map(
-            synapse.request_id, dojo_responses, obfuscated_model_to_model
-        )
+        logger.info(f"⬇️ Got {len(valid_miner_responses)} valid responses")
+
+        if valid_miner_responses is None or len(valid_miner_responses) == 0:
+            logger.warning("No valid miner responses to process... skipping")
+            return
+
+        # include the ground_truth to keep in data manager
+        synapse.ground_truth = data.ground_truth
         response_data = DendriteQueryResponse(
             request=synapse,
             miner_responses=valid_miner_responses,
         )
+
+        logger.debug("Attempting to saving dendrite response")
+        fb_request_model = await DataManager.save_dendrite_response(
+            response=response_data
+        )
+
+        if fb_request_model is None:
+            logger.error("Failed to save dendrite response")
+            return
+
+        logger.debug("Attempting to update task map")
+        await DojoTaskTracker.update_task_map(
+            synapse.request_id,
+            fb_request_model,
+            obfuscated_model_to_model,
+        )
+
         # saving response
-        success = await DataManager.save_dendrite_response(response=response_data)
-        logger.info(
-            f"Saved dendrite response for request id: {response_data.request.request_id}, success: {success}"
+        logger.success(
+            f"Saved dendrite response for request id: {response_data.request.request_id}"
         )
         logger.info(
             f"Sending request to miners & processing took {get_epoch_time() - start}"
@@ -398,7 +445,7 @@ class Validator(BaseNeuron):
                 except Exception as e:
                     logger.error(f"Error during validator run: {e}")
                     pass
-                await asyncio.sleep(300)
+                await asyncio.sleep(template.VALIDATOR_RUN)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -523,14 +570,14 @@ class Validator(BaseNeuron):
                 )
                 continue
 
-            logger.trace(f"Score for hotkey {key} is {value}")
+            logger.debug(f"Score for hotkey {key} is {value}")
             rewards[uid] = value
 
         logger.debug(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.FloatTensor = alpha * rewards + (1 - alpha) * self.scores
+        self.scores: torch.Tensor = alpha * rewards + (1 - alpha) * self.scores
         logger.debug(f"Updated scores: {self.scores}")
 
     def save_state(self):
@@ -557,7 +604,6 @@ class Validator(BaseNeuron):
             logger.error("Failed to load validator state data")
             return
 
-        logger.success("Loaded validator state successfully")
         self.scores = state_data[ValidatorStateKeys.SCORES]
         DojoTaskTracker._rid_to_mhotkey_to_task_id = state_data[
             ValidatorStateKeys.DOJO_TASKS_TO_TRACK
@@ -566,13 +612,9 @@ class Validator(BaseNeuron):
         DojoTaskTracker._task_to_expiry = state_data[ValidatorStateKeys.TASK_TO_EXPIRY]
 
         logger.info(f"Scores state: {self.scores}")
-        logger.info(
-            f"Dojo Tasks to track: {DojoTaskTracker._rid_to_mhotkey_to_task_id}"
-        )
-        logger.info(f"Task to expiry {DojoTaskTracker._task_to_expiry}")
 
     @classmethod
     async def log_validator_status(cls):
         while not cls._should_exit:
             logger.info(f"Validator running... {time.time()}")
-            await asyncio.sleep(20)
+            await asyncio.sleep(template.VALIDATOR_STATUS)

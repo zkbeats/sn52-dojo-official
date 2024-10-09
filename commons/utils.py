@@ -1,20 +1,22 @@
+import copy
 import os
 import time
 import uuid
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache, update_wrapper
 from math import floor
-from typing import Any, Callable, Tuple
+from pathlib import Path
+from typing import Any, Tuple
 
 import bittensor as bt
 import jsonref
 import requests
 import torch
 import wandb
+from bittensor.btlogging import logging as logger
 from Crypto.Hash import keccak
-from loguru import logger
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
 
 
@@ -40,22 +42,59 @@ def keccak256_hash(data):
     return k.hexdigest()
 
 
+def hide_sensitive_path(path):
+    """
+    Replace the path up to the directory just before '/logs' with '~/dir_before_logs'.
+    If 'logs' is not found, return the path starting from the first directory after '~'.
+    """
+
+    path = str(path)
+
+    home_directory = os.path.expanduser("~")
+    # Replace home directory with '~'
+    if path.startswith(home_directory):
+        path = path.replace(home_directory, "~")
+
+    return Path(path)
+
+
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
+    # Ensure paths are decoupled
     import template
+    from commons.objects import ObjectManager
+
+    # Deep copy of the config
+    config = copy.deepcopy(config)
+
+    # Manually deepcopy neuron and data_manager, otherwise it is referenced to the same object
+    config.neuron = copy.deepcopy(config.neuron)
+    config.data_manager = copy.deepcopy(config.data_manager)
 
     project_name = None
-    if "localhost" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-devnet"
-    elif "tensorplex.dev" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-devnet"
-    elif "dojo-api-testnet.tensorplex.ai" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-testnet"
-    elif "dojo-api.tensorplex.ai" in template.DOJO_API_BASE_URL:
-        project_name = "dojo-mainnet"
-    else:
-        raise ValueError("Unable to infer wandb project name")
+
+    config = ObjectManager.get_config()
+
+    project_name = config.wandb.project_name
+    if project_name not in ["dojo-devnet", "dojo-testnet", "dojo-mainnet"]:
+        raise ValueError("Invalid wandb project name")
 
     run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
+
+    # Hide sensitive paths in the config
+    config.neuron.full_path = (
+        hide_sensitive_path(config.neuron.full_path)
+        if config.neuron.full_path
+        else None
+    )
+    config.data_manager.base_path = (
+        hide_sensitive_path(config.data_manager.base_path)
+        if config.data_manager.base_path
+        else None
+    )
+
+    logger.debug(f"config.neuron.full_path: {config.neuron.full_path}")
+    logger.debug(f"config.data_manager.base_path: {config.data_manager.base_path}")
+
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
     config.run_name = run_name
@@ -310,7 +349,7 @@ def set_expire_time(expire_in_seconds: int) -> str:
         str: The expiration time in ISO 8601 format with 'Z' as the UTC indicator.
     """
     return (
-        (datetime.utcnow() + timedelta(seconds=expire_in_seconds))
+        (datetime.now(timezone.utc) + timedelta(seconds=expire_in_seconds))
         .replace(microsecond=0, tzinfo=timezone.utc)
         .isoformat()
         .replace("+00:00", "Z")

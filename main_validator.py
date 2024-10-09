@@ -3,20 +3,20 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 import wandb
+from bittensor.btlogging import logging as logger
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
 
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
+from database.client import connect_db, disconnect_db
 from neurons.validator import DojoTaskTracker
 
 load_dotenv()
-
 
 validator = ObjectManager.get_validator()
 
@@ -24,6 +24,7 @@ validator = ObjectManager.get_validator()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Performing startup tasks...")
+    await connect_db()
     yield
     logger.info("Performing shutdown tasks...")
     validator._should_exit = True
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     validator.save_state()
     await SyntheticAPI._session.close()
     await DojoAPI._http_client.aclose()
+    await disconnect_db()
 
 
 app = FastAPI(lifespan=lifespan)

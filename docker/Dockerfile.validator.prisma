@@ -1,0 +1,29 @@
+FROM python:3.11
+
+WORKDIR /app
+
+# Create directory for Prisma binary cache and set permissions
+RUN mkdir -p /root/prisma-python
+
+# Install OpenSSL and other dependencies
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# # Set Prisma to use the Node.js binary
+ENV PRISMA_USE_NODEJS_BIN=true
+
+# Set Prisma binary platform explicitly
+ENV PRISMA_BINARY_PLATFORM=debian-openssl-3.0.x
+
+# Specify where Prisma should cache the binary
+ENV PRISMA_BINARY_CACHE_DIR=/root/prisma-python
+
+# Copy the Prisma schema file
+COPY ./schema.prisma /app/schema.prisma
+
+RUN pip install prisma
+RUN prisma generate
+
+RUN [ -n "$$DATABASE_URL" ]
+
+# Push Prisma schema to the database
+CMD ["prisma", "db", "push"]
