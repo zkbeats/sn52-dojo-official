@@ -1,6 +1,6 @@
 PRECOMMIT_VERSION="3.7.1"
 UNAME := $(shell uname)
-.PHONY: hooks btcli install miner-decentralised miner-centralised validator miner-decentralised-logs miner-centralised-logs validator-logs
+.PHONY: hooks btcli install install-dev install-test miner-decentralised miner-centralised validator miner-decentralised-logs miner-centralised-logs validator-logs
 
 hooks:
 	@echo "Grabbing pre-commit version ${PRECOMMIT_VERSION} and installing pre-commit hooks"
@@ -21,6 +21,20 @@ install:
 		pip install -e .; \
 	elif [ "$(UNAME)" = "Linux" ]; then \
 		pip install -e . --find-links https://download.pytorch.org/whl/torch_stable.html; \
+	fi
+
+install-dev:
+	@if [ "$(UNAME)" = "Darwin" ]; then \
+		pip install -e ".[dev]"; \
+	elif [ "$(UNAME)" = "Linux" ]; then \
+		pip install -e ".[dev]" --find-links https://download.pytorch.org/whl/torch_stable.html; \
+	fi
+
+install-test:
+	@if [ "$(UNAME)" = "Darwin" ]; then \
+		pip install -e ".[test]"; \
+	elif [ "$(UNAME)" = "Linux" ]; then \
+		pip install -e ".[test]" --find-links https://download.pytorch.org/whl/torch_stable.html; \
 	fi
 
 btcli:

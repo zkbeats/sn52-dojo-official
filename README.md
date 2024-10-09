@@ -49,7 +49,7 @@
     - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
 - [Dojo CLI](#dojo-cli)
-- [For Dojo devs](#for-dojo-devs)
+- [For Dojo developerss](#for-dojo-developerss)
 - [License](#license)
 
 </details>
@@ -98,6 +98,7 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 
 - pm2
 - docker
+- GNU make
 - openrouter api key
 - wandb api key
 
@@ -113,6 +114,7 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 
 - pm2
 - docker
+- GNU make
 
 ### System Requirements
 
@@ -219,8 +221,12 @@ NETUID    N    MAX_N   EMISSION  TEMPO  RECYCLE        POW       SUDO
 7. Register to our subnet
 
 ```bash
+# run the dockerized btcli
+make btcli
 # register your wallet to our subnet
-# Testnet
+# for mainnet
+btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 52 --subtensor.network finney
+# for testnet
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
 
@@ -235,6 +241,8 @@ btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subt
 cp .env.miner.example .env
 
 # ENV's that needs to be filled for miners:
+# for mainnet
+DOJO_API_BASE_URL="https://dojo-api.tensorplex.ai"
 # for testnet
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
 DOJO_API_KEY= # blank for now
@@ -246,23 +254,32 @@ AXON_PORT=8888 # port to serve requests over the public network for validators t
 2. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
 
 ```bash
-make btcli
+make dojo-cli
+
+# remember to use tab completions to see list of commands
+# authenticate and generate keys
+authenticate
+api_key generate
+subscription_key generate
+
+# list all keys
+api_key list
+subscription_key list
 ```
 
 3. Complete the .env file with the variables below:
 
 ```bash
-DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
-DOJO_API_KEY=# api key from earlier
+DOJO_API_KEY=# api key from step 2.
 ```
 
 4. Start the miner by running the following commands:
 
 ```bash
-# For Testnet
-make miner-centralised network=testnet
 # for mainnet
 make miner-centralised network=mainnet
+# for testnet
+make miner-centralised network=testnet
 ```
 
 ### Option 2: Decentralised Method
@@ -273,8 +290,7 @@ make miner-centralised network=mainnet
 # copy .env.miner.example
 cp .env.miner.example .env
 
-# ENV's that needs to be filled for miners:
-# for testnet
+# env vars that needs to be filled for miners:
 DOJO_API_BASE_URL="http://worker-api:8080" # use this value
 DOJO_API_KEY=# blank for now
 WALLET_COLDKEY=# the name of the coldkey
@@ -326,16 +342,21 @@ DOJO_API_KEY=# api key from earlier
 5. Now, run the full miner service.
 
 ```bash
+# for mainnet
+make miner-decentralised network=mainnet
 # for testnet
 make miner-decentralised network=testnet
 
 # read miner logs using the following:
+# for mainnet
+make miner-decentralised-logs network=mainnet
+# for testnet
 make miner-decentralised-logs network=testnet
 ```
 
 > [!IMPORTANT]
 >
-> Don't be alarmed that the status of the `prisma-setup` service shows exit code 0. This means it ran successfully.
+> Don't be alarmed that the status of the `prisma-setup-miner` service shows exit code 0. This means it ran successfully.
 >
 > Other services should also be healthy in order for the `miner-testnet-decentralised` service to run successfully.
 
@@ -343,9 +364,7 @@ make miner-decentralised-logs network=testnet
 
 Note: URLs are different for testnet and mainnet. Please refer to [docs](https://docs.tensorplex.ai/tensorplex-docs/tensorplex-dojo-testnet/official-links).
 
-TODO guide for decentralised flow
-
-1. Head to https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
+1. Head to https://dojo.tensorplex.ai or https://dojo-testnet.tensorplex.ai and login and sign with your Metamask wallet.
 
 - You'll see an empty homepage with no Tasks, and a "Connect" button on the top right ![image](./assets/ui/homepage.png)
 - Click on "Connect" and you'll see a popup with different wallets for you to connect to ![image](./assets/ui/wallet_popup.jpg)
@@ -367,37 +386,42 @@ Copy the validator .env file and set up the .env file
 cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
+# for mainnet
+DOJO_API_BASE_URL="https://dojo-api.tensorplex.ai"
 # for testnet
 DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+# head to https://wandb.ai/authorize to get your API key
 WANDB_API_KEY="<wandb_key>"
 
 # for dojo-synthetic-api
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
 
-#postgres details for validator
+# Other LLM API providers, Optional or if you've chosen it over Openrouter
+TOGETHER_API_KEY=
+OPENAI_API_KEY=
+
+# postgres details for validator
 DB_HOST=postgres-vali:5432
 DB_NAME=db
 DB_USERNAME=
 DB_PASSWORD=
 DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
-
-# Other LLM API providers, Optional or if you've chosen it over Openrouter
-TOGETHER_API_KEY=
-OPENAI_API_KEY=
 ```
 
 Start the validator
 
 ```bash
 # start the validator
-# Testnet
+# for mainnet
+make validator network=mainnet
+# for testnet
 make validator network=testnet
 ```
 
-To start with autoupdate for validators (**optional**)
+(**WIP**) To start with autoupdate for validators (**optional**)
 
 ```bash
-# Testnet
+# for testnet
 pm2 start auto_update.py --name auto-update-validator -- validator
 
 or
@@ -454,11 +478,11 @@ api_key delete
 subscription_key delete
 ```
 
-# For Dojo devs
+# For Dojo developerss
 
 You most likely won't be running a dockerized version of the subnet code as you ship. Use the following guide to get up and running
 
-1. Get uv
+1. Get uv or miniconda or whatever choice of backend. Here, we'll assume you're using uv.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -475,7 +499,6 @@ uv python list
 ```bash
 # i'm using 3.11 here, but you may use any >=3.10 version
 uv venv dojo_venv --python=$(uv python find 3.11)
-# if you wish to follow
 ```
 
 4. Activate virtualenv
@@ -483,6 +506,15 @@ uv venv dojo_venv --python=$(uv python find 3.11)
 ```bash
 # follows python-venv syntax
 source dojo_venv/bin/activate
+```
+
+5. Install our dependencies
+
+```bash
+# install dev dependencies
+make install-dev
+# install test dependencies
+make install-test
 ```
 
 # License
