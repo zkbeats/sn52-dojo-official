@@ -108,7 +108,7 @@ services:
     volumes:
       - ./.env.miner:/dojo-api/.env
     platform: linux/amd64
-    image: ghcr.io/tensorplex-labs/dojo-worker-api:dev
+    image: ghcr.io/tensorplex-labs/dojo-worker-api:main
     environment:
       RUNTIME_ENV: local
       SERVER_PORT: 8080
@@ -156,7 +156,7 @@ services:
       - external
 
   dojo-cli:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - ./.env.miner:/app/.env
@@ -170,7 +170,7 @@ services:
   # ============== TEST NET ============== #
 
   miner-testnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.miner
@@ -195,7 +195,7 @@ services:
       - external
 
   miner-testnet-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.miner

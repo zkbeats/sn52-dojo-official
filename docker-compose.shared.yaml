@@ -1,7 +1,7 @@
 services:
   btcli:
     # TODO @dev change back after testing
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor

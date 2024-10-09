@@ -33,7 +33,7 @@ services:
       retries: 5
 
   synthetic-api:
-    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:dev
+    image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
     env_file:
       - .env.validator
     environment:
@@ -108,7 +108,7 @@ services:
   # ============== TEST NET ============== #
 
   validator-testnet:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.validator
