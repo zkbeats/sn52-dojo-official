@@ -387,6 +387,9 @@ cp .env.validator.example .env.validator
 
 # edit the .env file with vim, vi or nano
 
+WALLET_COLDKEY=# the name of the coldkey
+WALLET_HOTKEY=# the name of the hotkey
+
 # head to https://wandb.ai/authorize to get your API key
 WANDB_API_KEY="<wandb_key>"
 
