@@ -208,9 +208,12 @@ class Validator(BaseNeuron):
         """Obfuscate model names for both external requests and synthetic requests to prevent miners from knowing the true model names."""
         obfuscated_model_to_model: dict[str, str] = {}
         for completion in completion_responses:
-            new_uuid = get_new_uuid()
-            obfuscated_model_to_model[new_uuid] = completion.model
-            completion.model = new_uuid
+            if completion.completion_id is None:
+                raise ValueError("completion_id is None")
+            completion.model = completion.completion_id
+            obfuscated_model_to_model[completion.completion_id] = (
+                completion.completion_id
+            )
         return obfuscated_model_to_model
 
     async def send_heartbeats(self):

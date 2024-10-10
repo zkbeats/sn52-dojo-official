@@ -81,11 +81,11 @@ class DojoAPI:
     @classmethod
     async def create_task(
         cls,
-        ranking_request: FeedbackRequest,
+        feedback_request: FeedbackRequest,
     ):
         path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
-        taskData = cls.serialize_feedback_request(ranking_request)
-        for criteria_type in ranking_request.criteria_types:
+        taskData = cls.serialize_feedback_request(feedback_request)
+        for criteria_type in feedback_request.criteria_types:
             if isinstance(criteria_type, RankingCriteria) or isinstance(
                 criteria_type, MultiScoreCriteria
             ):
@@ -105,7 +105,7 @@ class DojoAPI:
 
         form_body = {
             "title": ("", "LLM Code Generation Task"),
-            "body": ("", ranking_request.prompt),
+            "body": ("", feedback_request.prompt),
             "expireAt": ("", expire_at),
             "taskData": ("", json.dumps([taskData])),
             "maxResults": ("", "1"),

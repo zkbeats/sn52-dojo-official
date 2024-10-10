@@ -21,6 +21,29 @@ def get_client_session():
     return aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120))
 
 
+def _map_synthetic_response(response: dict) -> SyntheticQA:
+    # Create a new dictionary to store the mapped fields
+    mapped_data = {
+        "prompt": response["prompt"],
+        "ground_truth": response["ground_truth"],
+    }
+
+    responses = list(
+        map(
+            lambda resp: {
+                "model": resp["model"],
+                "completion": resp["completion"],
+                "completion_id": resp["cid"],
+            },
+            response["responses"],
+        )
+    )
+
+    mapped_data["responses"] = responses
+
+    return SyntheticQA.model_validate(mapped_data)
+
+
 class SyntheticAPI:
     _session = get_client_session()
 
@@ -42,8 +65,8 @@ class SyntheticAPI:
                         response_json = await response.json()
                         if "body" not in response_json:
                             raise ValueError("Invalid response from the server.")
-                        synthetic_qa = SyntheticQA.parse_obj(response_json["body"])
-                        logger.info("Synthetic QA generated and parsed successfully.")
+                        synthetic_qa = _map_synthetic_response(response_json["body"])
+                        logger.info("Synthetic QA generated and parsed successfully")
                         return synthetic_qa
         except RetryError:
             logger.error(

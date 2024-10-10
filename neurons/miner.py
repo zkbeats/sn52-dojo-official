@@ -93,13 +93,14 @@ class Miner(BaseMinerNeuron):
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
         try:
-            logger.debug("Received feedback request")
             # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
             if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
                 logger.error("Invalid synapse: dendrite or dendrite.hotkey is None.")
                 return synapse
 
-            logger.info(f"Miner received request id: {synapse.request_id}")
+            logger.info(
+                f"Miner received request id: {synapse.request_id} from {synapse.dendrite.hotkey}"
+            )
 
             if not synapse.completion_responses:
                 logger.error("Invalid synapse: response field is None.")
@@ -152,6 +153,7 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
+
         logger.debug(f"Got request from {caller_hotkey}")
 
         caller_uid = self.metagraph.hotkeys.index(caller_hotkey)

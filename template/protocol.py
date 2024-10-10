@@ -94,11 +94,7 @@ class CompletionResponses(BaseModel):
     completion: CodeAnswer | List[DialogueItem] | str | None = Field(
         description="Completion from the model"
     )
-    completion_id: str = Field(
-        description="Unique identifier for the completion",
-        # will also be able to parse 'cid' from synthetic api json
-        alias="cid",
-    )
+    completion_id: str = Field(description="Unique identifier for the completion")
     rank_id: int | None = Field(
         description="Rank of the completion", examples=[1, 2, 3, 4], default=None
     )
