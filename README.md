@@ -238,7 +238,7 @@ btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subt
 
 ```bash
 # copy .env.miner.example
-cp .env.miner.example .env
+cp .env.miner.example .env.miner
 
 # ENV's that needs to be filled for miners:
 # for mainnet
@@ -288,7 +288,7 @@ make miner-centralised network=testnet
 
 ```bash
 # copy .env.miner.example
-cp .env.miner.example .env
+cp .env.miner.example .env.miner
 
 # env vars that needs to be filled for miners:
 DOJO_API_BASE_URL="http://worker-api:8080" # use this value
@@ -301,24 +301,24 @@ AXON_PORT=8888 # port to serve requests over the public network for validators t
 NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
 
 # for dojo-worker-api
-REDIS_USERNAME=
-REDIS_PASSWORD=
+REDIS_USERNAME=#set a non-default username
+REDIS_PASSWORD=#generate and set a secure password
 
 # postgres details
 DB_HOST=postgres-miner:5432 # use this value
 DB_NAME=db
-DB_USERNAME=
-DB_PASSWORD=
+DB_USERNAME=#set a non-default username
+DB_PASSWORD=#generate and set a secure password
 DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
 
 # aws credentials for S3
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_S3_BUCKET_NAME=
-S3_PUBLIC_URL=
+AWS_ACCESS_KEY_ID=#get from aws
+AWS_SECRET_ACCESS_KEY=#get from aws
+AWS_S3_BUCKET_NAME=#get from aws
+S3_PUBLIC_URL=#s3 bucket url that can be accessed publicly
 
 JWT_SECRET=# generate a random JWT key
-ETHEREUM_NODE=# get an ethereum endpoint URL from Infura
+ETHEREUM_NODE=# get an ethereum endpoint URL from Infura, Alchemy or any other provider
 ```
 
 2. Start the worker api which will be connected to the CLI later.
@@ -383,7 +383,7 @@ Copy the validator .env file and set up the .env file
 
 ```bash
 # copy .env.validator.example
-cp .env.validator.example .env
+cp .env.validator.example .env.validator
 
 # edit the .env file with vim, vi or nano
 
@@ -400,8 +400,8 @@ OPENAI_API_KEY=
 # postgres details for validator
 DB_HOST=postgres-vali:5432
 DB_NAME=db
-DB_USERNAME=
-DB_PASSWORD=
+DB_USERNAME=#set a non-default username
+DB_PASSWORD=#generate and set a secure password
 DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
 ```
 
