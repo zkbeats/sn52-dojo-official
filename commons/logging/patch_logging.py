@@ -4,7 +4,7 @@ import os
 from bittensor.btlogging import logging
 
 
-def custom_format(cls, prefix: object, sufix: object = None):
+def custom_format(cls, prefix: object, suffix: object = None):
     try:
         frame = inspect.currentframe().f_back.f_back
         args, _, _, value_dict = inspect.getargvalues(frame)
@@ -44,15 +44,14 @@ def custom_format(cls, prefix: object, sufix: object = None):
             30
         )
         log_msg = f"{context} | {prefix}"
-        if sufix is not None:
-            log_msg += f" | {sufix}"
+        if suffix is not None:
+            log_msg += f" | {suffix}"
     except:  # noqa: E722
-        log_msg = str(prefix).ljust(30) + str(sufix)
+        log_msg = str(prefix).ljust(30) + str(suffix)
 
     return log_msg
 
 
-# TODO fix after upgrading to bittensor 6.12.0
 # original_format = logging._format
 
 
