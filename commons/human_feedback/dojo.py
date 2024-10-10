@@ -6,9 +6,10 @@ from bittensor.btlogging import logging as logger
 
 import template
 from commons.utils import loaddotenv, set_expire_time
-from template import DOJO_API_BASE_URL
+from template import get_dojo_api_base_url
 from template.protocol import FeedbackRequest, MultiScoreCriteria, RankingCriteria
 
+DOJO_API_BASE_URL = get_dojo_api_base_url()
 # Set to True to enable debug mode
 # TODO could possible setup with logger to enable debug mode
 DEBUG = False

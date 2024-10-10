@@ -386,10 +386,7 @@ Copy the validator .env file and set up the .env file
 cp .env.validator.example .env
 
 # edit the .env file with vim, vi or nano
-# for mainnet
-DOJO_API_BASE_URL="https://dojo-api.tensorplex.ai"
-# for testnet
-DOJO_API_BASE_URL="https://dojo-api-testnet.tensorplex.ai"
+
 # head to https://wandb.ai/authorize to get your API key
 WANDB_API_KEY="<wandb_key>"
 

@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from commons.api.middleware import LimitContentLengthMiddleware
 from commons.api.reward_route import reward_router
 from commons.dataset.synthetic import SyntheticAPI
-from commons.human_feedback.dojo import DojoAPI
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from neurons.validator import DojoTaskTracker
@@ -32,7 +31,6 @@ async def lifespan(app: FastAPI):
     wandb.finish()
     validator.save_state()
     await SyntheticAPI._session.close()
-    await DojoAPI._http_client.aclose()
     await disconnect_db()
 
 

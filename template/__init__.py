@@ -43,6 +43,10 @@ VALIDATOR_STATUS = 60
 MINER_STATUS = 60
 DOJO_TASK_MONITORING = 60
 
-DOJO_API_BASE_URL = os.getenv("DOJO_API_BASE_URL")
-if DOJO_API_BASE_URL is None:
-    raise ValueError("DOJO_API_BASE_URL is not set in the environment")
+
+def get_dojo_api_base_url() -> str:
+    base_url = os.getenv("DOJO_API_BASE_URL")
+    if base_url is None:
+        raise ValueError("DOJO_API_BASE_URL is not set in the environment.")
+
+    return base_url
