@@ -138,7 +138,6 @@ class Validator(BaseNeuron):
                         hotkeys=list(hotkey_to_score.keys()),
                     )
 
-                    # TODO fix why after 5 mins this halts validator.run()
                     async def log_wandb():
                         # calculate mean across all criteria
                         mean_weighted_consensus_scores = (
@@ -421,10 +420,6 @@ class Validator(BaseNeuron):
         return
 
     async def run(self):
-        logger.info(
-            f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-        )
-
         logger.info(f"Validator starting at block: {self.block}")
 
         # This loop maintains the validator's operations until intentionally stopped.
