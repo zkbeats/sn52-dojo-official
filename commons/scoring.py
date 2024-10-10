@@ -406,8 +406,8 @@ class Scoring:
             )
 
             for i, r in enumerate(valid_miner_responses):
-                consensus = 0.6 * consensus_score.score[i]
-                ground_truth = 0.4 * gt_score.score[i]
+                consensus = 0.2 * consensus_score.score[i]
+                ground_truth = 0.8 * gt_score.score[i]
 
                 hotkey_to_final_score[r.axon.hotkey] = (consensus + ground_truth) / len(
                     criteria_types
