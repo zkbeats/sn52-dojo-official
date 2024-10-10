@@ -262,6 +262,7 @@ class Scoring:
         miner_responses: List[FeedbackRequest],
     ):
         # determine the ground truth ordering based on request
+        # TODO change to get the data from the ground truth stored on disk
         model_score_tuples = get_leaderboard_scores(
             [completion.model for completion in request.completion_responses]
         )
@@ -380,15 +381,6 @@ class Scoring:
                         f"Detected None values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
                     )
                     continue
-                if isinstance(criteria, MultiScoreCriteria):
-                    default_value = (5 / 10) * (
-                        criteria.max - criteria.min
-                    ) + criteria.min
-                    if all(v == default_value for v in values):
-                        logger.error(
-                            f"Detected all default values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
-                        )
-                        continue
                 valid_miner_responses.append(response)
 
             if len(valid_miner_responses) < 2:
