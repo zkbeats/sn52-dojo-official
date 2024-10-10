@@ -230,7 +230,7 @@ services:
     environment:
       - NETUID=52
       - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=***REMOVED***
+      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
     depends_on:
       worker-api:
         condition: service_healthy
@@ -257,7 +257,7 @@ services:
     environment:
       - NETUID=52
       - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=***REMOVED***
+      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
     networks:
       - internal
       - external
