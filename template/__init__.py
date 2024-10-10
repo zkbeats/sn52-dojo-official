@@ -31,7 +31,6 @@ __spec_version__ = (
 
 # Import all submodules.
 
-# TODO @dev change before live
 VALIDATOR_MIN_STAKE = 20000
 TASK_DEADLINE = 8 * 60 * 60
 
