@@ -241,12 +241,14 @@ class DojoTaskTracker:
                         miner_response.axon = bt.TerminalInfo(
                             hotkey=miner_hotkey,
                         )
-                        for completion in miner_response.responses:
+                        for completion in miner_response.completion_responses:
                             model_id = completion.model
 
                             for criteria in miner_response.criteria_types:
                                 if isinstance(criteria, RankingCriteria):
-                                    completion.rank_id = model_id_to_avg_rank[model_id]
+                                    completion.rank_id = int(
+                                        model_id_to_avg_rank[model_id]
+                                    )
                                 elif isinstance(criteria, MultiScoreCriteria):
                                     completion.score = model_id_to_avg_score[model_id]
 

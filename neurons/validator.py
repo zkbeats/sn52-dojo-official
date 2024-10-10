@@ -255,7 +255,7 @@ class Validator(BaseNeuron):
     @staticmethod
     async def _send_shuffled_requests(
         dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: FeedbackRequest
-    ):
+    ) -> list[FeedbackRequest]:
         """Based on the initial synapse, send shuffled ordering of responses so that miners cannot guess ordering of ground truth"""
         tasks = []
         for axon in axons:
@@ -271,7 +271,13 @@ class Validator(BaseNeuron):
                 )
             )
 
-        return await asyncio.gather(*tasks)
+        # Gather results and flatten the list
+        nested_responses = await asyncio.gather(*tasks)
+        flat_responses = [
+            response for sublist in nested_responses for response in sublist
+        ]
+
+        return flat_responses
 
     async def get_miner_uids(self, is_external_request: bool, request_id: str):
         async with self._lock:
