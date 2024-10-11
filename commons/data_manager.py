@@ -264,24 +264,29 @@ class DataManager:
                 data=validator_state_data, skip_duplicates=True
             )
 
-            # Save scores as a single record
-            score_model = await Score_Model.prisma().find_first()
+            if not torch.all(scores == 0):
+                # Save scores as a single record
+                score_model = await Score_Model.prisma().find_first()
 
-            if score_model:
-                await Score_Model.prisma().update(
-                    where={"id": score_model.id},
-                    data=Score_ModelUpdateInput(score=Json(json.dumps(scores_list))),
+                if score_model:
+                    await Score_Model.prisma().update(
+                        where={"id": score_model.id},
+                        data=Score_ModelUpdateInput(
+                            score=Json(json.dumps(scores_list))
+                        ),
+                    )
+                else:
+                    await Score_Model.prisma().create(
+                        data=Score_ModelCreateInput(
+                            score=Json(json.dumps(scores_list)),
+                        )
+                    )
+
+                logger.success(
+                    f"📦 Saved validator state with scores: {scores}, and for {len(dojo_task_data)} requests"
                 )
             else:
-                await Score_Model.prisma().create(
-                    data=Score_ModelCreateInput(
-                        score=Json(json.dumps(scores_list)),
-                    )
-                )
-
-            logger.success(
-                f"📦 Saved validator state with scores: {scores}, and for {len(dojo_task_data)} requests"
-            )
+                logger.warning("Scores are all zero. Skipping save.")
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
 
@@ -294,7 +299,6 @@ class DataManager:
             ] = await Validator_State_Model.prisma().find_many()
 
             if not states:
-                logger.error("Validator state not found.")
                 return None
 
             # Query the scores

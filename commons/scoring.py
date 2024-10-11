@@ -227,17 +227,19 @@ class Scoring:
         mse = torch.tensor(np.mean(np.abs(miner_outputs - avg) ** 2, axis=1))
         logger.debug(f"MSE raw: {mse}")
         logger.info(f"ICC raw: {icc_arr}")
+
+        mse_reward = F.softmax(-1 * mse, dim=0)
+
         if not np.isnan(icc_arr).any():
             return ConsensusScore(
                 score=torch.tensor(icc_arr),
-                mse_by_miner=mse,
+                mse_by_miner=mse_reward,
                 icc_by_miner=icc_arr,
             )
 
         logger.warning("ICC array contains NaN values, using just MSE instead")
 
         # use negative sign to penalize higher mse
-        mse_reward = F.softmax(-1 * mse, dim=0)
 
         # # edge case where all miners provide the same rating
         # if torch.all(mse_reward_norm == 0):
@@ -250,7 +252,7 @@ class Scoring:
 
         return ConsensusScore(
             score=mse_reward,
-            mse_by_miner=mse,
+            mse_by_miner=mse_reward,
             icc_by_miner=icc_arr,
         )
 
@@ -364,7 +366,7 @@ class Scoring:
         criteria_types: List[CriteriaType],
         request: FeedbackRequest,
         miner_responses: List[FeedbackRequest],
-    ) -> Dict[CriteriaType, Score]:
+    ) -> tuple[dict[CriteriaType, Score], Dict[str, float]]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
         criteria_to_miner_scores = defaultdict(Score)
         hotkey_to_final_score = defaultdict(float)

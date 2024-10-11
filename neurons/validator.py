@@ -23,6 +23,7 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
+from database.client import connect_db
 from template.base.neuron import BaseNeuron
 from template.protocol import (
     CompletionResponses,
@@ -141,6 +142,13 @@ class Validator(BaseNeuron):
 
                     async def log_wandb():
                         # calculate mean across all criteria
+
+                        if not criteria_to_miner_score.values() or not hotkey_to_score:
+                            logger.warning(
+                                "No criteria to miner scores available. Skipping calculating averages for wandb."
+                            )
+                            return
+
                         mean_weighted_consensus_scores = (
                             torch.stack(
                                 [
@@ -163,15 +171,12 @@ class Validator(BaseNeuron):
                         )
 
                         logger.info(
-                            f"mean miner scores across differerent criteria: consensus shape{mean_weighted_consensus_scores.shape}, gt shape:{mean_weighted_gt_scores.shape}"
+                            f"mean miner scores across differerent criteria: consensus shape:{mean_weighted_consensus_scores}, gt shape:{mean_weighted_gt_scores}"
                         )
 
                         score_data = {}
                         # update the scores based on the rewards
-                        score_data["scores_by_hotkey"] = {
-                            hotkey: score.dict()
-                            for hotkey, score in hotkey_to_score.items()
-                        }
+                        score_data["scores_by_hotkey"] = hotkey_to_score
                         score_data["mean"] = {
                             "consensus": mean_weighted_consensus_scores,
                             "ground_truth": mean_weighted_gt_scores,
@@ -193,8 +198,7 @@ class Validator(BaseNeuron):
 
                         wandb.log(wandb_data, commit=True)
 
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, log_wandb)
+                    asyncio.create_task(log_wandb())
 
                     # once we have scored a response, just remove it
                     await DataManager.remove_responses([d])
@@ -536,13 +540,25 @@ class Validator(BaseNeuron):
 
         logger.info("Attempting to set weights")
 
+        safe_uids = self.metagraph.uids
+        if isinstance(self.metagraph.uids, np.ndarray):
+            pass
+        elif isinstance(self.metagraph.uids, torch.Tensor):
+            safe_uids = self.metagraph.uids.to("cpu").numpy()
+
+        safe_normalized_weights = normalized_weights
+        if isinstance(normalized_weights, np.ndarray):
+            pass
+        elif isinstance(normalized_weights, torch.Tensor):
+            safe_normalized_weights = normalized_weights.to("cpu").numpy()
+
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
             processed_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(
-            uids=self.metagraph.uids.to("cpu"),
-            weights=normalized_weights.to("cpu"),
+        ) = bt.utils.weight_utils.process_weights_for_netuid(  # type: ignore
+            uids=safe_uids,
+            weights=safe_normalized_weights,
             netuid=self.config.netuid,
             subtensor=self.subtensor,
             metagraph=self.metagraph,
@@ -651,9 +667,12 @@ class Validator(BaseNeuron):
     def load_state(self):
         """Loads the state of the validator from a file."""
         loop = asyncio.get_event_loop()
+        loop.run_until_complete(connect_db())
         state_data = loop.run_until_complete(DataManager.validator_load())
         if state_data is None:
-            logger.error("Failed to load validator state data")
+            logger.warning(
+                "Failed to load validator state data, this is okay if you're running for the first time."
+            )
             return
 
         self.scores = state_data[ValidatorStateKeys.SCORES]

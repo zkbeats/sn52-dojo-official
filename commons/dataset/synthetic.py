@@ -1,4 +1,5 @@
 import os
+import traceback
 
 import aiohttp
 from bittensor.btlogging import logging as logger
@@ -110,6 +111,7 @@ class SyntheticAPI:
             logger.error(
                 f"Failed to generate synthetic QA after {MAX_RETRIES} retries."
             )
+            traceback.print_exc()
             raise
         except Exception:
             raise
