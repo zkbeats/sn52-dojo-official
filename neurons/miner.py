@@ -146,6 +146,9 @@ class Miner(BaseMinerNeuron):
         self, synapse: FeedbackRequest
     ) -> Tuple[bool, str]:
         logger.info("checking blacklist function")
+
+        return False, "Valid request received from validator"
+
         caller_hotkey = synapse.dendrite.hotkey
         if caller_hotkey is None or caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.

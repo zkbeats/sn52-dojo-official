@@ -83,6 +83,7 @@ class DojoAPI:
         cls,
         feedback_request: FeedbackRequest,
     ):
+        logger.debug("Creating Task....")
         path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
         taskData = cls.serialize_feedback_request(feedback_request)
         for criteria_type in feedback_request.criteria_types:
