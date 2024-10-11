@@ -9,7 +9,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     build-essential curl git ca-certificates \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash \
+    && export NVM_DIR="$HOME/.nvm" \
+    && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \
+    && nvm install 20 \
+    && npm install -g uglify-js
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 COPY . .

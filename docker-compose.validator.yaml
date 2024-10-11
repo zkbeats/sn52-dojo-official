@@ -105,17 +105,13 @@ services:
     depends_on:
       - postgres-vali
 
-  npm-install:
-    image: node:14
-    volumes:
-      - ./:/app
-    working_dir: /app
-    command: npm install -g uglify-js
-
   # ============== TEST NET ============== #
 
   validator-testnet:
-    image: ghcr.io/tensorplex-labs/dojo:main
+    # image: ghcr.io/tensorplex-labs/dojo:main
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
     working_dir: /app
     env_file:
       - .env.validator
@@ -141,8 +137,6 @@ services:
       postgres-vali:
         condition: service_healthy
       prisma-setup-vali:
-        condition: service_completed_successfully
-      npm-install:
         condition: service_completed_successfully
 
   # ============== MAIN NET ============== #
@@ -174,6 +168,4 @@ services:
       postgres-vali:
         condition: service_healthy
       prisma-setup-vali:
-        condition: service_completed_successfully
-      npm-install:
         condition: service_completed_successfully
