@@ -40,11 +40,11 @@ install-test:
 btcli:
 	docker compose -f docker-compose.shared.yaml run --rm btcli
 
-pull-validator:
-	docker compose -f docker-compose.validator.yaml pull
+validator-pull:
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml pull
 
-pull-miner:
-	docker compose -f docker-compose.miner.yaml pull
+miner-pull:
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml pull
 
 # ---------------------------------------------------------------------------- #
 #                                 CORE SERVICES                                #
@@ -78,6 +78,9 @@ validator:
 	else \
 		echo "Please specify a valid network: mainnet or testnet"; \
 	fi
+
+validator-up-deps:
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml up -d --build synthetic-api postgres-vali prisma-setup-vali
 
 miner-worker-api:
 	docker compose --env-file .env.miner -f docker-compose.miner.yaml up -d worker-api
