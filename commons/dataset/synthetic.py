@@ -6,12 +6,12 @@ from bittensor.btlogging import logging as logger
 from tenacity import (
     AsyncRetrying,
     RetryError,
+    before_sleep_log,
     stop_after_attempt,
     wait_exponential,
 )
 
 from commons.obfuscation.obfuscation_utils import JSObfuscator, obfuscate_html_and_js
-from commons.utils import log_retry_info
 from dojo.protocol import SyntheticQA
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
@@ -95,7 +95,9 @@ class SyntheticAPI:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(MAX_RETRIES),
                 wait=wait_exponential(multiplier=1, max=30),
-                before_sleep=log_retry_info,
+                before_sleep=before_sleep_log(
+                    logger._logger, log_level=10, exc_info=True
+                ),
             ):
                 with attempt:
                     async with cls._session.get(path) as response:
@@ -105,7 +107,7 @@ class SyntheticAPI:
                             raise ValueError("Invalid response from the server.")
                         synthetic_qa = _map_synthetic_response(response_json["body"])
                         logger.info("Synthetic QA generated and parsed successfully")
-                        # _obfuscate_html_content(synthetic_qa)
+                        _obfuscate_html_content(synthetic_qa)
                         return synthetic_qa
         except RetryError:
             logger.error(

@@ -485,7 +485,7 @@ class Validator(BaseNeuron):
 
                     # # Check if we should exit.
                     if self._should_exit:
-                        logger.info("Validator should stop...")
+                        logger.debug("Validator should stop...")
                         break
 
                     # Sync metagraph and potentially set weights.
