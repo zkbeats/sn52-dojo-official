@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from template.utils.config import source_dotenv
+from dojo.utils.config import source_dotenv
 
 source_dotenv()
 

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
 from torch.nn import functional as F
 
-from template.protocol import (
+from dojo.protocol import (
     CompletionResponses,
     CriteriaType,
     FeedbackRequest,

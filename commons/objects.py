@@ -1,4 +1,4 @@
-from template.utils.config import get_config
+from dojo.utils.config import get_config
 
 
 class ObjectManager:

@@ -27,7 +27,7 @@ def is_uid_available(metagraph: bt.metagraph, uid: int) -> bool:
 def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     """Check if uid is a validator."""
     stakes = metagraph.S.tolist()
-    from template import VALIDATOR_MIN_STAKE
+    from dojo import VALIDATOR_MIN_STAKE
 
     return stakes[uid] < VALIDATOR_MIN_STAKE
 

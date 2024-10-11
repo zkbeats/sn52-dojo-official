@@ -4,7 +4,7 @@ from datetime import timedelta
 import bittensor as bt
 from loguru import logger
 
-import template
+import dojo
 from commons.utils import is_valid_expiry, set_expire_time
 from database.prisma import Json
 from database.prisma.enums import Criteria_Type_Enum_Model
@@ -15,7 +15,7 @@ from database.prisma.types import (
     Feedback_Request_ModelCreateInput,
     Miner_Response_ModelCreateInput,
 )
-from template.protocol import (
+from dojo.protocol import (
     CompletionResponses,
     CriteriaType,
     DendriteQueryResponse,
@@ -120,7 +120,7 @@ def map_miner_response_to_model(
         # Ensure expire_at is set and is reasonable, this will prevent exploits where miners can set their own expiry times
         expire_at = response.expire_at
         if expire_at is None or is_valid_expiry(expire_at) is not True:
-            expire_at = set_expire_time(template.TASK_DEADLINE)
+            expire_at = set_expire_time(dojo.TASK_DEADLINE)
 
         if response.dojo_task_id is None:
             raise ValueError("Dojo task id is required")
@@ -178,7 +178,7 @@ def map_model_to_dendrite_query_response(
             ]
 
         # Add TASK_DEADLINE to created_at
-        expire_at_dt = model.created_at + timedelta(seconds=template.TASK_DEADLINE)
+        expire_at_dt = model.created_at + timedelta(seconds=dojo.TASK_DEADLINE)
 
         request: FeedbackRequest = FeedbackRequest(
             request_id=model.request_id,

@@ -5,7 +5,7 @@ from unittest.mock import patch
 import bittensor as bt
 import pytest
 
-from template.mock import MockDendrite, MockMetagraph, MockSubtensor
+from dojo.mock import MockDendrite, MockMetagraph, MockSubtensor
 
 # @pytest.fixture(autouse=True)
 # def mock_env_var(monkeypatch):

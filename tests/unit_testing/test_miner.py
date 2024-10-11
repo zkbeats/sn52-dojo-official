@@ -9,15 +9,15 @@ import pytest
 from loguru import logger
 
 from commons.utils import get_epoch_time
-from neurons.miner import Miner
-from template import VALIDATOR_MIN_STAKE
-from template.protocol import (
+from dojo import VALIDATOR_MIN_STAKE
+from dojo.protocol import (
     CompletionResponses,
     FeedbackRequest,
     MultiScoreCriteria,
     ScoringResult,
     TaskType,
 )
+from neurons.miner import Miner
 
 valid_feedback_request = FeedbackRequest(
     request_id="test_request_id",

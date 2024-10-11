@@ -4,7 +4,7 @@ import time
 
 from bittensor.btlogging import logging as logger
 
-from template import __version__
+from dojo import __version__
 
 CHECK_INTERVAL = 1800  # 30 minutes
 

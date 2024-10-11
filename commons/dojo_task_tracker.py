@@ -8,12 +8,12 @@ from typing import Dict
 import bittensor as bt
 from bittensor.btlogging import logging as logger
 
-import template
+import dojo
 from commons.data_manager import DataManager
 from commons.objects import ObjectManager
 from commons.utils import get_epoch_time
 from database.prisma.models import Feedback_Request_Model, Miner_Response_Model
-from template.protocol import (
+from dojo.protocol import (
     CriteriaTypeEnum,
     DendriteQueryResponse,
     MultiScoreCriteria,
@@ -159,7 +159,7 @@ class DojoTaskTracker:
     @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
-        await asyncio.sleep(template.DOJO_TASK_MONITORING)
+        await asyncio.sleep(dojo.DOJO_TASK_MONITORING)
 
         while not cls._should_exit:
             try:

@@ -12,8 +12,8 @@ from commons.api.reward_route import reward_router
 from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
+from dojo.utils.config import source_dotenv
 from neurons.validator import DojoTaskTracker
-from template.utils.config import source_dotenv
 
 source_dotenv()
 

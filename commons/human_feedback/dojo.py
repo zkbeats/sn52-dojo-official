@@ -4,10 +4,10 @@ from typing import Dict, List
 import httpx
 from bittensor.btlogging import logging as logger
 
-import template
+import dojo
 from commons.utils import loaddotenv, set_expire_time
-from template import get_dojo_api_base_url
-from template.protocol import FeedbackRequest, MultiScoreCriteria, RankingCriteria
+from dojo import get_dojo_api_base_url
+from dojo.protocol import FeedbackRequest, MultiScoreCriteria, RankingCriteria
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 # to be able to get the curlify requests
@@ -102,7 +102,7 @@ class DojoAPI:
             else:
                 logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
 
-        expire_at = set_expire_time(template.TASK_DEADLINE)
+        expire_at = set_expire_time(dojo.TASK_DEADLINE)
 
         form_body = {
             "title": ("", "LLM Code Generation Task"),

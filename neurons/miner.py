@@ -11,15 +11,15 @@ from bittensor.btlogging import logging as logger
 
 from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
-from template import MINER_STATUS, VALIDATOR_MIN_STAKE
-from template.base.miner import BaseMinerNeuron
-from template.protocol import (
+from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
+from dojo.base.miner import BaseMinerNeuron
+from dojo.protocol import (
     FeedbackRequest,
     Heartbeat,
     ScoringResult,
     TaskResultRequest,
 )
-from template.utils.uids import is_miner
+from dojo.utils.uids import is_miner
 
 
 class Miner(BaseMinerNeuron):

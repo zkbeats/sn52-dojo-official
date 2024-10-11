@@ -13,7 +13,7 @@ hooks:
 	python3 pre-commit.pyz install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 
 # ---------------------------------------------------------------------------- #
-#                                 INSTALL DEPS                                 #
+#                           INSTALL DEPS & UTILITIES                           #
 # ---------------------------------------------------------------------------- #
 
 install:
@@ -39,6 +39,12 @@ install-test:
 
 btcli:
 	docker compose -f docker-compose.shared.yaml run --rm btcli
+
+pull-validator:
+	docker compose -f docker-compose.validator.yaml pull
+
+pull-miner:
+	docker compose -f docker-compose.miner.yaml pull
 
 # ---------------------------------------------------------------------------- #
 #                                 CORE SERVICES                                #

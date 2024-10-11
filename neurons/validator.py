@@ -17,15 +17,15 @@ from fastapi.encoders import jsonable_encoder
 from tenacity import RetryError
 from torch.nn import functional as F
 
-import template
+import dojo
 from commons.data_manager import DataManager, ValidatorStateKeys
 from commons.dataset.synthetic import SyntheticAPI
 from commons.dojo_task_tracker import DojoTaskTracker
 from commons.scoring import Scoring
 from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
 from database.client import connect_db
-from template.base.neuron import BaseNeuron
-from template.protocol import (
+from dojo.base.neuron import BaseNeuron
+from dojo.protocol import (
     CompletionResponses,
     DendriteQueryResponse,
     FeedbackRequest,
@@ -34,8 +34,8 @@ from template.protocol import (
     ScoringResult,
     TaskType,
 )
-from template.utils.config import get_config
-from template.utils.uids import MinerUidSelector, extract_miner_uids
+from dojo.utils.config import get_config
+from dojo.utils.uids import MinerUidSelector, extract_miner_uids
 
 
 class Validator(BaseNeuron):
@@ -79,7 +79,7 @@ class Validator(BaseNeuron):
         only relevant data that has passed the deadline of 8 hours will be scored and sent feedback.
         """
         while True:
-            await asyncio.sleep(template.VALIDATOR_UPDATE_SCORE)
+            await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
             try:
                 logger.debug(
                     f"Scheduled update score and send feedback triggered at time: {time.time()}"
@@ -224,7 +224,7 @@ class Validator(BaseNeuron):
     async def send_heartbeats(self):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
-            await asyncio.sleep(template.VALIDATOR_HEARTBEAT)
+            await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
             self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
@@ -376,7 +376,7 @@ class Validator(BaseNeuron):
                 return
 
             obfuscated_model_to_model = self.obfuscate_model_names(data.responses)
-            expire_at = set_expire_time(template.TASK_DEADLINE)
+            expire_at = set_expire_time(dojo.TASK_DEADLINE)
             synapse = FeedbackRequest(
                 request_id=request_id,
                 task_type=str(TaskType.CODE_GENERATION),
@@ -501,7 +501,7 @@ class Validator(BaseNeuron):
                 except Exception as e:
                     logger.error(f"Error during validator run: {e}")
                     pass
-                await asyncio.sleep(template.VALIDATOR_RUN)
+                await asyncio.sleep(dojo.VALIDATOR_RUN)
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
@@ -688,4 +688,4 @@ class Validator(BaseNeuron):
     async def log_validator_status(cls):
         while not cls._should_exit:
             logger.info(f"Validator running... {time.time()}")
-            await asyncio.sleep(template.VALIDATOR_STATUS)
+            await asyncio.sleep(dojo.VALIDATOR_STATUS)

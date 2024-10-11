@@ -12,7 +12,7 @@ from tenacity import (
 
 from commons.obfuscation.obfuscation_utils import JSObfuscator, obfuscate_html_and_js
 from commons.utils import log_retry_info
-from template.protocol import SyntheticQA
+from dojo.protocol import SyntheticQA
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
 

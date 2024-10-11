@@ -3,7 +3,7 @@ import asyncio
 from bittensor.btlogging import logging as logger
 
 from commons.objects import ObjectManager
-from template.utils.config import source_dotenv
+from dojo.utils.config import source_dotenv
 
 source_dotenv()
 

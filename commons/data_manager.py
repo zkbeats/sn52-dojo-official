@@ -27,7 +27,7 @@ from database.prisma.types import (
     Score_ModelUpdateInput,
     Validator_State_ModelCreateInput,
 )
-from template.protocol import (
+from dojo.protocol import (
     DendriteQueryResponse,
     FeedbackRequest,
     RidToHotKeyToTaskId,

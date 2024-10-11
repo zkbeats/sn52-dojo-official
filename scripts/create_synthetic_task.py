@@ -4,7 +4,7 @@ from bittensor.btlogging import logging as logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
-from template.protocol import FeedbackRequest, MultiScoreCriteria, TaskType
+from dojo.protocol import FeedbackRequest, MultiScoreCriteria, TaskType
 
 
 async def main():
