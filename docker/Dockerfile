@@ -4,16 +4,21 @@ WORKDIR /app
 
 ENV PATH="/root/.cargo/bin/:$PATH"
 ENV UV_SYSTEM_PYTHON=true
+ENV NVM_DIR=/root/.nvm
+ENV NODE_VERSION=v20.11.1
+ENV NODE_PATH=$NVM_DIR/versions/node/$NODE_VERSION/lib/node_modules
+ENV PATH=$NVM_DIR/versions/node/$NODE_VERSION/bin:$PATH
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     build-essential curl git ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash \
-    && export NVM_DIR="$HOME/.nvm" \
-    && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" \
-    && nvm install 20 \
+    && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \
+    && . $NVM_DIR/nvm.sh \
+    && nvm install $NODE_VERSION \
+    && nvm alias default $NODE_VERSION \
+    && nvm use default \
     && npm install -g uglify-js
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
