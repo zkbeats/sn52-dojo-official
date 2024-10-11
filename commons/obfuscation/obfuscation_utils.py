@@ -1,14 +1,15 @@
-import base64
-import random
-import string
-import re
 import argparse
+import base64
 import hashlib
+import os
+import random
+import re
+import string
 import subprocess
 import tempfile
-import os
-from bs4 import BeautifulSoup
 from typing import Callable
+
+from bs4 import BeautifulSoup
 
 
 # Obfuscator base class
@@ -119,14 +120,15 @@ class JSObfuscator(Obfuscator):
 def obfuscate_html_and_js(html_content):
     return HTMLObfuscator.obfuscate(JSObfuscator.obfuscate_html(html_content))
 
+
 def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
     try:
-        with open(input_file, "r", encoding="utf-8") as file:
+        with open(input_file, encoding="utf-8") as file:
             original_content = file.read()
     except FileNotFoundError:
         print(f"Error: The file '{input_file}' was not found.")
         return
-    except IOError:
+    except OSError:
         print(f"Error: Could not read the file '{input_file}'.")
         return
 
@@ -143,11 +145,11 @@ def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
         obfuscated_hash = hashlib.md5(obfuscated.encode()).hexdigest()
         print(f"\nOriginal content MD5: {original_hash}")
         print(f"Obfuscated content MD5: {obfuscated_hash}")
-    except IOError:
+    except OSError:
         print(f"Error: Could not write to the file '{output_file}'.")
 
 
-# Funtion to test the obfuscation
+# Function to test the obfuscation
 # Command to run: python obfuscation_utils.py input.html
 def main():
     parser = argparse.ArgumentParser(
