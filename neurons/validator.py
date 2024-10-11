@@ -260,8 +260,33 @@ class Validator(BaseNeuron):
         tasks = []
         for axon in axons:
             # shuffle synapse Responses
-            shuffled_synapse = copy.deepcopy(synapse)
-            random.shuffle(shuffled_synapse.completion_responses)
+            shuffled_completions = random.sample(
+                synapse.completion_responses,
+                k=len(synapse.completion_responses),
+            )
+            criteria_types = []
+            # ensure criteria options same order as completion_responses
+            for criteria in synapse.criteria_types:
+                if not isinstance(criteria, MultiScoreCriteria):
+                    logger.trace(f"Skipping non multi score criteria: {criteria}")
+                    continue
+                options = [completion.model for completion in shuffled_completions]
+                criteria = MultiScoreCriteria(
+                    options=options,
+                    min=criteria.min,
+                    max=criteria.max,
+                )
+                criteria_types.append(criteria)
+
+            shuffled_synapse = FeedbackRequest(
+                epoch_timestamp=synapse.epoch_timestamp,
+                request_id=synapse.request_id,
+                prompt=synapse.prompt,
+                completion_responses=shuffled_completions,
+                task_type=synapse.task_type,
+                criteria_types=criteria_types,
+            )
+
             tasks.append(
                 dendrite.forward(
                     axons=[axon],

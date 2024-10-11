@@ -1,4 +1,3 @@
-import functools
 import os
 
 import aiohttp
@@ -14,11 +13,6 @@ from commons.utils import log_retry_info
 from template.protocol import SyntheticQA
 
 SYNTHETIC_API_BASE_URL = os.getenv("SYNTHETIC_API_URL")
-
-
-@functools.lru_cache
-def get_client_session():
-    return aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120))
 
 
 def _map_synthetic_response(response: dict) -> SyntheticQA:
@@ -45,10 +39,20 @@ def _map_synthetic_response(response: dict) -> SyntheticQA:
 
 
 class SyntheticAPI:
-    _session = get_client_session()
+    _session: aiohttp.ClientSession | None = None
+
+    @classmethod
+    async def init_session(cls):
+        if cls._session is None:
+            cls._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=120)
+            )
+        return
 
     @classmethod
     async def get_qa(cls) -> SyntheticQA | None:
+        await cls.init_session()
+
         path = f"{SYNTHETIC_API_BASE_URL}/api/synthetic-gen"
         logger.debug(f"Generating synthetic QA from {path}.")
 
