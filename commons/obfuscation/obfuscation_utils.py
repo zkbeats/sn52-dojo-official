@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 from typing import Callable
 
+from bittensor.btlogging import logging as logger
 from bs4 import BeautifulSoup
 
 
@@ -106,7 +107,7 @@ class JSObfuscator(Obfuscator):
                 )
                 return result.stdout
             except subprocess.CalledProcessError as e:
-                print(f"Error occurred while obfuscating: {e}")
+                logger.error(f"Error occurred while obfuscating: {e}")
                 return js_code
 
     @classmethod
@@ -126,10 +127,10 @@ def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
         with open(input_file, encoding="utf-8") as file:
             original_content = file.read()
     except FileNotFoundError:
-        print(f"Error: The file '{input_file}' was not found.")
+        logger.error(f"Error: The file '{input_file}' was not found.")
         return
     except OSError:
-        print(f"Error: Could not read the file '{input_file}'.")
+        logger.error(f"Error: Could not read the file '{input_file}'.")
         return
 
     obfuscated = obfuscation_func(original_content)
@@ -137,16 +138,15 @@ def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
     try:
         with open(output_file, "w", encoding="utf-8") as file:
             file.write(obfuscated)
-        print(f"Obfuscated content has been written to '{output_file}'")
-        print(f"You can now open '{output_file}' in a web browser to see the result.")
+        logger.info(f"Obfuscated content has been written to '{output_file}'")
 
         # Calculate and display hashes to show difference
         original_hash = hashlib.md5(original_content.encode()).hexdigest()
         obfuscated_hash = hashlib.md5(obfuscated.encode()).hexdigest()
-        print(f"\nOriginal content MD5: {original_hash}")
-        print(f"Obfuscated content MD5: {obfuscated_hash}")
+        logger.info(f"\nOriginal content MD5: {original_hash}")
+        logger.info(f"Obfuscated content MD5: {obfuscated_hash}")
     except OSError:
-        print(f"Error: Could not write to the file '{output_file}'.")
+        logger.error(f"Error: Could not write to the file '{output_file}'.")
 
 
 # Function to test the obfuscation
