@@ -15,6 +15,7 @@ from commons.utils import get_epoch_time
 from database.prisma.models import Feedback_Request_Model, Miner_Response_Model
 from template.protocol import (
     CriteriaTypeEnum,
+    DendriteQueryResponse,
     MultiScoreCriteria,
     RankingCriteria,
     RidToHotKeyToTaskId,
@@ -178,7 +179,10 @@ class DojoTaskTracker:
                     miner_to_task_id = cls._rid_to_mhotkey_to_task_id[request_id]
                     processed_hotkeys = set()
 
-                    data = await DataManager.get_by_request_id(request_id)
+                    data: (
+                        DendriteQueryResponse | None
+                    ) = await DataManager.get_by_request_id(request_id)
+
                     if not data or not data.request:
                         logger.error(
                             f"No request on disk found for request id: {request_id}"
@@ -241,12 +245,15 @@ class DojoTaskTracker:
                         miner_response.axon = bt.TerminalInfo(
                             hotkey=miner_hotkey,
                         )
-                        for completion in miner_response.responses:
+                        miner_response.dojo_task_id = task_id
+                        for completion in miner_response.completion_responses:
                             model_id = completion.model
 
                             for criteria in miner_response.criteria_types:
                                 if isinstance(criteria, RankingCriteria):
-                                    completion.rank_id = model_id_to_avg_rank[model_id]
+                                    completion.rank_id = int(
+                                        model_id_to_avg_rank[model_id]
+                                    )
                                 elif isinstance(criteria, MultiScoreCriteria):
                                     completion.score = model_id_to_avg_score[model_id]
 

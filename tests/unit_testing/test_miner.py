@@ -28,7 +28,11 @@ valid_feedback_request = FeedbackRequest(
         MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
     ],
     completion_responses=[
-        CompletionResponses(model="test_model", completion="test_completion")
+        CompletionResponses(
+            model="test_model",
+            completion="test_completion",
+            completion_id="test_uuid1234",
+        )
     ],
 )
 

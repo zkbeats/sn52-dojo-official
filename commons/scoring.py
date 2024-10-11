@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
 from torch.nn import functional as F
 
-from commons.dataset.leaderboard import get_leaderboard_scores
 from template.protocol import (
     CompletionResponses,
     CriteriaType,
@@ -262,8 +261,10 @@ class Scoring:
         miner_responses: List[FeedbackRequest],
     ):
         # determine the ground truth ordering based on request
-        model_score_tuples = get_leaderboard_scores(
-            [completion.model for completion in request.completion_responses]
+        # TODO change to get the data from the ground truth stored on disk
+        # we can assume `model` is the same as the `completion_id`, see validator.obfuscate_model_names function
+        model_score_tuples = _map_ground_truth_rank_to_score(
+            criteria, request.ground_truth
         )
         model_with_score_sorted = sorted(
             model_score_tuples, key=lambda x: (x[1] is not None, x[1]), reverse=True
@@ -380,15 +381,6 @@ class Scoring:
                         f"Detected None values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
                     )
                     continue
-                if isinstance(criteria, MultiScoreCriteria):
-                    default_value = (5 / 10) * (
-                        criteria.max - criteria.min
-                    ) + criteria.min
-                    if all(v == default_value for v in values):
-                        logger.error(
-                            f"Detected all default values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
-                        )
-                        continue
                 valid_miner_responses.append(response)
 
             if len(valid_miner_responses) < 2:
@@ -414,8 +406,8 @@ class Scoring:
             )
 
             for i, r in enumerate(valid_miner_responses):
-                consensus = 0.6 * consensus_score.score[i]
-                ground_truth = 0.4 * gt_score.score[i]
+                consensus = 0.2 * consensus_score.score[i]
+                ground_truth = 0.8 * gt_score.score[i]
 
                 hotkey_to_final_score[r.axon.hotkey] = (consensus + ground_truth) / len(
                     criteria_types
@@ -427,20 +419,39 @@ class Scoring:
         return criteria_to_miner_scores, hotkey_to_final_score
 
 
-def _calculate_average_rank_by_model(
-    responses: List[FeedbackRequest],
-) -> Dict[str, float]:
-    model_id_to_average_rank = defaultdict(list)
-    for request in responses:
-        for completion in request.completion_responses:
-            # if completion.model_id not in model_id_to_average_rank:
-            #     model_id_to_average_rank[completion.model_id] = []
-            model_id_to_average_rank[completion.model].append(completion.rank_id)
+def _map_ground_truth_rank_to_score(
+    criteria: CriteriaType, ground_truth: dict[str, int]
+) -> list[tuple[str, float]]:
+    if not isinstance(criteria, MultiScoreCriteria):
+        raise NotImplementedError("Only multi-score criteria is supported")
 
-    for model_id, ranks in model_id_to_average_rank.items():
-        model_id_to_average_rank[model_id] = sum(ranks) / len(ranks)
+    completion_ids = list(ground_truth.keys())
+    unique_ranks = set(ground_truth.values())
+    expected_ranks = set(range(0, len(completion_ids)))
 
-    sorted_dict = dict(
-        sorted(model_id_to_average_rank.items(), key=lambda item: item[1])
-    )
-    return sorted_dict
+    assert (
+        unique_ranks == expected_ranks
+    ), f"Ground truth values must be discrete integers from 0 to {len(completion_ids) - 1}"
+
+    def convert_rank_to_score(
+        rank: int,
+        min_rank: int,
+        max_rank: int,
+        min_score: int | float,
+        max_score: int | float,
+    ):
+        return rank / (max_rank - min_rank) * (max_score - min_score) + min_score
+
+    completion_id_score_tuples: list[tuple[str, float]] = []
+
+    for completion_id, rank in list(ground_truth.items()):
+        score = convert_rank_to_score(
+            rank,
+            min(list(unique_ranks)),
+            max(list(unique_ranks)),
+            criteria.min,
+            criteria.max,
+        )
+        completion_id_score_tuples.append((completion_id, float(score)))
+
+    return completion_id_score_tuples

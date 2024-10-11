@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import random
 import time
 import traceback
 from datetime import datetime, timezone
@@ -208,9 +209,12 @@ class Validator(BaseNeuron):
         """Obfuscate model names for both external requests and synthetic requests to prevent miners from knowing the true model names."""
         obfuscated_model_to_model: dict[str, str] = {}
         for completion in completion_responses:
-            new_uuid = get_new_uuid()
-            obfuscated_model_to_model[new_uuid] = completion.model
-            completion.model = new_uuid
+            if completion.completion_id is None:
+                raise ValueError("completion_id is None")
+            completion.model = completion.completion_id
+            obfuscated_model_to_model[completion.completion_id] = (
+                completion.completion_id
+            )
         return obfuscated_model_to_model
 
     async def send_heartbeats(self):
@@ -248,24 +252,61 @@ class Validator(BaseNeuron):
                 )
                 pass
 
-    async def send_request(
-        self,
-        synapse: FeedbackRequest | None = None,
-        external_user: bool = False,
-    ):
-        start = get_epoch_time()
-        # typically the request may come from an external source however,
-        # initially will seed it with some data for miners to get started
+    @staticmethod
+    async def _send_shuffled_requests(
+        dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: FeedbackRequest
+    ) -> list[FeedbackRequest]:
+        """Based on the initial synapse, send shuffled ordering of responses so that miners cannot guess ordering of ground truth"""
+        tasks = []
+        for axon in axons:
+            # shuffle synapse Responses
+            shuffled_completions = random.sample(
+                synapse.completion_responses,
+                k=len(synapse.completion_responses),
+            )
+            criteria_types = []
+            # ensure criteria options same order as completion_responses
+            for criteria in synapse.criteria_types:
+                if not isinstance(criteria, MultiScoreCriteria):
+                    logger.trace(f"Skipping non multi score criteria: {criteria}")
+                    continue
+                options = [completion.model for completion in shuffled_completions]
+                criteria = MultiScoreCriteria(
+                    options=options,
+                    min=criteria.min,
+                    max=criteria.max,
+                )
+                criteria_types.append(criteria)
 
-        # ensure we consider only active miners
+            shuffled_synapse = FeedbackRequest(
+                epoch_timestamp=synapse.epoch_timestamp,
+                request_id=synapse.request_id,
+                prompt=synapse.prompt,
+                completion_responses=shuffled_completions,
+                task_type=synapse.task_type,
+                criteria_types=criteria_types,
+            )
 
-        if len(self._active_miner_uids) == 0:
-            logger.warning("🤷 No active miners to send request to... skipping")
-            return
+            tasks.append(
+                dendrite.forward(
+                    axons=[axon],
+                    synapse=shuffled_synapse,
+                    deserialize=False,
+                    timeout=12,
+                )
+            )
 
-        request_id = get_new_uuid()
+        # Gather results and flatten the list
+        nested_responses = await asyncio.gather(*tasks)
+        flat_responses = [
+            response for sublist in nested_responses for response in sublist
+        ]
+
+        return flat_responses
+
+    async def get_miner_uids(self, is_external_request: bool, request_id: str):
         async with self._lock:
-            if external_user:
+            if is_external_request:
                 sel_miner_uids = [
                     uid
                     for uid in self._active_miner_uids
@@ -278,6 +319,22 @@ class Validator(BaseNeuron):
                 sel_miner_uids = MinerUidSelector(
                     nodes=list(self._active_miner_uids),
                 ).get_target_uids(key=request_id, k=get_config().neuron.sample_size)
+        return sel_miner_uids
+
+    async def send_request(
+        self,
+        synapse: FeedbackRequest | None = None,
+        external_user: bool = False,
+    ):
+        start = get_epoch_time()
+        # typically the request may come from an external source however,
+        # initially will seed it with some data for miners to get started
+        if len(self._active_miner_uids) == 0:
+            logger.warning("🤷 No active miners to send request to... skipping")
+            return
+
+        request_id = get_new_uuid()
+        sel_miner_uids = await self.get_miner_uids(external_user, request_id)
 
         axons = [
             self.metagraph.axons[uid]
@@ -339,8 +396,8 @@ class Validator(BaseNeuron):
             f"⬆️ Sending feedback request for request id: {synapse.request_id}, miners uids:{sel_miner_uids}"
         )
 
-        miner_responses: List[FeedbackRequest] = await self.dendrite.forward(
-            axons=axons, synapse=synapse, deserialize=False, timeout=24
+        miner_responses: List[FeedbackRequest] = await self._send_shuffled_requests(
+            self.dendrite, axons, synapse
         )
 
         valid_miner_responses: List[FeedbackRequest] = []

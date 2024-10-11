@@ -86,6 +86,8 @@ class DataManager:
                 logger.info(
                     f"Saving dendrite query response for request_id: {response.request.request_id}"
                 )
+                logger.trace("Starting transaction for saving dendrite query response.")
+
                 # Create the main feedback request record
                 feedback_request_model: Feedback_Request_Model = (
                     await tx.feedback_request_model.create(
@@ -107,6 +109,7 @@ class DataManager:
                         miner_response,
                         feedback_request_model.request_id,  # Use feedback_request_model.request_id
                     )
+
                     if not miner_response_data.get("dojo_task_id"):
                         logger.error("Dojo task id is required")
                         raise ValueError("Dojo task id is required")
@@ -119,11 +122,12 @@ class DataManager:
 
                     # Create related completions for miner responses
                     for completion in miner_response.completion_responses:
-                        await tx.completion_response_model.create(
-                            data=map_completion_response_to_model(
-                                completion, miner_response_model.id
-                            )
+                        completion_data = map_completion_response_to_model(
+                            completion, miner_response_model.id
                         )
+                        await tx.completion_response_model.create(data=completion_data)
+                        logger.trace(f"Created completion response: {completion_data}")
+
                 feedback_request_model.miner_responses = miner_responses
                 return feedback_request_model
         except Exception as e:

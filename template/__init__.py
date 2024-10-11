@@ -1,9 +1,9 @@
 import os
 import subprocess
 
-from dotenv import load_dotenv
+from template.utils.config import source_dotenv
 
-load_dotenv()
+source_dotenv()
 
 
 def get_latest_git_tag():

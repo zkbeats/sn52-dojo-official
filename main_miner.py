@@ -1,11 +1,11 @@
 import asyncio
 
 from bittensor.btlogging import logging as logger
-from dotenv import load_dotenv
 
 from commons.objects import ObjectManager
+from template.utils.config import source_dotenv
 
-load_dotenv()
+source_dotenv()
 
 
 async def main():
