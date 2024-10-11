@@ -105,7 +105,7 @@ class SyntheticAPI:
                             raise ValueError("Invalid response from the server.")
                         synthetic_qa = _map_synthetic_response(response_json["body"])
                         logger.info("Synthetic QA generated and parsed successfully")
-                        _obfuscate_html_content(synthetic_qa)
+                        # _obfuscate_html_content(synthetic_qa)
                         return synthetic_qa
         except RetryError:
             logger.error(
