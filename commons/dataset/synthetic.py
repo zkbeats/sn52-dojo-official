@@ -9,6 +9,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from commons.obfuscation.obfuscation_utils import JSObfuscator, obfuscate_html_and_js
 from commons.utils import log_retry_info
 from template.protocol import SyntheticQA
 
@@ -36,6 +37,38 @@ def _map_synthetic_response(response: dict) -> SyntheticQA:
     mapped_data["responses"] = responses
 
     return SyntheticQA.model_validate(mapped_data)
+
+
+def _obfuscate_html_content(synthetic_qa: SyntheticQA) -> None:
+    for response in synthetic_qa.responses:
+        if hasattr(response.completion, "files"):
+            html_file = None
+            js_file = None
+
+            # Identify HTML and JS files
+            for file in response.completion.files:
+                if file.language.lower() in ["html", "htm"]:
+                    html_file = file
+                elif file.language.lower() == "javascript":
+                    js_file = file
+
+            # Obfuscate HTML file
+            if html_file:
+                html_file.content = obfuscate_html_and_js(html_file.content)
+
+            # Obfuscate JS file if it exists
+            if js_file:
+                js_file.content = JSObfuscator.obfuscate_html(js_file.content)
+
+            # If no HTML or JS files found, log a warning
+            if not html_file and not js_file:
+                logger.warning(
+                    f"No HTML or JS files found for response {response.completion_id}"
+                )
+        else:
+            logger.warning(
+                f"Completion does not have 'files' attribute for response {response.completion_id}"
+            )
 
 
 class SyntheticAPI:
@@ -71,6 +104,7 @@ class SyntheticAPI:
                             raise ValueError("Invalid response from the server.")
                         synthetic_qa = _map_synthetic_response(response_json["body"])
                         logger.info("Synthetic QA generated and parsed successfully")
+                        _obfuscate_html_content(synthetic_qa)
                         return synthetic_qa
         except RetryError:
             logger.error(
