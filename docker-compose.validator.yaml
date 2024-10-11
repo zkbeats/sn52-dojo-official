@@ -108,10 +108,7 @@ services:
   # ============== TEST NET ============== #
 
   validator-testnet:
-    # image: ghcr.io/tensorplex-labs/dojo:main
-    build:
-      context: .
-      dockerfile: ./docker/Dockerfile
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.validator
