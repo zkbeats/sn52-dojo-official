@@ -66,10 +66,8 @@ miner-centralised:
 
 validator:
 	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.validator -f docker-compose.validator.yaml run --rm npm-install && \
 		docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator-mainnet; \
 	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.validator -f docker-compose.validator.yaml run --rm npm-install && \
 		docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator-testnet; \
 	else \
 		echo "Please specify a valid network: mainnet or testnet"; \
