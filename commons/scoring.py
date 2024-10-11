@@ -379,9 +379,6 @@ class Scoring:
                     for completion in response.completion_responses
                 ]
                 if any(v is None for v in values):
-                    logger.error(
-                        f"Detected None values in response for request id: {request.request_id} from miner: {response.axon.hotkey}"
-                    )
                     continue
                 valid_miner_responses.append(response)
 

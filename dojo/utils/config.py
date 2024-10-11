@@ -97,10 +97,8 @@ def configure_logging(config: bt.config):
     try:
         if config.logging.trace:  # pyright: ignore[reportOptionalMemberAccess]
             bt.logging.set_trace(True)
-            bt.logging.debug("Trace level logging enabled")
         elif config.logging.debug:  # pyright: ignore[reportOptionalMemberAccess]
             bt.logging.set_debug(True)
-            bt.logging.debug("Debug level logging enabled")
     except Exception:
         pass
 

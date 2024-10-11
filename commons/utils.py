@@ -92,9 +92,6 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
         else None
     )
 
-    logger.debug(f"config.neuron.full_path: {config.neuron.full_path}")
-    logger.debug(f"config.data_manager.base_path: {config.data_manager.base_path}")
-
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
     config.run_name = run_name

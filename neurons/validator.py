@@ -81,9 +81,6 @@ class Validator(BaseNeuron):
         while True:
             await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
             try:
-                logger.debug(
-                    f"Scheduled update score and send feedback triggered at time: {time.time()}"
-                )
                 data: List[DendriteQueryResponse] | None = await DataManager.load()
                 if not data:
                     logger.debug(
@@ -120,9 +117,6 @@ class Validator(BaseNeuron):
                         try:
                             del DojoTaskTracker._rid_to_mhotkey_to_task_id[request_id]
                         except KeyError:
-                            logger.warning(
-                                f"Failed to remove request id: {request_id} from dojo task tracker"
-                            )
                             pass
                         await DataManager.remove_responses([d])
                         continue
@@ -228,7 +222,7 @@ class Validator(BaseNeuron):
             self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
-                logger.debug(f"⬆️ Sending heartbeats to {len(all_miner_uids)} miners")
+                logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
                 axons: List[bt.AxonInfo] = [
                     self.metagraph.axons[uid]
                     for uid in all_miner_uids
@@ -334,7 +328,7 @@ class Validator(BaseNeuron):
         # typically the request may come from an external source however,
         # initially will seed it with some data for miners to get started
         if len(self._active_miner_uids) == 0:
-            logger.warning("🤷 No active miners to send request to... skipping")
+            logger.info("No active miners to send request to... skipping")
             return
 
         request_id = get_new_uuid()
@@ -670,9 +664,12 @@ class Validator(BaseNeuron):
         loop.run_until_complete(connect_db())
         state_data = loop.run_until_complete(DataManager.validator_load())
         if state_data is None:
-            logger.warning(
-                "Failed to load validator state data, this is okay if you're running for the first time."
-            )
+            if self.step == 0:
+                logger.warning(
+                    "Failed to load validator state data, this is okay on start, or if you're running for the first time."
+                )
+            else:
+                logger.error("Failed to load validator state data")
             return
 
         self.scores = state_data[ValidatorStateKeys.SCORES]

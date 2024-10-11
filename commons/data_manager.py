@@ -46,7 +46,7 @@ class ValidatorStateKeys(StrEnum):
 class DataManager:
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -61,11 +61,11 @@ class DataManager:
                 }
             )
 
-            logger.info(f"Loaded feedback requests: {len(feedback_requests)}")
-
             if not feedback_requests or len(feedback_requests) == 0:
                 logger.error("No Feedback_Request_Model data found.")
                 return None
+
+            logger.info(f"Loaded {len(feedback_requests)} requests")
 
             result = [
                 map_model_to_dendrite_query_response(r) for r in feedback_requests
@@ -82,6 +82,7 @@ class DataManager:
         cls, response: DendriteQueryResponse
     ) -> Feedback_Request_Model | None:
         try:
+            feedback_request_model: Feedback_Request_Model | None = None
             async with transaction() as tx:
                 logger.info(
                     f"Saving dendrite query response for request_id: {response.request.request_id}"
@@ -89,10 +90,8 @@ class DataManager:
                 logger.trace("Starting transaction for saving dendrite query response.")
 
                 # Create the main feedback request record
-                feedback_request_model: Feedback_Request_Model = (
-                    await tx.feedback_request_model.create(
-                        data=map_feedback_request_to_model(response.request)
-                    )
+                feedback_request_model = await tx.feedback_request_model.create(
+                    data=map_feedback_request_to_model(response.request)
                 )
 
                 # Create related criteria types
@@ -129,7 +128,7 @@ class DataManager:
                         logger.trace(f"Created completion response: {completion_data}")
 
                 feedback_request_model.miner_responses = miner_responses
-                return feedback_request_model
+            return feedback_request_model
         except Exception as e:
             logger.error(f"Failed to save dendrite query response: {e}")
             return None
@@ -165,10 +164,8 @@ class DataManager:
                             )
                         )
 
-                logger.success(
-                    f"Overwritten miner responses for requestId: {request_id}"
-                )
-                return True
+            logger.success(f"Overwritten miner responses for requestId: {request_id}")
+            return True
         except Exception as e:
             logger.error(f"Failed to overwrite miner responses: {e}")
             return False
@@ -194,8 +191,10 @@ class DataManager:
     async def remove_responses(cls, responses: List[DendriteQueryResponse]) -> bool:
         try:
             async with transaction() as tx:
+                request_ids = []
                 for response in responses:
                     request_id = response.request.request_id
+                    request_ids.append(request_id)
 
                     # Delete completion responses associated with the miner responses
                     await tx.completion_response_model.delete_many(
@@ -217,8 +216,8 @@ class DataManager:
                         where={"request_id": request_id}
                     )
 
-                logger.success("Successfully removed specified responses.")
-                return True
+            logger.success(f"Successfully removed responses for {request_ids} requests")
+            return True
         except Exception as e:
             logger.error(f"Failed to remove responses: {e}")
             return False
@@ -232,7 +231,8 @@ class DataManager:
         task_to_expiry: TaskExpiryDict,
     ):
         """Saves the state of the validator to the database."""
-        logger.debug("Attempting to save validator state.")
+        if cls._instance and cls._instance.step == 0:
+            return
         try:
             dojo_task_data = json.loads(json.dumps(requestid_to_mhotkey_to_task_id))
             if not dojo_task_data and torch.count_nonzero(scores).item() == 0:
@@ -307,7 +307,7 @@ class DataManager:
             )
 
             if not score_record:
-                logger.error("Score record not found.")
+                logger.trace("Score record not found.")
                 return None
 
             # Deserialize the data
@@ -343,16 +343,19 @@ class DataManager:
             }
 
         except Exception as e:
-            logger.error(f"Unexpected error: {e}")
+            logger.error(
+                f"Unexpected error occurred while loading validator state: {e}"
+            )
             return None
 
     @staticmethod
     async def remove_expired_tasks_from_storage():
         try:
-            # Load the current state
             state_data = await DataManager.validator_load()
             if not state_data:
-                logger.error("Failed to load validator state data for cleanup.")
+                logger.error(
+                    "Failed to load validator state while removing expired tasks, skipping"
+                )
                 return
 
             # Identify expired tasks
@@ -396,7 +399,9 @@ class DataManager:
                 state_data[ValidatorStateKeys.MODEL_MAP],
                 task_to_expiry,
             )
-
-            logger.info(f"Removed {len(expired_tasks)} expired tasks from DataManager.")
+            if len(expired_tasks) > 0:
+                logger.info(
+                    f"Removed {len(expired_tasks)} expired tasks from database."
+                )
         except Exception as e:
             logger.error(f"Failed to remove expired tasks: {e}")
