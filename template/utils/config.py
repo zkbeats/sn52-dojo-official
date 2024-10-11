@@ -7,6 +7,8 @@ from functools import lru_cache
 from pathlib import Path
 
 import bittensor as bt
+from bittensor.btlogging import logging as logger
+from dotenv import find_dotenv, load_dotenv
 
 base_path = Path.cwd()
 
@@ -158,6 +160,12 @@ def add_args(parser):
         default=1888,
     )
 
+    parser.add_argument(
+        "--env_file",
+        type=str,
+        help="Path to the environment file to use.",
+    )
+
     if neuron_type == "validator":
         parser.add_argument(
             "--data_manager.base_path",
@@ -210,3 +218,14 @@ def get_config():
     configure_logging(_config)  # Configure logging using bt.logging
 
     return _config
+
+
+def source_dotenv():
+    """Source env file if provided"""
+    config = get_config()
+    if config.env_file:
+        load_dotenv(find_dotenv(config.env_file))
+        logger.trace(f"Sourcing env vars from {config.env_file}")
+        return
+
+    load_dotenv()
