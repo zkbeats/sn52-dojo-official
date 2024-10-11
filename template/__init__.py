@@ -42,6 +42,10 @@ VALIDATOR_STATUS = 60
 MINER_STATUS = 60
 DOJO_TASK_MONITORING = 60
 
+# TODO remove, just for testing atm
+TASK_DEADLINE = 180
+VALIDATOR_RUN = 30
+
 
 def get_dojo_api_base_url() -> str:
     base_url = os.getenv("DOJO_API_BASE_URL")
