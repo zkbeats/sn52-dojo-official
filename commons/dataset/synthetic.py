@@ -53,18 +53,23 @@ def _obfuscate_html_content(synthetic_qa: SyntheticQA) -> None:
                 elif file.language.lower() == "javascript":
                     js_file = file
 
-            # Obfuscate HTML file
-            if html_file:
-                html_file.content = obfuscate_html_and_js(html_file.content)
+            try:
+                # Obfuscate HTML file
+                if html_file:
+                    html_file.content = obfuscate_html_and_js(html_file.content)
 
-            # Obfuscate JS file if it exists
-            if js_file:
-                js_file.content = JSObfuscator.obfuscate_html(js_file.content)
+                # Obfuscate JS file if it exists
+                if js_file:
+                    js_file.content = JSObfuscator.obfuscate(js_file.content)
 
-            # If no HTML or JS files found, log a warning
-            if not html_file and not js_file:
-                logger.warning(
-                    f"No HTML or JS files found for response {response.completion_id}"
+                # If no HTML or JS files found, log a warning
+                if not html_file and not js_file:
+                    logger.warning(
+                        f"No HTML or JS files found for response {response.completion_id}"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Error during obfuscation for response {response.completion_id}: {e}. But will still continue to process without obfuscation."
                 )
         else:
             logger.warning(

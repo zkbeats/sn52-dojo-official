@@ -54,6 +54,7 @@ dependencies = [
   "redis==5.0.7",
   "prisma==0.15.0",
   "beautifulsoup4==4.12.3",
+  "jsmin==3.0.1"
 ]
 
 [project.optional-dependencies]
