@@ -99,7 +99,7 @@ class Miner(BaseMinerNeuron):
                 return synapse
 
             logger.info(
-                f"Miner received request id: {synapse.request_id} from {synapse.dendrite.hotkey}"
+                f"Miner received request id: {synapse.request_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
             )
 
             if not synapse.completion_responses:
