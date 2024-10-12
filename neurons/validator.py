@@ -570,10 +570,8 @@ class Validator(BaseNeuron):
             wait_for_inclusion=True,
             version_key=self.spec_version,
         )
-        if result is True:
-            logger.success("Validator set weights on chain successfully!")
-        else:
-            logger.error("set_weights failed")
+
+        logger.info(f"set_weights result: {result}")
         return result
 
     def resync_metagraph(self):
