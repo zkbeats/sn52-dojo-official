@@ -59,17 +59,31 @@ class HTMLObfuscator(Obfuscator):
 
         encryption_key = random.randint(1, 255)
         encrypted_content = cls.simple_encrypt(body_content, encryption_key)
-
         decrypt_func, result_var = (
             cls.generate_random_string(),
             cls.generate_random_string(),
         )
+        error_var, temp_var = cls.generate_random_string(), cls.generate_random_string()
+
+        # Add more randomization to the JavaScript code
+        js_operations = [
+            f"var {temp_var}=atob(e);",
+            f"var {result_var}='';",
+            f"for(var {cls.generate_random_string()}=0;{cls.generate_random_string()}<{temp_var}.length;{cls.generate_random_string()}++){{",
+            f"{result_var}+=String.fromCharCode({temp_var}.charCodeAt({cls.generate_random_string()})^t);",
+            "}",
+        ]
+        random.shuffle(js_operations)
 
         js_code = (
-            f"function {decrypt_func}(e,t){{try{{var r=atob(e),n='';for(var i=0;i<r.length;i++){{n+=String.fromCharCode(r.charCodeAt(i)^t)}}return n}}catch(err){{console.error('Decryption failed:',err);return e}}}}"
+            f"function {decrypt_func}(e,t){{try{{{';'.join(js_operations)}return {result_var}}}catch({error_var}){{console.error('Decryption failed:',{error_var});return e}}}}"
             f"var {result_var}={decrypt_func}('{encrypted_content}',{encryption_key});"
             f"if({result_var}.indexOf('<')!==-1){{document.body.innerHTML={result_var};}}else{{console.error('Decryption produced invalid HTML');document.body.innerHTML=atob('{encrypted_content}');}}"
         )
+
+        if random.choice([True, False]):
+            dummy_func = cls.generate_random_string()
+            js_code = f"function {dummy_func}(){{return Math.random()<0.5}}" + js_code
 
         new_script = soup.new_tag("script")
         new_script.string = js_code
@@ -91,7 +105,7 @@ class JSObfuscator(Obfuscator):
         "--mangle-props",
         "--toplevel",
     ]
-    MAX_RETRIES = 3
+    MAX_RETRIES = 5
     RETRY_DELAY = 1  # seconds
 
     @staticmethod
@@ -117,27 +131,46 @@ class JSObfuscator(Obfuscator):
 
                 for attempt in range(cls.MAX_RETRIES):
                     try:
+                        random_options = cls.get_random_uglify_options()
                         result = subprocess.run(
-                            cls.UGLIFYJS_COMMAND + [temp_file.name],
+                            cls.UGLIFYJS_COMMAND + random_options + [temp_file.name],
                             capture_output=True,
                             text=True,
                             check=True,
+                            timeout=3,
                         )
                         return result.stdout
                     except subprocess.CalledProcessError as e:
                         logger.warning(f"Attempt {attempt + 1} failed: {e}")
                         logger.warning(f"UglifyJS stderr: {e.stderr}")
-                        if attempt < cls.MAX_RETRIES - 1:
-                            time.sleep(cls.RETRY_DELAY)
-                        else:
-                            logger.error(
-                                f"All {cls.MAX_RETRIES} attempts to obfuscate with UglifyJS failed. Falling back to simple minification."
-                            )
-                            logger.error(f"Last UglifyJS error: {e.stderr}")
-                            return cls.simple_minify(js_code)
+                    except subprocess.TimeoutExpired:
+                        logger.warning(
+                            f"Attempt {attempt + 1} timed out after 5 seconds"
+                        )
+
+                    if attempt < cls.MAX_RETRIES - 1:
+                        time.sleep(cls.RETRY_DELAY)
+                    else:
+                        logger.error(
+                            f"All {cls.MAX_RETRIES} attempts to obfuscate with UglifyJS failed. Falling back to simple minification."
+                        )
+                        return cls.simple_minify(js_code)
         else:
             logger.warning("UglifyJS not found. Falling back to simple minification.")
             return cls.simple_minify(js_code)
+
+    @staticmethod
+    def get_random_uglify_options():
+        options = []
+        if random.choice([True, False]):
+            options.append("--compress")
+        if random.choice([True, False]):
+            options.append("--mangle")
+        if random.choice([True, False]):
+            options.append("--mangle-props")
+        if random.choice([True, False]):
+            options.append("--toplevel")
+        return options
 
 
 def obfuscate_html_and_js(html_content):
