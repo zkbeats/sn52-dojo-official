@@ -9,15 +9,15 @@ import pytest
 from loguru import logger
 
 from commons.utils import get_epoch_time
-from neurons.miner import Miner
-from template import VALIDATOR_MIN_STAKE
-from template.protocol import (
+from dojo import VALIDATOR_MIN_STAKE
+from dojo.protocol import (
     CompletionResponses,
     FeedbackRequest,
     MultiScoreCriteria,
     ScoringResult,
     TaskType,
 )
+from neurons.miner import Miner
 
 valid_feedback_request = FeedbackRequest(
     request_id="test_request_id",
@@ -28,8 +28,13 @@ valid_feedback_request = FeedbackRequest(
         MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
     ],
     completion_responses=[
-        CompletionResponses(model="test_model", completion="test_completion")
+        CompletionResponses(
+            model="test_model",
+            completion="test_completion",
+            completion_id="test_uuid1234",
+        )
     ],
+    expire_at="2024-10-12T09:45:25Z",
 )
 
 invalid_feedback_request = FeedbackRequest(
@@ -41,6 +46,7 @@ invalid_feedback_request = FeedbackRequest(
         MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
     ],
     completion_responses=[],  # Invalid because responses list is empty
+    expire_at="2024-10-12T09:45:25Z",
 )
 
 MOCK_HOTKEYS: list[str] = [

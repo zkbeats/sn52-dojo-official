@@ -60,7 +60,7 @@ def hide_sensitive_path(path):
 
 def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     # Ensure paths are decoupled
-    import template
+    import dojo
     from commons.objects import ObjectManager
 
     # Deep copy of the config
@@ -78,7 +78,7 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     if project_name not in ["dojo-devnet", "dojo-testnet", "dojo-mainnet"]:
         raise ValueError("Invalid wandb project name")
 
-    run_name = f"{config.neuron.type}-{my_uid}-{template.__version__}"
+    run_name = f"{config.neuron.type}-{my_uid}-{dojo.__version__}"
 
     # Hide sensitive paths in the config
     config.neuron.full_path = (
@@ -92,13 +92,10 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
         else None
     )
 
-    logger.debug(f"config.neuron.full_path: {config.neuron.full_path}")
-    logger.debug(f"config.data_manager.base_path: {config.data_manager.base_path}")
-
     config.uid = my_uid
     config.hotkey = wallet.hotkey.ss58_address
     config.run_name = run_name
-    config.version = template.__version__
+    config.version = dojo.__version__
 
     # Initialize the wandb run for the single project
     kwargs = {

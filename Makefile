@@ -1,6 +1,6 @@
 PRECOMMIT_VERSION="3.7.1"
 UNAME := $(shell uname)
-.PHONY: hooks btcli install install-dev install-test miner-decentralised miner-centralised validator miner-decentralised-logs miner-centralised-logs validator-logs
+.PHONY: hooks install install-dev install-test btcli validator-pull miner-pull miner-decentralised miner-centralised validator validator-up-deps miner-worker-api dojo-cli miner-decentralised-logs miner-centralised-logs validator-logs
 
 hooks:
 	@echo "Grabbing pre-commit version ${PRECOMMIT_VERSION} and installing pre-commit hooks"
@@ -13,7 +13,7 @@ hooks:
 	python3 pre-commit.pyz install --hook-type pre-commit --hook-type pre-push --hook-type commit-msg
 
 # ---------------------------------------------------------------------------- #
-#                                 INSTALL DEPS                                 #
+#                           INSTALL DEPS & UTILITIES                           #
 # ---------------------------------------------------------------------------- #
 
 install:
@@ -39,6 +39,12 @@ install-test:
 
 btcli:
 	docker compose -f docker-compose.shared.yaml run --rm btcli
+
+validator-pull:
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml pull
+
+miner-pull:
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml pull
 
 # ---------------------------------------------------------------------------- #
 #                                 CORE SERVICES                                #
@@ -72,6 +78,9 @@ validator:
 	else \
 		echo "Please specify a valid network: mainnet or testnet"; \
 	fi
+
+validator-up-deps:
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml up -d --build synthetic-api postgres-vali prisma-setup-vali
 
 miner-worker-api:
 	docker compose --env-file .env.miner -f docker-compose.miner.yaml up -d worker-api

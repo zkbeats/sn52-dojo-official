@@ -5,7 +5,8 @@ import numpy as np
 import pytest
 import torch
 
-from template.protocol import FeedbackRequest, RankingCriteria, TaskType
+from commons.utils import set_expire_time
+from dojo.protocol import FeedbackRequest, RankingCriteria, TaskType
 
 # # Remove the default loguru handler
 # logger.remove()
@@ -26,7 +27,7 @@ def scoring_module():
     # ensure we import them depending on mock_env_var so the ValueError doesn't
     # get raised
     from commons.scoring import Scoring
-    from template.protocol import (
+    from dojo.protocol import (
         CodeAnswer,
         CompletionResponses,
         FeedbackRequest,
@@ -53,7 +54,7 @@ def mock_response(
     cid: str = "",
     rank_id: int = 0,
 ):
-    from template.protocol import CodeAnswer, CompletionResponses, FileObject
+    from dojo.protocol import CodeAnswer, CompletionResponses, FileObject
 
     return CompletionResponses(
         model=model,
@@ -67,7 +68,7 @@ def mock_response(
 
 
 def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
-    from template.protocol import MultiScoreCriteria
+    from dojo.protocol import MultiScoreCriteria
 
     axon = bt.TerminalInfo(hotkey=hotkey)
     prompt = "Write a hello world program in python"
@@ -101,6 +102,7 @@ def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
             MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
         ],
         completion_responses=responses,
+        expire_at=set_expire_time(8 * 3600),
     )
 
 
@@ -293,7 +295,7 @@ def mock_request_spm(
     """
     Dynamically generates miner responses using separate rank_ids and cids.
     """
-    from template.protocol import FeedbackRequest, TaskType
+    from dojo.protocol import FeedbackRequest, TaskType
 
     axon = bt.TerminalInfo(hotkey=hotkey)
     prompt = "Write a hello world program in python"
@@ -332,6 +334,7 @@ def mock_request_spm(
         criteria_types=[RankingCriteria(type="rank", options=[])],
         completion_responses=responses,
         ground_truth=ground_truth,
+        expire_at=set_expire_time(8 * 3600),
     )
 
 

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import DefaultDict, Dict, List
 
 import bittensor as bt
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from strenum import StrEnum
 
 from commons.utils import get_epoch_time, get_new_uuid
@@ -94,10 +94,7 @@ class CompletionResponses(BaseModel):
     completion: CodeAnswer | List[DialogueItem] | str | None = Field(
         description="Completion from the model"
     )
-    completion_id: str = Field(
-        default_factory=get_new_uuid,
-        description="Unique identifier for the completion",
-    )
+    completion_id: str = Field(description="Unique identifier for the completion")
     rank_id: int | None = Field(
         description="Rank of the completion", examples=[1, 2, 3, 4], default=None
     )
@@ -111,6 +108,25 @@ class SyntheticQA(BaseModel):
         description="Mapping of unique identifiers to their ground truth values",
         default_factory=dict,
     )
+
+    @model_validator(mode="after")
+    def verify_completion_ids(self):
+        completion_ids = {resp.completion_id for resp in self.responses}
+        ground_truth_keys = set(self.ground_truth.keys())
+
+        if not completion_ids.issubset(ground_truth_keys):
+            missing_ids = completion_ids - ground_truth_keys
+            raise ValueError(
+                f"The following completion_ids are missing from ground_truth: {missing_ids}"
+            )
+
+        if not ground_truth_keys.issubset(completion_ids):
+            extra_keys = ground_truth_keys - completion_ids
+            raise ValueError(
+                f"The following keys in ground_truth do not correspond to any completion_id: {extra_keys}"
+            )
+
+        return self
 
 
 class FeedbackRequest(bt.Synapse):
@@ -136,9 +152,8 @@ class FeedbackRequest(bt.Synapse):
     dojo_task_id: str | None = Field(
         description="Dojo task ID for the request", default=None
     )
-    expire_at: str | None = Field(
-        description="Expired time for Dojo task which will be used by miner to create task",
-        default=None,
+    expire_at: str = Field(
+        description="Expired time for Dojo task which will be used by miner to create task"
     )
     ground_truth: dict[str, int] = Field(
         description="Mapping of unique identifiers to their ground truth values",

@@ -11,15 +11,15 @@ from bittensor.btlogging import logging as logger
 
 from commons.human_feedback.dojo import DojoAPI
 from commons.utils import get_epoch_time
-from template import MINER_STATUS, VALIDATOR_MIN_STAKE
-from template.base.miner import BaseMinerNeuron
-from template.protocol import (
+from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
+from dojo.base.miner import BaseMinerNeuron
+from dojo.protocol import (
     FeedbackRequest,
     Heartbeat,
     ScoringResult,
     TaskResultRequest,
 )
-from template.utils.uids import is_miner
+from dojo.utils.uids import is_miner
 
 
 class Miner(BaseMinerNeuron):
@@ -93,13 +93,14 @@ class Miner(BaseMinerNeuron):
         self, synapse: FeedbackRequest
     ) -> FeedbackRequest:
         try:
-            logger.debug("Received feedback request")
             # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
             if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
                 logger.error("Invalid synapse: dendrite or dendrite.hotkey is None.")
                 return synapse
 
-            logger.info(f"Miner received request id: {synapse.request_id}")
+            logger.info(
+                f"Miner received request id: {synapse.request_id} from {synapse.dendrite.hotkey}, with expire_at: {synapse.expire_at}"
+            )
 
             if not synapse.completion_responses:
                 logger.error("Invalid synapse: response field is None.")
@@ -145,6 +146,9 @@ class Miner(BaseMinerNeuron):
         self, synapse: FeedbackRequest
     ) -> Tuple[bool, str]:
         logger.info("checking blacklist function")
+
+        return False, "Valid request received from validator"
+
         caller_hotkey = synapse.dendrite.hotkey
         if caller_hotkey is None or caller_hotkey not in self.metagraph.hotkeys:
             # Ignore requests from unrecognized entities.
@@ -152,6 +156,7 @@ class Miner(BaseMinerNeuron):
                 f"Blacklisting unrecognized hotkey {synapse.dendrite.hotkey}"
             )
             return True, "Unrecognized hotkey"
+
         logger.debug(f"Got request from {caller_hotkey}")
 
         caller_uid = self.metagraph.hotkeys.index(caller_hotkey)

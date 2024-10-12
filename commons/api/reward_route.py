@@ -6,7 +6,7 @@ from pydantic.error_wrappers import ValidationError
 from commons.cache import RedisCache
 from commons.objects import ObjectManager
 from commons.utils import get_new_uuid
-from template.protocol import FeedbackRequest
+from dojo.protocol import FeedbackRequest
 
 reward_router = APIRouter(prefix="/api/reward_model")
 

@@ -4,16 +4,16 @@ from typing import Callable, Dict
 
 import bittensor
 import requests
-from dotenv import load_dotenv
 from prompt_toolkit import PromptSession, prompt
 from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
 from rich.console import Console
 
-from template import get_dojo_api_base_url
+from dojo import get_dojo_api_base_url
+from dojo.utils.config import source_dotenv
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 
-load_dotenv()
+source_dotenv()
 console = Console()
 
 

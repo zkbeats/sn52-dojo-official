@@ -8,13 +8,14 @@ from typing import Dict
 import bittensor as bt
 from bittensor.btlogging import logging as logger
 
-import template
+import dojo
 from commons.data_manager import DataManager
 from commons.objects import ObjectManager
 from commons.utils import get_epoch_time
 from database.prisma.models import Feedback_Request_Model, Miner_Response_Model
-from template.protocol import (
+from dojo.protocol import (
     CriteriaTypeEnum,
+    DendriteQueryResponse,
     MultiScoreCriteria,
     RankingCriteria,
     RidToHotKeyToTaskId,
@@ -53,7 +54,6 @@ class DojoTaskTracker:
             logger.warning("No Dojo responses found")
             return
 
-        logger.debug("update_task_map attempting to acquire lock")
         async with cls._lock:
             valid_responses: list[Miner_Response_Model] = list(
                 filter(
@@ -78,7 +78,6 @@ class DojoTaskTracker:
                 cls._task_to_expiry[r.dojo_task_id] = r.expire_at
 
             cls._rid_to_model_map[request_id] = obfuscated_model_to_model
-        logger.debug("released lock for task tracker")
         return
 
     @classmethod
@@ -105,7 +104,8 @@ class DojoTaskTracker:
                 # Remove from _task_to_expiry
                 del cls._task_to_expiry[task_id]
 
-        logger.info(f"Removed {len(expired_tasks)} expired tasks from DojoTaskTracker.")
+        if len(expired_tasks):
+            logger.info(f"Removed {len(expired_tasks)} expired tasks from task tracker")
 
     @classmethod
     async def get_task_results_from_miner(
@@ -158,12 +158,16 @@ class DojoTaskTracker:
     @classmethod
     async def monitor_task_completions(cls):
         SLEEP_SECONDS = 30
-        await asyncio.sleep(template.DOJO_TASK_MONITORING)
+        await asyncio.sleep(dojo.DOJO_TASK_MONITORING)
 
         while not cls._should_exit:
             try:
+                if len(cls._rid_to_mhotkey_to_task_id.keys()) == 0:
+                    await asyncio.sleep(SLEEP_SECONDS)
+                    continue
+
                 logger.info(
-                    f"Monitoring Dojo Task completions... {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id)} requests"
+                    f"Monitoring task completions {get_epoch_time()} for {len(cls._rid_to_mhotkey_to_task_id.keys())} requests"
                 )
 
                 # Clean up expired tasks before processing
@@ -178,7 +182,10 @@ class DojoTaskTracker:
                     miner_to_task_id = cls._rid_to_mhotkey_to_task_id[request_id]
                     processed_hotkeys = set()
 
-                    data = await DataManager.get_by_request_id(request_id)
+                    data: (
+                        DendriteQueryResponse | None
+                    ) = await DataManager.get_by_request_id(request_id)
+
                     if not data or not data.request:
                         logger.error(
                             f"No request on disk found for request id: {request_id}"
@@ -241,12 +248,15 @@ class DojoTaskTracker:
                         miner_response.axon = bt.TerminalInfo(
                             hotkey=miner_hotkey,
                         )
-                        for completion in miner_response.responses:
+                        miner_response.dojo_task_id = task_id
+                        for completion in miner_response.completion_responses:
                             model_id = completion.model
 
                             for criteria in miner_response.criteria_types:
                                 if isinstance(criteria, RankingCriteria):
-                                    completion.rank_id = model_id_to_avg_rank[model_id]
+                                    completion.rank_id = int(
+                                        model_id_to_avg_rank[model_id]
+                                    )
                                 elif isinstance(criteria, MultiScoreCriteria):
                                     completion.score = model_id_to_avg_score[model_id]
 
