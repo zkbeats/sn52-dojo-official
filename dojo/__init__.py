@@ -36,15 +36,11 @@ TASK_DEADLINE = 8 * 60 * 60
 
 # Define the time intervals for various tasks.
 VALIDATOR_RUN = 300
-VALIDATOR_HEARTBEAT = 60
-VALIDATOR_UPDATE_SCORE = 60
+VALIDATOR_HEARTBEAT = 150
+VALIDATOR_UPDATE_SCORE = 1200
 VALIDATOR_STATUS = 60
 MINER_STATUS = 60
 DOJO_TASK_MONITORING = 60
-
-# TODO remove, just for testing atm
-TASK_DEADLINE = 180
-VALIDATOR_RUN = 30
 
 
 def get_dojo_api_base_url() -> str:

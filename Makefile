@@ -1,6 +1,6 @@
 PRECOMMIT_VERSION="3.7.1"
 UNAME := $(shell uname)
-.PHONY: hooks btcli install install-dev install-test miner-decentralised miner-centralised validator miner-decentralised-logs miner-centralised-logs validator-logs
+.PHONY: hooks install install-dev install-test btcli validator-pull miner-pull miner-decentralised miner-centralised validator validator-up-deps miner-worker-api dojo-cli miner-decentralised-logs miner-centralised-logs validator-logs
 
 hooks:
 	@echo "Grabbing pre-commit version ${PRECOMMIT_VERSION} and installing pre-commit hooks"

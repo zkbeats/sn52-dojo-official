@@ -105,7 +105,7 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 ### System Requirements
 
 - 4 cores
-- 8 GB RAM
+- 16 GB RAM
 - 256 SSD
 
 ## Miner
@@ -119,7 +119,7 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 ### System Requirements
 
 - 2 cores
-- 4 GB RAM
+- 8 GB RAM
 - 32GB SSD
 
 # Getting Started

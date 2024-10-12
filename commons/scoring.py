@@ -263,7 +263,6 @@ class Scoring:
         miner_responses: List[FeedbackRequest],
     ):
         # determine the ground truth ordering based on request
-        # TODO change to get the data from the ground truth stored on disk
         # we can assume `model` is the same as the `completion_id`, see validator.obfuscate_model_names function
         model_score_tuples = _map_ground_truth_rank_to_score(
             criteria, request.ground_truth

@@ -83,7 +83,6 @@ if __name__ == "__main__":
 
     _, owner_wallet, _ = roles[Roles.SUBNET_OWNER.name]
     if create_new_subnet:
-        # TODO check subnet lock cost before register
         for r in Roles:
             # let alice be our subnet owner
             if r == Roles.SUBNET_OWNER:
