@@ -288,6 +288,7 @@ class Validator(BaseNeuron):
                 completion_responses=shuffled_completions,
                 task_type=synapse.task_type,
                 criteria_types=criteria_types,
+                expire_at=synapse.expire_at,
             )
 
             tasks.append(

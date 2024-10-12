@@ -4,11 +4,15 @@ from bittensor.btlogging import logging as logger
 
 from commons.dataset.synthetic import SyntheticAPI
 from commons.human_feedback.dojo import DojoAPI
+from commons.utils import set_expire_time
 from dojo.protocol import FeedbackRequest, MultiScoreCriteria, TaskType
 
 
 async def main():
     data = await SyntheticAPI.get_qa()
+    if data is None:
+        logger.error("Failed to generate synthetic data")
+        return
     model_names = [response.model for response in data.responses]
     if len(set(model_names)) == len(data.responses):
         logger.info("All responses have a unique model key")
@@ -25,6 +29,7 @@ async def main():
             else:
                 response.completion_id = f"{response.completion_id}_{index}"
 
+    expire_at = set_expire_time(8 * 3600)
     synapse = FeedbackRequest(
         task_type=str(TaskType.CODE_GENERATION),
         criteria_types=[
@@ -36,6 +41,7 @@ async def main():
         ],
         prompt=data.prompt,
         completion_responses=data.responses,
+        expire_at=expire_at,
     )
 
     task_response = await DojoAPI.create_task(synapse)

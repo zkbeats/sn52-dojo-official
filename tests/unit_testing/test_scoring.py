@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 import torch
 
+from commons.utils import set_expire_time
 from dojo.protocol import FeedbackRequest, RankingCriteria, TaskType
 
 # # Remove the default loguru handler
@@ -101,6 +102,7 @@ def mock_request(hotkey: str | None = None, scores: list[float] | None = None):
             MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
         ],
         completion_responses=responses,
+        expire_at=set_expire_time(8 * 3600),
     )
 
 
@@ -332,6 +334,7 @@ def mock_request_spm(
         criteria_types=[RankingCriteria(type="rank", options=[])],
         completion_responses=responses,
         ground_truth=ground_truth,
+        expire_at=set_expire_time(8 * 3600),
     )
 
 

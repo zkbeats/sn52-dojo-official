@@ -34,6 +34,7 @@ valid_feedback_request = FeedbackRequest(
             completion_id="test_uuid1234",
         )
     ],
+    expire_at="2024-10-12T09:45:25Z",
 )
 
 invalid_feedback_request = FeedbackRequest(
@@ -45,6 +46,7 @@ invalid_feedback_request = FeedbackRequest(
         MultiScoreCriteria(type="multi-score", options=[], min=0.0, max=100.0)
     ],
     completion_responses=[],  # Invalid because responses list is empty
+    expire_at="2024-10-12T09:45:25Z",
 )
 
 MOCK_HOTKEYS: list[str] = [
