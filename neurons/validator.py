@@ -408,7 +408,7 @@ class Validator(BaseNeuron):
             )
 
         logger.info(
-            f"⬆️ Sending feedback request for request id: {synapse.request_id}, miners uids:{sel_miner_uids}"
+            f"⬆️ Sending feedback request for request id: {synapse.request_id}, miners uids:{sel_miner_uids} with expire_at: {synapse.expire_at}"
         )
 
         miner_responses: List[FeedbackRequest] = await self._send_shuffled_requests(
