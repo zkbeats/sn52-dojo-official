@@ -1,4 +1,5 @@
 import argparse
+import asyncio
 import base64
 import hashlib
 import os
@@ -8,7 +9,7 @@ import string
 import subprocess
 import tempfile
 import time
-from typing import Callable
+from functools import partial
 
 from bittensor.btlogging import logging as logger
 from bs4 import BeautifulSoup
@@ -91,8 +92,9 @@ class JSObfuscator(Obfuscator):
         "--mangle-props",
         "--toplevel",
     ]
-    MAX_RETRIES = 3
-    RETRY_DELAY = 1  # seconds
+    MAX_RETRIES = 5
+    RETRY_DELAY = 1
+    TIMEOUT = 3
 
     @staticmethod
     def is_uglifyjs_available():
@@ -122,25 +124,44 @@ class JSObfuscator(Obfuscator):
                             capture_output=True,
                             text=True,
                             check=True,
+                            timeout=cls.TIMEOUT,
                         )
                         return result.stdout
+                    except subprocess.TimeoutExpired:
+                        logger.warning(
+                            f"Attempt {attempt + 1} timed out after {cls.TIMEOUT} seconds. Retrying..."
+                        )
                     except subprocess.CalledProcessError as e:
                         logger.warning(f"Attempt {attempt + 1} failed: {e}")
                         logger.warning(f"UglifyJS stderr: {e.stderr}")
-                        if attempt < cls.MAX_RETRIES - 1:
-                            time.sleep(cls.RETRY_DELAY)
-                        else:
-                            logger.error(
-                                f"All {cls.MAX_RETRIES} attempts to obfuscate with UglifyJS failed. Falling back to simple minification."
-                            )
-                            logger.error(f"Last UglifyJS error: {e.stderr}")
-                            return cls.simple_minify(js_code)
+
+                    if attempt < cls.MAX_RETRIES - 1:
+                        time.sleep(cls.RETRY_DELAY)
+                    else:
+                        logger.error(
+                            f"All {cls.MAX_RETRIES} attempts to obfuscate with UglifyJS failed. Falling back to simple minification."
+                        )
+                        return cls.simple_minify(js_code)
         else:
             logger.warning("UglifyJS not found. Falling back to simple minification.")
             return cls.simple_minify(js_code)
 
 
-def obfuscate_html_and_js(html_content):
+async def obfuscate_html_and_js(html_content, timeout=30):
+    loop = asyncio.get_event_loop()
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(
+                None, partial(_obfuscate_html_and_js_sync, html_content)
+            ),
+            timeout=timeout,
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Obfuscation timed out after {timeout} seconds")
+        return html_content  # Return original content if obfuscation times out
+
+
+def _obfuscate_html_and_js_sync(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
 
     # Obfuscate JavaScript content
@@ -153,7 +174,7 @@ def obfuscate_html_and_js(html_content):
     return HTMLObfuscator.obfuscate(obfuscated_html)
 
 
-def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
+async def process_file(input_file: str, output_file: str):
     try:
         with open(input_file, encoding="utf-8") as file:
             original_content = file.read()
@@ -164,7 +185,7 @@ def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
         logger.error(f"Error: Could not read the file '{input_file}'.")
         return
 
-    obfuscated = obfuscation_func(original_content)
+    obfuscated = await obfuscate_html_and_js(original_content)
 
     try:
         with open(output_file, "w", encoding="utf-8") as file:
@@ -182,7 +203,7 @@ def process_file(input_file: str, output_file: str, obfuscation_func: Callable):
 
 # Function to test the obfuscation
 # Command to run: python obfuscation_utils.py input.html
-def main():
+async def main():
     parser = argparse.ArgumentParser(
         description="Obfuscate HTML and JavaScript content"
     )
@@ -197,8 +218,8 @@ def main():
     input_name, input_ext = os.path.splitext(input_filename)
     output_file = args.output or f"{input_name}_obfuscated{input_ext}"
 
-    process_file(args.input_file, output_file, obfuscate_html_and_js)
+    await process_file(args.input_file, output_file)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
