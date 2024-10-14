@@ -33,7 +33,7 @@ jobs:
         with:
           image_name: ${{ github.repository }}
           image_tag: ${{ env.BRANCH_NAME }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.PAT }}
           dockerfile: ./docker/Dockerfile
 
       - name: Build and Push Docker Image with Semver Tag
@@ -41,4 +41,4 @@ jobs:
         uses: macbre/push-to-ghcr@master
         with:
           image_name: ${{ github.repository }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.PAT }}
