@@ -265,7 +265,7 @@ class Validator(BaseNeuron):
             )
 
             # Apply obfuscation to each completion's files
-            Validator._obfuscate_completion_files(shuffled_completions)
+            await Validator._obfuscate_completion_files(shuffled_completions)
 
             criteria_types = []
             # ensure criteria options same order as completion_responses
@@ -309,14 +309,16 @@ class Validator(BaseNeuron):
         return flat_responses
 
     @staticmethod
-    def _obfuscate_completion_files(completion_responses: List[CompletionResponses]):
+    async def _obfuscate_completion_files(
+        completion_responses: List[CompletionResponses],
+    ):
         """Obfuscate HTML files in each completion response."""
         for completion in completion_responses:
             if hasattr(completion.completion, "files"):
                 for file in completion.completion.files:
                     if file.filename.lower().endswith(".html"):
                         try:
-                            file.content = obfuscate_html_and_js(file.content)
+                            file.content = await obfuscate_html_and_js(file.content)
                         except Exception as e:
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 
