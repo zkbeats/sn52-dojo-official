@@ -31,4 +31,4 @@ jobs:
             @semantic-release/github
             conventional-changelog-conventionalcommits
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT }}
