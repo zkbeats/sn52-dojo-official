@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/tensorplex-labs/dojo/compare/v1.1.0...v1.1.1) (2024-10-14)
+
+### Bug Fixes
+
+* re-enable blacklist func ([a3b2c45](https://github.com/tensorplex-labs/dojo/commit/a3b2c45a2553a68042ffa2c1eabb2c454a522a36))
+* semantic release protected branch issue ([f3544c1](https://github.com/tensorplex-labs/dojo/commit/f3544c1a1407cacd31153fb383b7fdc326409813))
+
 ## [1.1.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.0...v1.1.0) (2024-10-12)
 
 ### Features
