@@ -108,6 +108,7 @@ class Validator(BaseNeuron):
                     if not task_batch:
                         break
 
+                    batch_id += 1
                     logger.info(
                         f"Processing batch {batch_id}, batch size: {batch_size}"
                     )
@@ -785,9 +786,10 @@ class Validator(BaseNeuron):
             try:
                 validator_hotkey = self.wallet.hotkey.ss58_address
                 batch_id = 0
+                batch_size = 10
                 async for task_batch, has_more_batches in ORM.get_unexpired_tasks(
                     validator_hotkeys=[validator_hotkey],
-                    batch_size=10,
+                    batch_size=batch_size,
                 ):
                     if not has_more_batches:
                         logger.success(
@@ -799,6 +801,7 @@ class Validator(BaseNeuron):
                     if not task_batch:
                         continue
 
+                    batch_id += 1
                     logger.info(f"Monitoring task completions, batch id: {batch_id}")
 
                     for task in task_batch:
@@ -859,6 +862,7 @@ class Validator(BaseNeuron):
                             logger.info(
                                 f"Updating task {request_id} with miner's completion data, success ? {success}"
                             )
+
             except NoNewUnexpiredTasksYet as e:
                 logger.info(f"No new unexpired tasks yet: {e}")
             except Exception as e:
