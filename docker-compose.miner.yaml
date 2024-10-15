@@ -1,3 +1,7 @@
+x-logging: &default-logging
+  options:
+    max-size: "50m"
+
 volumes:
   postgres-miner-volume:
   redis-miner-volume:
@@ -30,6 +34,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   postgres-miner:
     image: postgres:15.7
@@ -58,6 +63,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   prisma-setup-miner:
     platform: linux/amd64
@@ -77,6 +83,7 @@ services:
       - postgres-miner
     networks:
       - internal
+    logging: *default-logging
 
   sidecar:
     image: docker.io/parity/substrate-api-sidecar:v19.0.2
@@ -101,6 +108,7 @@ services:
       start_period: 30s
     networks:
       - internal
+    logging: *default-logging
 
   worker-api:
     env_file:
@@ -142,6 +150,7 @@ services:
       start_period: 30s
     networks:
       - internal
+    logging: *default-logging
 
   worker-ui:
     image: ghcr.io/tensorplex-labs/dojo-ui:tensorplex-prod
@@ -155,6 +164,7 @@ services:
     networks:
       - internal
       - external
+    logging: *default-logging
 
   dojo-cli:
     image: ghcr.io/tensorplex-labs/dojo:main
@@ -241,6 +251,7 @@ services:
     networks:
       - internal
       - external
+    logging: *default-logging
 
   miner-mainnet-centralised:
     image: ghcr.io/tensorplex-labs/dojo:main
@@ -261,3 +272,4 @@ services:
     networks:
       - internal
       - external
+    logging: *default-logging
