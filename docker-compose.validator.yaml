@@ -1,3 +1,7 @@
+x-logging: &default-logging
+  options:
+    max-size: "50m"
+
 volumes:
   postgres-validator-volume:
   redis-validator-volume:
@@ -31,6 +35,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   synthetic-api:
     image: ghcr.io/tensorplex-labs/dojo-synthetic-api:main
@@ -61,6 +66,7 @@ services:
     # allow docker commands inside container
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    logging: *default-logging
 
   postgres-vali:
     image: postgres:15.7
@@ -89,6 +95,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging: *default-logging
 
   prisma-setup-vali:
     platform: linux/amd64
@@ -106,6 +113,7 @@ services:
       - internal
     depends_on:
       - postgres-vali
+    logging: *default-logging
 
   # ============== TEST NET ============== #
 
@@ -137,6 +145,7 @@ services:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
+    logging: *default-logging
 
   # ============== MAIN NET ============== #
 
@@ -168,3 +177,4 @@ services:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
+    logging: *default-logging
