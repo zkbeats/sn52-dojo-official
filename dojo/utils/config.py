@@ -166,13 +166,6 @@ def add_args(parser):
 
     if neuron_type == "validator":
         parser.add_argument(
-            "--data_manager.base_path",
-            type=str,
-            help="Base path to store data to.",
-            default=base_path,
-        )
-
-        parser.add_argument(
             "--neuron.sample_size",
             type=int,
             help="The number of miners to query per dendrite call.",

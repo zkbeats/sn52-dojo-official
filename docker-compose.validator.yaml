@@ -127,7 +127,7 @@ services:
       - WANDB_PROJECT_NAME=dojo-testnet
       - NETUID=98
       - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=ws://test.finney.opentensor.ai
+      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443/
       - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
     volumes:
       - ./:/app

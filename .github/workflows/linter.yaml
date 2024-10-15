@@ -2,6 +2,7 @@ name: Run Linter
 
 on:
   pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
     branches:
       - dev
       - staging
@@ -9,6 +10,7 @@ on:
 
 jobs:
   lint:
+    if: github.event.pull_request.draft == false
     runs-on: self-hosted
     steps:
       - name: Checkout
@@ -17,7 +19,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5.1.1
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Pipx
         uses: CfirTsabari/actions-pipx@v1.0.2
@@ -25,4 +27,4 @@ jobs:
       - uses: chartboost/ruff-action@v1
         with:
           version: 0.4.10
-          args: 'check . --config pyproject.toml --no-cache'
+          args: "check . --config pyproject.toml --no-cache"

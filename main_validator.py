@@ -13,7 +13,6 @@ from commons.dataset.synthetic import SyntheticAPI
 from commons.objects import ObjectManager
 from database.client import connect_db, disconnect_db
 from dojo.utils.config import source_dotenv
-from neurons.validator import DojoTaskTracker
 
 source_dotenv()
 
@@ -27,7 +26,6 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Performing shutdown tasks...")
     validator._should_exit = True
-    DojoTaskTracker()._should_exit = True
     wandb.finish()
     validator.save_state()
     await SyntheticAPI._session.close()
@@ -56,7 +54,7 @@ async def main():
         asyncio.create_task(validator.log_validator_status()),
         asyncio.create_task(validator.run()),
         asyncio.create_task(validator.update_score_and_send_feedback()),
-        asyncio.create_task(DojoTaskTracker.monitor_task_completions()),
+        asyncio.create_task(validator.monitor_task_completions()),
         asyncio.create_task(validator.send_heartbeats()),
     ]
 

@@ -68,7 +68,6 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
 
     # Manually deepcopy neuron and data_manager, otherwise it is referenced to the same object
     config.neuron = copy.deepcopy(config.neuron)
-    config.data_manager = copy.deepcopy(config.data_manager)
 
     project_name = None
 
@@ -84,11 +83,6 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     config.neuron.full_path = (
         hide_sensitive_path(config.neuron.full_path)
         if config.neuron.full_path
-        else None
-    )
-    config.data_manager.base_path = (
-        hide_sensitive_path(config.data_manager.base_path)
-        if config.data_manager.base_path
         else None
     )
 
@@ -351,6 +345,10 @@ def set_expire_time(expire_in_seconds: int) -> str:
         .isoformat()
         .replace("+00:00", "Z")
     )
+
+
+def datetime_as_utc(datetime: datetime) -> datetime:
+    return datetime.replace(microsecond=0, tzinfo=timezone.utc)
 
 
 def is_valid_expiry(expire_at: str) -> bool:
