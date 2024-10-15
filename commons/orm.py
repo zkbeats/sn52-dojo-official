@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
 import torch
@@ -14,6 +14,7 @@ from commons.exceptions import (
     NoNewUnexpiredTasksYet,
     UnexpiredTasksAlreadyProcessed,
 )
+from commons.utils import datetime_as_utc
 from database.client import connect_db, disconnect_db, transaction
 from database.mappers import (
     map_child_feedback_request_to_model,
@@ -45,9 +46,52 @@ from dojo.protocol import (
 
 class ORM:
     @staticmethod
+    async def get_last_expire_at_cutoff(
+        validator_hotkeys: list[str],
+        expire_at: datetime = datetime_as_utc(
+            datetime.now(timezone.utc) - 1.5 * timedelta(seconds=TASK_DEADLINE)
+        ),
+    ) -> datetime:
+        """
+        Get the expire at cutoff for the query to `get_unexpired_tasks`
+        We use 1.5 * TASK_DEADLINE to overlap with the `expire_at` field in the
+        database so we don't miss out any data.
+
+        Args:
+            validator_hotkeys (list[str]): List of validator hotkeys.
+            expire_at (datetime, optional): _description_. Defaults to datetime_as_utc( datetime.now(timezone.utc) - 1.5 * timedelta(seconds=TASK_DEADLINE) ).
+
+        Raises:
+            ValueError: Unable to determine expire at cutoff
+
+        Returns:
+            datetime: Expire at cutoff
+        """
+        logger.debug(f"Expire at cutoff: {expire_at}")
+        vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
+            {
+                "hotkey": {"in": validator_hotkeys, "mode": "insensitive"},
+                "child_requests": {"some": {}},
+                "expire_at": {"gt": expire_at},
+                "is_processed": {"equals": False},
+            }
+        )
+
+        found = await Feedback_Request_Model.prisma().find_first(
+            where=vali_where_query_unprocessed,
+            order={"expire_at": "asc"},
+        )
+        if found:
+            return datetime_as_utc(found.expire_at)
+
+        # TODO @dev custom exception maybe
+        raise ValueError("Unable to determine expire at cutoff")
+
+    @staticmethod
     async def get_unexpired_tasks(
         validator_hotkeys: list[str],
         batch_size: int = 10,
+        expire_at: datetime | None = None,
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
         """Returns a batch of Feedback_Request_Model and a boolean indicating if there are more batches
 
@@ -56,6 +100,8 @@ class ORM:
             batch_size (int, optional): Number of tasks to return in a batch. Defaults to 10.
 
             1 task == 1 validator request, N miner responses
+            expire_at: (datetime | None) If provided, only tasks with expire_at after the provided datetime will be returned.
+            You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
 
         Raises:
             NoNewUnexpiredTasksYet: If no unexpired tasks are found for processing.
@@ -76,8 +122,10 @@ class ORM:
                 "parent_request": True,
             }
         )
-        # now = datetime(2024, 10, 15, 18, 49, 25, tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
+
+        now = datetime_as_utc(datetime.now(timezone.utc))
+        if expire_at:
+            now = expire_at
 
         vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
             {
@@ -112,8 +160,8 @@ class ORM:
             where=vali_where_query_processed,
         )
 
-        logger.info(f"Count of unprocessed tasks: {task_count_unprocessed}")
-        logger.info(f"Count of processed tasks: {task_count_processed}")
+        logger.debug(f"Count of unprocessed tasks: {task_count_unprocessed}")
+        logger.debug(f"Count of processed tasks: {task_count_processed}")
 
         logger.debug(
             f"Count of unprocessed tasks: {task_count_unprocessed}, count of processed tasks: {task_count_processed}"
@@ -204,7 +252,8 @@ class ORM:
         try:
             async with transaction() as tx:
                 num_updated = await tx.feedback_request_model.update_many(
-                    data={"is_processed": True}, where={"id": {"in": request_ids}}
+                    data={"is_processed": True},
+                    where={"request_id": {"in": request_ids}},
                 )
                 logger.success(
                     f"Marked {num_updated} records associated to {len(request_ids)} tasks as processed"
@@ -369,6 +418,12 @@ class ORM:
                         )
 
                         created_miner_models.append(created_miner_model)
+
+                        criteria_create_input = [
+                            map_criteria_type_to_model(criteria, created_miner_model.id)
+                            for criteria in miner_response.criteria_types
+                        ]
+                        await tx.criteria_type_model.create_many(criteria_create_input)
 
                         # Create related completions for miner responses
                         for completion in miner_response.completion_responses:

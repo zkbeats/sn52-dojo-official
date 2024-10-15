@@ -118,7 +118,7 @@ def add_args(parser):
     Adds relevant arguments to the parser for operation.
     """
     # Netuid Arg: The netuid of the subnet to connect to.
-    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=52)
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
@@ -127,7 +127,7 @@ def add_args(parser):
         type=str,
         help="Whether running a miner or validator",
     )
-    args, unknown = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     neuron_type = None
     if known_args := vars(args):
         neuron_type = known_args["neuron.type"]
@@ -162,6 +162,12 @@ def add_args(parser):
         "--env_file",
         type=str,
         help="Path to the environment file to use.",
+    )
+
+    parser.add_argument(
+        "--ignore_min_stake",
+        action="store_true",
+        help="Whether to always include self in monitoring queries, mainly for testing",
     )
 
     if neuron_type == "validator":

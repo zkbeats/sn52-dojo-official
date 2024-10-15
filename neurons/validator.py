@@ -24,7 +24,12 @@ from commons.exceptions import EmptyScores, InvalidMinerResponse, NoNewUnexpired
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.orm import ORM
 from commons.scoring import Scoring
-from commons.utils import get_epoch_time, get_new_uuid, init_wandb, set_expire_time
+from commons.utils import (
+    get_epoch_time,
+    get_new_uuid,
+    init_wandb,
+    set_expire_time,
+)
 from database.client import connect_db
 from dojo.base.neuron import BaseNeuron
 from dojo.protocol import (
@@ -90,17 +95,25 @@ class Validator(BaseNeuron):
                     if not is_miner(self.metagraph, uid)
                 ]
 
+                if get_config().ignore_min_stake:
+                    validator_hotkeys.append(self.wallet.hotkey.ss58_address)
+
                 batch_id = 0
                 # number of tasks to process in a batch
                 batch_size = 10
                 processed_request_ids = []
+
+                # TODO @dev not sure if this is necessary
+                expire_at = await ORM.get_last_expire_at_cutoff(validator_hotkeys)
                 async for (
                     task_batch,
                     has_more_batches,
-                ) in ORM.get_unexpired_tasks(validator_hotkeys, batch_size=batch_size):
+                ) in ORM.get_unexpired_tasks(
+                    validator_hotkeys, batch_size=batch_size, expire_at=expire_at
+                ):
                     if not has_more_batches:
                         logger.success(
-                            f"All tasks processed, total batches: {batch_id}, batch size: {batch_size}"
+                            f"📝 All tasks processed, total batches: {batch_id}, batch size: {batch_size}"
                         )
                         gc.collect()
                         break
@@ -110,7 +123,7 @@ class Validator(BaseNeuron):
 
                     batch_id += 1
                     logger.info(
-                        f"Processing batch {batch_id}, batch size: {batch_size}"
+                        f"📝 Processing batch {batch_id}, batch size: {batch_size}"
                     )
                     for task in task_batch:
                         criteria_to_miner_score, hotkey_to_score = (
@@ -120,15 +133,17 @@ class Validator(BaseNeuron):
                                 miner_responses=task.miner_responses,
                             )
                         )
-                        logger.debug(f"Got hotkey to score: {hotkey_to_score}")
+                        logger.debug(f"📝 Got hotkey to score: {hotkey_to_score}")
                         logger.debug(
-                            f"Initially had {len(task.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
+                            f"📝 Initially had {len(task.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
                         )
 
                         if not hotkey_to_score:
                             logger.info(
-                                "Did not manage to generate a dict of hotkey to score"
+                                "📝 Did not manage to generate a dict of hotkey to score"
                             )
+                            # append it anyways so we can cut off later
+                            processed_request_ids.append(task.request.request_id)
                             continue
 
                         self.update_scores(hotkey_to_scores=hotkey_to_score)
@@ -148,7 +163,7 @@ class Validator(BaseNeuron):
                                 or not hotkey_to_score
                             ):
                                 logger.warning(
-                                    "No criteria to miner scores available. Skipping calculating averages for wandb."
+                                    "📝 No criteria to miner scores available. Skipping calculating averages for wandb."
                                 )
                                 return
 
@@ -174,7 +189,7 @@ class Validator(BaseNeuron):
                             )
 
                             logger.info(
-                                f"mean miner scores across differerent criteria: consensus shape:{mean_weighted_consensus_scores}, gt shape:{mean_weighted_gt_scores}"
+                                f"📝 Mean miner scores across different criteria: consensus shape:{mean_weighted_consensus_scores}, gt shape:{mean_weighted_gt_scores}"
                             )
 
                             score_data = {}
@@ -434,8 +449,11 @@ class Validator(BaseNeuron):
         valid_miner_responses: List[FeedbackRequest] = []
         try:
             for miner_response in miner_responses:
+                miner_hotkey = (
+                    miner_response.axon.hotkey if miner_response.axon else "??"
+                )
                 logger.debug(
-                    f"Received response from miner: {miner_response.axon.hotkey, miner_response.dojo_task_id}"
+                    f"Received response from miner: {miner_hotkey, miner_response.dojo_task_id}"
                 )
                 # map obfuscated model names back to the original model names
                 real_model_ids = []
@@ -454,13 +472,11 @@ class Validator(BaseNeuron):
                     continue
 
                 if miner_response.dojo_task_id is None:
-                    logger.debug(
-                        "Miner must provide the dojo task id for scoring method dojo"
-                    )
+                    logger.debug(f"Miner {miner_hotkey} must provide the dojo task id")
                     continue
 
                 logger.debug(
-                    f"Successfully mapped obfuscated model names for {miner_response.axon.hotkey}"
+                    f"Successfully mapped obfuscated model names for {miner_hotkey}"
                 )
 
                 # update the miner response with the real model ids
@@ -472,7 +488,7 @@ class Validator(BaseNeuron):
         logger.info(f"⬇️ Got {len(valid_miner_responses)} valid responses")
 
         if valid_miner_responses is None or len(valid_miner_responses) == 0:
-            logger.warning("No valid miner responses to process... skipping")
+            logger.info("No valid miner responses to process... skipping")
             return
 
         # include the ground_truth to keep in data manager
@@ -742,10 +758,6 @@ class Validator(BaseNeuron):
     ) -> list[TaskResult]:
         """Fetch task results from the miner's Axon using Dendrite."""
         try:
-            logger.info(
-                f"Fetching task result from miner {miner_hotkey} for task {task_id}"
-            )
-
             if not self.dendrite:
                 raise ValueError("Dendrite not initialized")
 
@@ -764,15 +776,13 @@ class Validator(BaseNeuron):
                 axons=[miner_axon], synapse=task_synapse, deserialize=False
             )
 
-            logger.debug(f"TaskResult Response from miner {miner_hotkey}: {response}")
-
             if response and response[0]:
-                logger.info(
-                    f"Received task result from miner {miner_hotkey} for task {task_id}"
+                logger.debug(
+                    f"Received task result from miner {miner_hotkey} for task {task_id}, {response}"
                 )
                 return response[0].task_results
             else:
-                logger.warning(
+                logger.debug(
                     f"No task results found from miner {miner_hotkey} for task {task_id}"
                 )
                 return []
@@ -789,6 +799,10 @@ class Validator(BaseNeuron):
                     for uid, hotkey in enumerate(self.metagraph.hotkeys)
                     if not is_miner(self.metagraph, uid)
                 ]
+
+                if get_config().ignore_min_stake:
+                    validator_hotkeys.append(self.wallet.hotkey.ss58_address)
+
                 batch_id = 0
                 batch_size = 10
                 async for task_batch, has_more_batches in ORM.get_unexpired_tasks(
@@ -831,8 +845,8 @@ class Validator(BaseNeuron):
 
                             miner_hotkey = miner_response.axon.hotkey
                             task_id = miner_response.dojo_task_id
-                            task_results = await self._get_task_results_from_miner(
-                                miner_hotkey, task_id
+                            task_results = await asyncio.create_task(
+                                self._get_task_results_from_miner(miner_hotkey, task_id)
                             )
 
                             if not task_results and not len(task_results) > 0:
@@ -866,7 +880,7 @@ class Validator(BaseNeuron):
                             logger.info(
                                 f"Updating task {request_id} with miner's completion data, success ? {success}"
                             )
-
+                        await asyncio.sleep(0.2)
             except NoNewUnexpiredTasksYet as e:
                 logger.info(f"No new unexpired tasks yet: {e}")
             except Exception as e:
