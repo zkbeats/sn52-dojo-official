@@ -784,11 +784,15 @@ class Validator(BaseNeuron):
     async def monitor_task_completions(self):
         while not self._should_exit:
             try:
-                validator_hotkey = self.wallet.hotkey.ss58_address
+                validator_hotkeys = [
+                    hotkey
+                    for uid, hotkey in enumerate(self.metagraph.hotkeys)
+                    if not is_miner(self.metagraph, uid)
+                ]
                 batch_id = 0
                 batch_size = 10
                 async for task_batch, has_more_batches in ORM.get_unexpired_tasks(
-                    validator_hotkeys=[validator_hotkey],
+                    validator_hotkeys=validator_hotkeys,
                     batch_size=batch_size,
                 ):
                     if not has_more_batches:
