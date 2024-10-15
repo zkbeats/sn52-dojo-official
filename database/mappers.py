@@ -5,7 +5,11 @@ import bittensor as bt
 from loguru import logger
 
 from commons.exceptions import InvalidMinerResponse, InvalidValidatorRequest
-from commons.utils import datetime_as_utc
+from commons.utils import (
+    datetime_as_utc,
+    datetime_to_iso8601_str,
+    iso8601_str_to_datetime,
+)
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum
 from database.prisma.models import Criteria_Type_Model, Feedback_Request_Model
@@ -105,7 +109,7 @@ def map_completion_response_to_model(
     result = Completion_Response_ModelCreateInput(
         completion_id=response.completion_id,
         model=response.model,
-        completion=Json(json.dumps(response.completion)),
+        completion=Json(json.dumps(response.completion, default=vars)),
         rank_id=response.rank_id,
         score=response.score,
         feedback_request_id=feedback_request_id,
@@ -122,7 +126,7 @@ def map_parent_feedback_request_to_model(
     if not request.expire_at:
         raise InvalidValidatorRequest("Expire at is required")
 
-    expire_at = datetime.fromisoformat(request.expire_at)
+    expire_at = iso8601_str_to_datetime(request.expire_at)
     if expire_at < datetime.now(timezone.utc):
         raise InvalidValidatorRequest("Expire at must be in the future")
 
@@ -218,9 +222,7 @@ def map_feedback_request_model_to_feedback_request(
                 criteria_types=criteria_types,
                 completion_responses=completion_responses,
                 dojo_task_id=model.dojo_task_id,
-                expire_at=model.expire_at.replace(microsecond=0, tzinfo=timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                expire_at=datetime_to_iso8601_str(model.expire_at),
                 axon=bt.TerminalInfo(hotkey=model.hotkey),
             )
         else:
@@ -231,9 +233,7 @@ def map_feedback_request_model_to_feedback_request(
                 criteria_types=criteria_types,
                 completion_responses=completion_responses,
                 dojo_task_id=model.dojo_task_id,
-                expire_at=model.expire_at.replace(microsecond=0, tzinfo=timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                expire_at=datetime_to_iso8601_str(model.expire_at),
                 dendrite=bt.TerminalInfo(hotkey=model.hotkey),
                 ground_truth=ground_truth,
             )

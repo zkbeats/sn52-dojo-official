@@ -52,3 +52,11 @@ class EmptyScores(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+
+class CreateTaskFailed(Exception):
+    """Exception raised when creating a task fails."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)

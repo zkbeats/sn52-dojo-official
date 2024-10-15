@@ -17,14 +17,15 @@ enum CriteriaTypeEnum {
 }
 
 model Ground_Truth_Model {
-    id                  String @id @default(uuid())
+    id                  String                 @id @default(uuid())
     request_id          String
     obfuscated_model_id String
     real_model_id       String
     rank_id             Int
-
     feedback_request    Feedback_Request_Model @relation(fields: [feedback_request_id], references: [id])
     feedback_request_id String
+    created_at          DateTime               @default(now())
+    updated_at          DateTime               @updatedAt
 
     @@unique([request_id, obfuscated_model_id, rank_id])
 }

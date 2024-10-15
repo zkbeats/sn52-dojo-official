@@ -1,5 +1,6 @@
 import asyncio
 import copy
+import gc
 import random
 import time
 import traceback
@@ -19,7 +20,7 @@ from torch.nn import functional as F
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import EmptyScores, InvalidMinerResponse
+from commons.exceptions import EmptyScores, InvalidMinerResponse, NoNewUnexpiredTasksYet
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.orm import ORM
 from commons.scoring import Scoring
@@ -81,6 +82,7 @@ class Validator(BaseNeuron):
     async def update_score_and_send_feedback(self):
         while True:
             await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+            logger.info("📝 performing scoring ...")
             try:
                 validator_hotkeys = [
                     hotkey
@@ -100,6 +102,7 @@ class Validator(BaseNeuron):
                         logger.success(
                             f"All tasks processed, total batches: {batch_id}, batch size: {batch_size}"
                         )
+                        gc.collect()
                         break
 
                     if not task_batch:
@@ -473,6 +476,7 @@ class Validator(BaseNeuron):
 
         # include the ground_truth to keep in data manager
         synapse.ground_truth = data.ground_truth
+        synapse.dendrite.hotkey = self.wallet.hotkey.ss58_address
         response_data = DendriteQueryResponse(
             request=synapse,
             miner_responses=valid_miner_responses,
@@ -777,9 +781,6 @@ class Validator(BaseNeuron):
             return []
 
     async def monitor_task_completions(self):
-        SLEEP_SECONDS = 30
-        await asyncio.sleep(dojo.DOJO_TASK_MONITORING)
-
         while not self._should_exit:
             try:
                 validator_hotkey = self.wallet.hotkey.ss58_address
@@ -792,6 +793,7 @@ class Validator(BaseNeuron):
                         logger.success(
                             "No more unexpired tasks found for processing, exiting task monitoring."
                         )
+                        gc.collect()
                         break
 
                     if not task_batch:
@@ -857,12 +859,13 @@ class Validator(BaseNeuron):
                             logger.info(
                                 f"Updating task {request_id} with miner's completion data, success ? {success}"
                             )
-
+            except NoNewUnexpiredTasksYet as e:
+                logger.info(f"No new unexpired tasks yet: {e}")
             except Exception as e:
                 traceback.print_exc()
                 logger.error(f"Error during Dojo task monitoring {str(e)}")
                 pass
-            await asyncio.sleep(SLEEP_SECONDS)
+            await asyncio.sleep(dojo.DOJO_TASK_MONITORING)
 
     @staticmethod
     def _calculate_averages(

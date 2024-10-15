@@ -1,9 +1,11 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 from typing import AsyncGenerator, List
 
 import torch
 from bittensor.btlogging import logging as logger
+from dotenv import find_dotenv, load_dotenv
 
 from commons.exceptions import (
     InvalidCompletion,
@@ -12,7 +14,7 @@ from commons.exceptions import (
     NoNewUnexpiredTasksYet,
     UnexpiredTasksAlreadyProcessed,
 )
-from database.client import transaction
+from database.client import connect_db, disconnect_db, transaction
 from database.mappers import (
     map_child_feedback_request_to_model,
     map_completion_response_to_model,
@@ -74,13 +76,16 @@ class ORM:
                 "parent_request": True,
             }
         )
+        # now = datetime(2024, 10, 15, 18, 49, 25, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+
         vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
             {
                 "hotkey": {"in": validator_hotkeys, "mode": "insensitive"},
                 "child_requests": {"some": {}},
                 # only check for expire at since miner may lie
                 "expire_at": {
-                    "gt": datetime.now(timezone.utc),
+                    "gt": now,
                 },
                 "is_processed": {"equals": False},
             }
@@ -92,7 +97,7 @@ class ORM:
                 "child_requests": {"some": {}},
                 # only check for expire at since miner may lie
                 "expire_at": {
-                    "gt": datetime.now(timezone.utc),
+                    "gt": now,
                 },
                 "is_processed": {"equals": True},
             }
@@ -105,6 +110,13 @@ class ORM:
 
         task_count_processed = await Feedback_Request_Model.prisma().count(
             where=vali_where_query_processed,
+        )
+
+        logger.info(f"Count of unprocessed tasks: {task_count_unprocessed}")
+        logger.info(f"Count of processed tasks: {task_count_processed}")
+
+        logger.debug(
+            f"Count of unprocessed tasks: {task_count_unprocessed}, count of processed tasks: {task_count_processed}"
         )
 
         if not task_count_unprocessed:
@@ -436,3 +448,20 @@ class ORM:
             return None
 
         return torch.tensor(json.loads(score_record.score))
+
+
+async def _test_get_unexpired_tasks():
+    load_dotenv(find_dotenv(".env.validator"))
+    await connect_db()
+    batch_id = 0
+    async for task_batch, has_more_batches in ORM.get_unexpired_tasks(
+        validator_hotkeys=["5Hdf4hSQoLGj4JyJuabTnp85ZYKezLE366SXqkWYjcUw5PfJ"]
+    ):
+        for task in task_batch:
+            print(f"Task expire_at: {task.request.expire_at}")
+        batch_id += 1
+    await disconnect_db()
+
+
+if __name__ == "__main__":
+    asyncio.run(_test_get_unexpired_tasks())

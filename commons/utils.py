@@ -28,6 +28,18 @@ def get_epoch_time():
     return time.time()
 
 
+def datetime_as_utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=timezone.utc)
+
+
+def datetime_to_iso8601_str(dt: datetime) -> str:
+    return dt.replace(tzinfo=timezone.utc).isoformat()
+
+
+def iso8601_str_to_datetime(dt_str: str) -> datetime:
+    return datetime.fromisoformat(dt_str).replace(tzinfo=timezone.utc)
+
+
 def loaddotenv(varname: str):
     """Wrapper to get env variables for sanity checking"""
     value = os.getenv(varname)
@@ -325,10 +337,6 @@ def ttl_get_block(subtensor) -> int:
     return subtensor.get_current_block()
 
 
-def get_current_utc_time_iso():
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def set_expire_time(expire_in_seconds: int) -> str:
     """
     Sets the expiration time based on the current UTC time and the given number of seconds.
@@ -341,14 +349,10 @@ def set_expire_time(expire_in_seconds: int) -> str:
     """
     return (
         (datetime.now(timezone.utc) + timedelta(seconds=expire_in_seconds))
-        .replace(microsecond=0, tzinfo=timezone.utc)
+        .replace(tzinfo=timezone.utc)
         .isoformat()
         .replace("+00:00", "Z")
     )
-
-
-def datetime_as_utc(datetime: datetime) -> datetime:
-    return datetime.replace(microsecond=0, tzinfo=timezone.utc)
 
 
 def is_valid_expiry(expire_at: str) -> bool:

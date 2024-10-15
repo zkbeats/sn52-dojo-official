@@ -108,6 +108,7 @@ class Miner(BaseMinerNeuron):
             synapse.dojo_task_id = task_ids[0]
 
         except Exception:
+            traceback.print_exc()
             logger.error(
                 f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
             )
