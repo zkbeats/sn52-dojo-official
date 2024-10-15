@@ -1,3 +1,9 @@
+## [1.1.2](https://github.com/tensorplex-labs/dojo/compare/v1.1.1...v1.1.2) (2024-10-15)
+
+### Bug Fixes
+
+* added log retention to avoid storage buildup ([#16](https://github.com/tensorplex-labs/dojo/issues/16)) ([4989184](https://github.com/tensorplex-labs/dojo/commit/4989184b0dde96a0c7c0e9cd9bb24b4bf1b442ff))
+
 ## [1.1.1](https://github.com/tensorplex-labs/dojo/compare/v1.1.0...v1.1.1) (2024-10-14)
 
 ### Bug Fixes
