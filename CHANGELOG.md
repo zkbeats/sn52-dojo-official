@@ -1,3 +1,41 @@
+## [1.1.2](https://github.com/tensorplex-labs/dojo/compare/v1.1.1...v1.1.2) (2024-10-15)
+
+### Bug Fixes
+
+* added log retention to avoid storage buildup ([#16](https://github.com/tensorplex-labs/dojo/issues/16)) ([4989184](https://github.com/tensorplex-labs/dojo/commit/4989184b0dde96a0c7c0e9cd9bb24b4bf1b442ff))
+
+## [1.1.1](https://github.com/tensorplex-labs/dojo/compare/v1.1.0...v1.1.1) (2024-10-14)
+
+### Bug Fixes
+
+* re-enable blacklist func ([a3b2c45](https://github.com/tensorplex-labs/dojo/commit/a3b2c45a2553a68042ffa2c1eabb2c454a522a36))
+* semantic release protected branch issue ([f3544c1](https://github.com/tensorplex-labs/dojo/commit/f3544c1a1407cacd31153fb383b7fdc326409813))
+
+## [1.1.0](https://github.com/tensorplex-labs/dojo/compare/v1.0.0...v1.1.0) (2024-10-12)
+
+### Features
+
+* add obfuscation to synthetic code outputs ([79f0e24](https://github.com/tensorplex-labs/dojo/commit/79f0e24db969695bfbc4e39e0ee3f220ae4773b3))
+* allow pointing to env file, otherwise default to .env ([6060707](https://github.com/tensorplex-labs/dojo/commit/6060707d2b76410b93df28fdd222ac5541f4c763))
+
+### Bug Fixes
+
+* add missing port ([653ddfc](https://github.com/tensorplex-labs/dojo/commit/653ddfcefc80f6ec68f86b763719dbc3babf1698))
+* criteria options ordering, unit test warnings ([26ce2e3](https://github.com/tensorplex-labs/dojo/commit/26ce2e340bf9c3c6bf6da5eb2022f156d5ca3786))
+* database initialisation errors ([7c701d9](https://github.com/tensorplex-labs/dojo/commit/7c701d92cecc5ee85031e08819a3655d11dff565))
+* fixed _send_shuffled_requests return nested array of FeedbackRequest ([6cce1cc](https://github.com/tensorplex-labs/dojo/commit/6cce1cc21f08a93e1cdd438802108e16d3c7cf7d))
+* fixed on completion_id constriant error, and dojo_task_id not found while the overwriting miner response ([adbe518](https://github.com/tensorplex-labs/dojo/commit/adbe5180e8662e540871a8ad81b32038a2924053))
+* missing expire_at from vali to miner ([aa296b1](https://github.com/tensorplex-labs/dojo/commit/aa296b1ad23c032c29b88330697e29e04e51be41))
+* revert docker compose and validator run ([d50af40](https://github.com/tensorplex-labs/dojo/commit/d50af401fb7843d37b41509675d2e21fb6c8df20))
+* scoring ([7b1ea8e](https://github.com/tensorplex-labs/dojo/commit/7b1ea8ee4fd02e4bf607094dfb95a45356c84945))
+* uglifyjs not found error ([9ab36b9](https://github.com/tensorplex-labs/dojo/commit/9ab36b93ebdde80d9bb6a1a42d18edc01769540e))
+
+### Performance Improvements
+
+* add retries to obfuscation ([#5](https://github.com/tensorplex-labs/dojo/issues/5)) ([40204ed](https://github.com/tensorplex-labs/dojo/commit/40204ed005a2b4caa95e4d1be40a669170a8eb64))
+* add synthetic qa model validator, remove default 5/10 skip scoring ([26a5344](https://github.com/tensorplex-labs/dojo/commit/26a5344b465de7cd25c083f14a0a9a894606a537))
+* shuffle responses sent to miners ([b5133c3](https://github.com/tensorplex-labs/dojo/commit/b5133c361d843fc43a90f13ad0870c54fa77c2cb))
+
 ## 1.0.0 (2024-10-10)
 
 ### ⚠ BREAKING CHANGES
