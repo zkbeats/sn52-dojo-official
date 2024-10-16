@@ -5,13 +5,14 @@ import httpx
 from bittensor.btlogging import logging as logger
 
 import dojo
+from commons.exceptions import CreateTaskFailed
 from commons.utils import loaddotenv, set_expire_time
 from dojo import get_dojo_api_base_url
 from dojo.protocol import FeedbackRequest, MultiScoreCriteria, RankingCriteria
 
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 # to be able to get the curlify requests
-DEBUG = False
+# DEBUG = False
 
 
 class DojoAPI:
@@ -57,7 +58,7 @@ class DojoAPI:
         return task_results
 
     @staticmethod
-    def serialize_feedback_request(data: FeedbackRequest) -> Dict[str, str]:
+    def serialize_feedback_request(data: FeedbackRequest):
         output = dict(
             prompt=data.prompt,
             responses=[],
@@ -83,66 +84,87 @@ class DojoAPI:
         cls,
         feedback_request: FeedbackRequest,
     ):
-        logger.debug("Creating Task....")
-        path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
-        taskData = cls.serialize_feedback_request(feedback_request)
-        for criteria_type in feedback_request.criteria_types:
-            if isinstance(criteria_type, RankingCriteria) or isinstance(
-                criteria_type, MultiScoreCriteria
-            ):
-                taskData["criteria"].append(
-                    {
-                        **criteria_type.model_dump(),
-                        "options": [
-                            option
-                            for option in criteria_type.model_dump().get("options", [])
-                        ],
-                    }
-                )
-            else:
-                logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
+        response_text = ""
+        response_json = {}
+        try:
+            path = f"{DOJO_API_BASE_URL}/api/v1/tasks/create-tasks"
+            taskData = cls.serialize_feedback_request(feedback_request)
+            for criteria_type in feedback_request.criteria_types:
+                if isinstance(criteria_type, RankingCriteria) or isinstance(
+                    criteria_type, MultiScoreCriteria
+                ):
+                    taskData["criteria"].append(
+                        {
+                            **criteria_type.model_dump(),
+                            "options": [
+                                option
+                                for option in criteria_type.model_dump().get(
+                                    "options", []
+                                )
+                            ],
+                        }
+                    )
+                else:
+                    logger.error(f"Unrecognized criteria type: {type(criteria_type)}")
 
-        expire_at = set_expire_time(dojo.TASK_DEADLINE)
+            expire_at = set_expire_time(dojo.TASK_DEADLINE)
 
-        form_body = {
-            "title": ("", "LLM Code Generation Task"),
-            "body": ("", feedback_request.prompt),
-            "expireAt": ("", expire_at),
-            "taskData": ("", json.dumps([taskData])),
-            "maxResults": ("", "1"),
-        }
+            form_body = {
+                "title": ("", "LLM Code Generation Task"),
+                "body": ("", feedback_request.prompt),
+                "expireAt": ("", expire_at),
+                "taskData": ("", json.dumps([taskData])),
+                "maxResults": ("", "1"),
+            }
 
-        DOJO_API_KEY = loaddotenv("DOJO_API_KEY")
+            DOJO_API_KEY = loaddotenv("DOJO_API_KEY")
 
-        response = await cls._http_client.post(
-            path,
-            files=form_body,
-            headers={
-                "x-api-key": DOJO_API_KEY,
-            },
-            timeout=15.0,
-        )
-
-        if DEBUG is True:
-            try:
-                from curlify2 import Curlify
-
-                curl_req = Curlify(response.request)
-                print("CURL REQUEST >>> ")
-                print(curl_req.to_curl())
-            except ImportError:
-                print("Curlify not installed")
-            except Exception as e:
-                print("Tried to export create task request as curl, but failed.")
-                print(f"Exception: {e}")
-
-        task_ids = []
-        if response.status_code == 200:
-            task_ids = response.json()["body"]
-            logger.success(f"Successfully created task with\ntask ids:{task_ids}")
-        else:
-            logger.error(
-                f"Error occurred when trying to create task\nErr:{response.json()['error']}"
+            response = await cls._http_client.post(
+                path,
+                files=form_body,
+                headers={
+                    "x-api-key": DOJO_API_KEY,
+                },
+                timeout=15.0,
             )
-        response.raise_for_status()
-        return task_ids
+
+            response_text = response.text
+            response_json = response.json()
+            # if DEBUG is True:
+            #     try:
+            #         from curlify2 import Curlify
+
+            #         curl_req = Curlify(response.request)
+            #         print("CURL REQUEST >>> ")
+            #         print(curl_req.to_curl())
+            #     except ImportError:
+            #         print("Curlify not installed")
+            #     except Exception as e:
+            #         print("Tried to export create task request as curl, but failed.")
+            #         print(f"Exception: {e}")
+
+            task_ids = []
+            if response.status_code == 200:
+                task_ids = response.json()["body"]
+                logger.success(f"Successfully created task with\ntask ids:{task_ids}")
+            else:
+                logger.error(
+                    f"Error occurred when trying to create task\nErr:{response.json()['error']}"
+                )
+            response.raise_for_status()
+            return task_ids
+        except json.JSONDecodeError as e1:
+            message = f"While trying to create task got JSON decode error: {e1}, response_text: {response_text}"
+            logger.error(message)
+            raise CreateTaskFailed("Failed to create task due to JSON decode error")
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                f"HTTP error occurred: {e}. Status code: {e.response.status_code}. Response content: {e.response.text}"
+            )
+            raise CreateTaskFailed(
+                f"Failed to create task due to HTTP error: {e}, response_text: {response_text}, response_json: {response_json}"
+            )
+        except Exception as e:
+            raise CreateTaskFailed(
+                f"Failed to create task due to unexpected error: {e}, response_text: {response_text}, response_json: {response_json}"
+            )

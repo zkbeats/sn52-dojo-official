@@ -197,21 +197,28 @@ class Scoring:
 
         # this works because we are calculating ICC for each rater VS the avg
         for rater_id in rater_ids:
-            data_by_rater = df[["subject", rater_id, "avg"]]
-            # only use the columns for the current rater and avg
-            data_by_rater = data_by_rater.melt(
-                id_vars=["subject"], var_name=rater_id, value_name="score"
-            )
-            icc = pg.intraclass_corr(
-                data=data_by_rater,
-                targets="subject",
-                raters=rater_id,
-                ratings="score",
-            )
+            try:
+                data_by_rater = df[["subject", rater_id, "avg"]]
+                # only use the columns for the current rater and avg
+                data_by_rater = data_by_rater.melt(
+                    id_vars=["subject"], var_name=rater_id, value_name="score"
+                )
+                icc = pg.intraclass_corr(
+                    data=data_by_rater,
+                    targets="subject",
+                    raters=rater_id,
+                    ratings="score",
+                )
 
-            # take ICC(2,1)
-            icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
-            icc_arr.append(icc2_value)
+                # take ICC(2,1)
+                icc2_value = icc[icc["Type"] == "ICC2"]["ICC"].iloc[0]
+                icc_arr.append(icc2_value)
+
+            except Exception as e:
+                logger.error(f"Error calculating ICC for rater {rater_id}: {e}")
+                logger.debug(f"Data by rater: {data_by_rater}")
+                continue
+
         # already in the range [0, 1]
         icc_arr: torch.Tensor = torch.tensor(np.array(icc_arr))
 

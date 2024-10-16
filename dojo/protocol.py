@@ -175,6 +175,7 @@ class Heartbeat(bt.Synapse):
     ack: bool = Field(description="Acknowledgement of the heartbeat", default=False)
 
 
+# TODO rename this to be a Task or something
 class DendriteQueryResponse(BaseModel):
     model_config = ConfigDict(frozen=False)
     request: FeedbackRequest

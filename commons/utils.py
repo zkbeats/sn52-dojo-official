@@ -28,6 +28,18 @@ def get_epoch_time():
     return time.time()
 
 
+def datetime_as_utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=timezone.utc)
+
+
+def datetime_to_iso8601_str(dt: datetime) -> str:
+    return dt.replace(tzinfo=timezone.utc).isoformat()
+
+
+def iso8601_str_to_datetime(dt_str: str) -> datetime:
+    return datetime.fromisoformat(dt_str).replace(tzinfo=timezone.utc)
+
+
 def loaddotenv(varname: str):
     """Wrapper to get env variables for sanity checking"""
     value = os.getenv(varname)
@@ -68,7 +80,6 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
 
     # Manually deepcopy neuron and data_manager, otherwise it is referenced to the same object
     config.neuron = copy.deepcopy(config.neuron)
-    config.data_manager = copy.deepcopy(config.data_manager)
 
     project_name = None
 
@@ -84,11 +95,6 @@ def init_wandb(config: bt.config, my_uid, wallet: bt.wallet):
     config.neuron.full_path = (
         hide_sensitive_path(config.neuron.full_path)
         if config.neuron.full_path
-        else None
-    )
-    config.data_manager.base_path = (
-        hide_sensitive_path(config.data_manager.base_path)
-        if config.data_manager.base_path
         else None
     )
 
@@ -331,10 +337,6 @@ def ttl_get_block(subtensor) -> int:
     return subtensor.get_current_block()
 
 
-def get_current_utc_time_iso():
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
 def set_expire_time(expire_in_seconds: int) -> str:
     """
     Sets the expiration time based on the current UTC time and the given number of seconds.
@@ -347,7 +349,7 @@ def set_expire_time(expire_in_seconds: int) -> str:
     """
     return (
         (datetime.now(timezone.utc) + timedelta(seconds=expire_in_seconds))
-        .replace(microsecond=0, tzinfo=timezone.utc)
+        .replace(tzinfo=timezone.utc)
         .isoformat()
         .replace("+00:00", "Z")
     )

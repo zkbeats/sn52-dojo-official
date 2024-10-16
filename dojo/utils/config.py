@@ -118,7 +118,7 @@ def add_args(parser):
     Adds relevant arguments to the parser for operation.
     """
     # Netuid Arg: The netuid of the subnet to connect to.
-    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
+    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=52)
 
     neuron_types = ["miner", "validator"]
     parser.add_argument(
@@ -127,7 +127,7 @@ def add_args(parser):
         type=str,
         help="Whether running a miner or validator",
     )
-    args, unknown = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     neuron_type = None
     if known_args := vars(args):
         neuron_type = known_args["neuron.type"]
@@ -164,19 +164,18 @@ def add_args(parser):
         help="Path to the environment file to use.",
     )
 
-    if neuron_type == "validator":
-        parser.add_argument(
-            "--data_manager.base_path",
-            type=str,
-            help="Base path to store data to.",
-            default=base_path,
-        )
+    parser.add_argument(
+        "--ignore_min_stake",
+        action="store_true",
+        help="Whether to always include self in monitoring queries, mainly for testing",
+    )
 
+    if neuron_type == "validator":
         parser.add_argument(
             "--neuron.sample_size",
             type=int,
             help="The number of miners to query per dendrite call.",
-            default=10,
+            default=8,
         )
 
         parser.add_argument(

@@ -14,6 +14,7 @@ from commons.utils import get_epoch_time
 from dojo import MINER_STATUS, VALIDATOR_MIN_STAKE
 from dojo.base.miner import BaseMinerNeuron
 from dojo.protocol import FeedbackRequest, Heartbeat, ScoringResult, TaskResultRequest
+from dojo.utils.config import get_config
 from dojo.utils.uids import is_miner
 
 
@@ -108,6 +109,7 @@ class Miner(BaseMinerNeuron):
             synapse.dojo_task_id = task_ids[0]
 
         except Exception:
+            traceback.print_exc()
             logger.error(
                 f"Error occurred while processing request id: {synapse.request_id}, error: {traceback.format_exc()}"
             )
@@ -134,6 +136,7 @@ class Miner(BaseMinerNeuron):
             return synapse
 
         except Exception as e:
+            traceback.print_exc()
             logger.error(f"Error handling TaskResultRequest: {e}")
             return synapse
 
@@ -156,6 +159,15 @@ class Miner(BaseMinerNeuron):
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
         if is_miner(self.metagraph, caller_uid):
             return True, "Not a validator"
+
+        if get_config().ignore_min_stake:
+            message = f"""Ignoring min stake stake required: {VALIDATOR_MIN_STAKE} \
+                for {caller_hotkey}, YOU SHOULD NOT SEE THIS when you are running a miner on mainnet"""
+            logger.warning(message)
+            return (
+                False,
+                f"Ignored minimum validator stake requirement of {VALIDATOR_MIN_STAKE}",
+            )
 
         if validator_neuron.stake.tao < float(VALIDATOR_MIN_STAKE):
             logger.warning(
