@@ -174,9 +174,7 @@ class Scoring:
         # create df with the original number of completions
         df = pd.DataFrame(
             {
-                "subject": [
-                    i for i in range(len(miner_responses[0].completion_responses))
-                ],
+                "subject": [i for i in range(len(request.completion_responses))],
             }
         )
         # prepare dataframe for calculating ICC

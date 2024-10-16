@@ -1,11 +1,9 @@
-import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
 import torch
 from bittensor.btlogging import logging as logger
-from dotenv import find_dotenv, load_dotenv
 
 from commons.exceptions import (
     InvalidCompletion,
@@ -15,7 +13,7 @@ from commons.exceptions import (
     UnexpiredTasksAlreadyProcessed,
 )
 from commons.utils import datetime_as_utc
-from database.client import connect_db, disconnect_db, transaction
+from database.client import transaction
 from database.mappers import (
     map_child_feedback_request_to_model,
     map_completion_response_to_model,
@@ -39,6 +37,8 @@ from database.prisma.types import (
 )
 from dojo import TASK_DEADLINE
 from dojo.protocol import (
+    CodeAnswer,
+    CompletionResponses,
     DendriteQueryResponse,
     FeedbackRequest,
 )
@@ -88,12 +88,15 @@ class ORM:
         raise ValueError("Unable to determine expire at cutoff")
 
     @staticmethod
-    async def get_unexpired_tasks(
+    async def get_expired_tasks(
         validator_hotkeys: list[str],
         batch_size: int = 10,
         expire_at: datetime | None = None,
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
-        """Returns a batch of Feedback_Request_Model and a boolean indicating if there are more batches
+        """Returns a batch of Feedback_Request_Model and a boolean indicating if there are more batches.
+        Depending on the `expire_at` provided, it will return different results.
+
+        YOUR LOGIC ON WHETHER TASKS ARE EXPIRED OR NON-EXPIRED SHOULD BE HANDLED BY SETTING EXPIRE_AT YOURSELF.
 
         Args:
             validator_hotkeys (list[str]): List of validator hotkeys.
@@ -427,8 +430,16 @@ class ORM:
 
                         # Create related completions for miner responses
                         for completion in miner_response.completion_responses:
+                            # remove the completion field, since the miner receives an obfuscated completion_response anyways
+                            # therefore it is useless for training
+                            try:
+                                completion_copy = completion.model_dump()
+                                completion_copy["completion"] = CodeAnswer(files=[])
+                            except KeyError:
+                                pass
                             completion_input = map_completion_response_to_model(
-                                completion, created_miner_model.id
+                                CompletionResponses.model_validate(completion_copy),
+                                created_miner_model.id,
                             )
                             await tx.completion_response_model.create(
                                 data=completion_input
@@ -470,6 +481,14 @@ class ORM:
                     await tx.ground_truth_model.create(
                         data=Ground_Truth_ModelCreateInput(**gt_create_input)
                     )
+                for vali_completion in validator_request.completion_responses:
+                    vali_completion_input = map_completion_response_to_model(
+                        vali_completion,
+                        feedback_request_model.id,
+                    )
+                    await tx.completion_response_model.create(
+                        data=vali_completion_input
+                    )
 
                 feedback_request_model.child_requests = created_miner_models
             return feedback_request_model
@@ -503,20 +522,3 @@ class ORM:
             return None
 
         return torch.tensor(json.loads(score_record.score))
-
-
-async def _test_get_unexpired_tasks():
-    load_dotenv(find_dotenv(".env.validator"))
-    await connect_db()
-    batch_id = 0
-    async for task_batch, has_more_batches in ORM.get_unexpired_tasks(
-        validator_hotkeys=["5Hdf4hSQoLGj4JyJuabTnp85ZYKezLE366SXqkWYjcUw5PfJ"]
-    ):
-        for task in task_batch:
-            print(f"Task expire_at: {task.request.expire_at}")
-        batch_id += 1
-    await disconnect_db()
-
-
-if __name__ == "__main__":
-    asyncio.run(_test_get_unexpired_tasks())

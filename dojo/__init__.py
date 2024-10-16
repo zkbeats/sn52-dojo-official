@@ -32,7 +32,7 @@ __spec_version__ = (
 # Import all submodules.
 
 VALIDATOR_MIN_STAKE = 20000
-TASK_DEADLINE = 8 * 60 * 60
+TASK_DEADLINE = 6 * 60 * 60
 
 # Define the time intervals for various tasks.
 VALIDATOR_RUN = 300

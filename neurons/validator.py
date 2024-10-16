@@ -5,6 +5,7 @@ import random
 import time
 import traceback
 from collections import defaultdict
+from datetime import datetime, timezone
 from traceback import print_exception
 from typing import List
 
@@ -25,6 +26,7 @@ from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.orm import ORM
 from commons.scoring import Scoring
 from commons.utils import (
+    datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
     init_wandb,
@@ -61,7 +63,9 @@ class Validator(BaseNeuron):
         self.dendrite = bt.dendrite(wallet=self.wallet)
         logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
-        self.scores = torch.zeros(self.metagraph.n.item(), dtype=torch.float32)
+        self.scores: torch.Tensor = torch.zeros(
+            self.metagraph.n.item(), dtype=torch.float32
+        )
         self.load_state()
 
         # manually always register and always sync metagraph when application starts
@@ -103,12 +107,12 @@ class Validator(BaseNeuron):
                 batch_size = 10
                 processed_request_ids = []
 
-                # TODO @dev not sure if this is necessary
+                # figure out an expire_at cutoff time to determine those requests ready for scoring
                 expire_at = await ORM.get_last_expire_at_cutoff(validator_hotkeys)
                 async for (
                     task_batch,
                     has_more_batches,
-                ) in ORM.get_unexpired_tasks(
+                ) in ORM.get_expired_tasks(
                     validator_hotkeys, batch_size=batch_size, expire_at=expire_at
                 ):
                     if not has_more_batches:
@@ -539,6 +543,7 @@ class Validator(BaseNeuron):
 
                     self.step += 1
                 except Exception as e:
+                    traceback.print_exc()
                     logger.error(f"Error during validator run: {e}")
                     pass
                 await asyncio.sleep(dojo.VALIDATOR_RUN)
@@ -561,6 +566,7 @@ class Validator(BaseNeuron):
         """
 
         # Check if self.scores contains any NaN values and log a warning if it does.
+        # TODO @torch fix inconsistency between numpy and torch
         if torch.isnan(self.scores).any():
             logger.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
@@ -644,7 +650,7 @@ class Validator(BaseNeuron):
         # If so, we need to add new hotkeys and moving averages.
         if len(previous_metagraph.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = np.zeros(self.metagraph.n)
+            new_moving_average = torch.zeros(self.metagraph.n)
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             self.scores = new_moving_average
@@ -686,7 +692,7 @@ class Validator(BaseNeuron):
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: torch.Tensor = alpha * rewards + (1 - alpha) * self.scores
+        self.scores = alpha * rewards + (1 - alpha) * self.scores
         logger.debug(f"Updated scores: {self.scores}")
 
     async def _save_state(
@@ -805,9 +811,12 @@ class Validator(BaseNeuron):
 
                 batch_id = 0
                 batch_size = 10
-                async for task_batch, has_more_batches in ORM.get_unexpired_tasks(
+                # use current time as cutoff so we get only unexpired tasks
+                now = datetime_as_utc(datetime.now(timezone.utc))
+                async for task_batch, has_more_batches in ORM.get_expired_tasks(
                     validator_hotkeys=validator_hotkeys,
                     batch_size=batch_size,
+                    expire_at=now,
                 ):
                     if not has_more_batches:
                         logger.success(

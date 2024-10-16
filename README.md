@@ -106,7 +106,7 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 
 - 4 cores
 - 16 GB RAM
-- 256 SSD
+- 2TB SSD
 
 ## Miner
 
@@ -120,7 +120,7 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 
 - 2 cores
 - 8 GB RAM
-- 32GB SSD
+- 32GB SSD or 1TB SSD if decentralised
 
 # Getting Started
 

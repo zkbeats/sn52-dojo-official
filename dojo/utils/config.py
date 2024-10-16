@@ -175,7 +175,7 @@ def add_args(parser):
             "--neuron.sample_size",
             type=int,
             help="The number of miners to query per dendrite call.",
-            default=10,
+            default=8,
         )
 
         parser.add_argument(
