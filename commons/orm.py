@@ -49,7 +49,7 @@ class ORM:
     async def get_last_expire_at_cutoff(
         validator_hotkeys: list[str],
         expire_at: datetime = datetime_as_utc(
-            datetime.now(timezone.utc) - 1.5 * timedelta(seconds=TASK_DEADLINE)
+            datetime.now(timezone.utc) - timedelta(seconds=TASK_DEADLINE)
         ),
     ) -> datetime:
         """
@@ -84,7 +84,6 @@ class ORM:
         if found:
             return datetime_as_utc(found.expire_at)
 
-        # TODO @dev custom exception maybe
         raise ValueError("Unable to determine expire at cutoff")
 
     @staticmethod

@@ -167,7 +167,7 @@ services:
     logging: *default-logging
 
   dojo-cli:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - ./.env.miner:/app/.env
@@ -181,7 +181,7 @@ services:
   # ============== TEST NET ============== #
 
   miner-testnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.miner
@@ -206,7 +206,7 @@ services:
       - external
 
   miner-testnet-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.miner
@@ -228,7 +228,7 @@ services:
   # ============== MAIN NET ============== #
 
   miner-mainnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.miner
@@ -254,8 +254,7 @@ services:
     logging: *default-logging
 
   miner-mainnet-centralised:
-    # TODO @dev regex change later
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.miner

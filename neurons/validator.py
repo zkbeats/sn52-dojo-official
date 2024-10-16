@@ -21,7 +21,11 @@ from torch.nn import functional as F
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
-from commons.exceptions import EmptyScores, InvalidMinerResponse, NoNewUnexpiredTasksYet
+from commons.exceptions import (
+    EmptyScores,
+    InvalidMinerResponse,
+    NoNewUnexpiredTasksYet,
+)
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.orm import ORM
 from commons.scoring import Scoring
@@ -108,7 +112,14 @@ class Validator(BaseNeuron):
                 processed_request_ids = []
 
                 # figure out an expire_at cutoff time to determine those requests ready for scoring
-                expire_at = await ORM.get_last_expire_at_cutoff(validator_hotkeys)
+                try:
+                    expire_at = await ORM.get_last_expire_at_cutoff(validator_hotkeys)
+                except ValueError:
+                    logger.warning(
+                        f"No tasks for scoring yet, please wait for tasks to to pass deadline of {dojo.TASK_DEADLINE} seconds"
+                    )
+                    continue
+
                 async for (
                     task_batch,
                     has_more_batches,
@@ -507,7 +518,6 @@ class Validator(BaseNeuron):
         vali_request_model = await ORM.save_task(
             validator_request=synapse,
             miner_responses=valid_miner_responses,
-            # TODO the way we save obfuscated models is a bit redundant atm
             ground_truth=data.ground_truth,
         )
 
@@ -566,7 +576,6 @@ class Validator(BaseNeuron):
         """
 
         # Check if self.scores contains any NaN values and log a warning if it does.
-        # TODO @torch fix inconsistency between numpy and torch
         if torch.isnan(self.scores).any():
             logger.warning(
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."

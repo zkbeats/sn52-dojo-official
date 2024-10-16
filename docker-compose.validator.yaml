@@ -118,7 +118,7 @@ services:
   # ============== TEST NET ============== #
 
   validator-testnet:
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.validator
@@ -150,8 +150,7 @@ services:
   # ============== MAIN NET ============== #
 
   validator-mainnet:
-    # TODO @dev regex change later
-    image: ghcr.io/tensorplex-labs/dojo:dev
+    image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.validator
