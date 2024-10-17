@@ -405,6 +405,18 @@ class Validator(BaseNeuron):
 
         request_id = get_new_uuid()
         sel_miner_uids = await self.get_miner_uids(external_user, request_id)
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        # TODO @dev REMOVE AFTER TESTING
+        sel_miner_uids = sorted(list(self._active_miner_uids))
 
         axons = [
             self.metagraph.axons[uid]
