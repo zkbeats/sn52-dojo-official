@@ -1,3 +1,9 @@
+## [1.1.4](https://github.com/tensorplex-labs/dojo/compare/v1.1.3...v1.1.4) (2024-10-17)
+
+### Bug Fixes
+
+* set weights even if all zeros ([ca2332a](https://github.com/tensorplex-labs/dojo/commit/ca2332af7623f6f922b25bb31837f4c5a18b997b))
+
 ## [1.1.3](https://github.com/tensorplex-labs/dojo/compare/v1.1.2...v1.1.3) (2024-10-16)
 
 ### Bug Fixes
