@@ -117,6 +117,9 @@ class DojoAPI:
                 "maxResults": ("", "1"),
             }
 
+            payload_size = sum(len(str(v[1])) for v in form_body.values())
+            logger.info(f"Payload size: {payload_size} bytes")
+
             DOJO_API_KEY = loaddotenv("DOJO_API_KEY")
 
             response = await cls._http_client.post(
