@@ -308,7 +308,8 @@ class Validator(BaseNeuron):
             )
 
             # Apply obfuscation to each completion's files
-            await Validator._obfuscate_completion_files(shuffled_completions)
+            # TODO re-nable obfuscation
+            # await Validator._obfuscate_completion_files(shuffled_completions)
 
             criteria_types = []
             # ensure criteria options same order as completion_responses
