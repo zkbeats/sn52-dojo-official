@@ -588,11 +588,6 @@ class Validator(BaseNeuron):
         logger.debug(f"Raw scores: {self.scores}")
         logger.debug(f"normalized weights: {normalized_weights}")
         logger.debug(f"normalized weights uids: {self.metagraph.uids}")
-
-        if torch.count_nonzero(normalized_weights).item() == 0:
-            logger.warning("All weights are zero, skipping...")
-            return
-
         logger.info("Attempting to set weights")
 
         safe_uids = self.metagraph.uids
