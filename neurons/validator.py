@@ -361,7 +361,15 @@ class Validator(BaseNeuron):
                 for file in completion.completion.files:
                     if file.filename.lower().endswith(".html"):
                         try:
+                            original_size = len(file.content)
+                            logger.debug(
+                                f"Original size of {file.filename}: {original_size} bytes"
+                            )
                             file.content = await obfuscate_html_and_js(file.content)
+                            obfuscated_size = len(file.content)
+                            logger.debug(
+                                f"Obfuscated size of {file.filename}: {obfuscated_size} bytes"
+                            )
                         except Exception as e:
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 

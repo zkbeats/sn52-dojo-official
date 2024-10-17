@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from bittensor.btlogging import logging as logger
 
@@ -43,6 +44,13 @@ async def main():
         completion_responses=data.responses,
         expire_at=expire_at,
     )
+
+    # Serialize the synapse object to JSON
+    synapse_json = json.dumps(synapse.model_dump())
+
+    # Calculate and print the size of the request in bytes
+    request_size = len(synapse_json.encode("utf-8"))
+    logger.info(f"Request size: {request_size} bytes")
 
     task_response = await DojoAPI.create_task(synapse)
     print(task_response)

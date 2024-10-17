@@ -134,6 +134,10 @@ class JSObfuscator(Obfuscator):
                     except subprocess.CalledProcessError as e:
                         logger.warning(f"Attempt {attempt + 1} failed: {e}")
                         logger.warning(f"UglifyJS stderr: {e.stderr}")
+                    except Exception as e:
+                        logger.warning(
+                            f"Attempt {attempt + 1} failed with unexpected error: {str(e)}"
+                        )
 
                     if attempt < cls.MAX_RETRIES - 1:
                         time.sleep(cls.RETRY_DELAY)
@@ -162,6 +166,7 @@ async def obfuscate_html_and_js(html_content, timeout=30):
 
 
 def _obfuscate_html_and_js_sync(html_content):
+    logger.info("Obfuscating HTML and JavaScript content...")
     soup = BeautifulSoup(html_content, "html.parser")
 
     # Obfuscate JavaScript content
@@ -171,7 +176,9 @@ def _obfuscate_html_and_js_sync(html_content):
             script.string = obfuscated_js
 
     obfuscated_html = str(soup)
-    return HTMLObfuscator.obfuscate(obfuscated_html)
+    final_obfuscated_html = HTMLObfuscator.obfuscate(obfuscated_html)
+    logger.info("Obfuscation complete")
+    return final_obfuscated_html
 
 
 async def process_file(input_file: str, output_file: str):
