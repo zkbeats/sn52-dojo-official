@@ -178,9 +178,9 @@ services:
     networks:
       - internal
 
-  # ============== TEST NET ============== #
+  # ============== MINER ============== #
 
-  miner-testnet-decentralised:
+  miner-decentralised:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
@@ -190,57 +190,6 @@ services:
       - ./.env.miner:/app/.env
       - $HOME/.bittensor:/root/.bittensor
     command: ["miner"]
-    environment:
-      - NETUID=98
-      - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443
-    depends_on:
-      worker-api:
-        condition: service_healthy
-      worker-ui:
-        condition: service_healthy
-    ports:
-      - ${AXON_PORT}:${AXON_PORT}
-    networks:
-      - internal
-      - external
-
-  miner-testnet-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
-    env_file:
-      - .env.miner
-    volumes:
-      - ./:/app
-      - ./.env.miner:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
-    command: ["miner"]
-    ports:
-      - ${AXON_PORT}:${AXON_PORT}
-    environment:
-      - NETUID=98
-      - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443
-    networks:
-      - internal
-      - external
-
-  # ============== MAIN NET ============== #
-
-  miner-mainnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
-    env_file:
-      - .env.miner
-    volumes:
-      - ./:/app
-      - ./.env.miner:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
-    command: ["miner"]
-    environment:
-      - NETUID=52
-      - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
     depends_on:
       worker-api:
         condition: service_healthy
@@ -253,7 +202,7 @@ services:
       - external
     logging: *default-logging
 
-  miner-mainnet-centralised:
+  miner-centralised:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
@@ -265,10 +214,6 @@ services:
     command: ["miner"]
     ports:
       - ${AXON_PORT}:${AXON_PORT}
-    environment:
-      - NETUID=52
-      - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
     networks:
       - internal
       - external

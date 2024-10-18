@@ -115,52 +115,11 @@ services:
       - postgres-vali
     logging: *default-logging
 
-  # ============== TEST NET ============== #
-
-  validator-testnet:
+  validator:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.validator
-    environment:
-      - SYNTHETIC_API_URL=http://synthetic-api:5003
-      - WANDB_PROJECT_NAME=dojo-testnet
-      - NETUID=98
-      - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443/
-      - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
-    volumes:
-      - ./:/app
-      - ./.env.validator:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
-      - prisma-binary:/root/prisma-python
-    command: ["validator"]
-    networks:
-      - internal
-      - external
-    depends_on:
-      synthetic-api:
-        condition: service_healthy
-      postgres-vali:
-        condition: service_healthy
-      prisma-setup-vali:
-        condition: service_completed_successfully
-    logging: *default-logging
-
-  # ============== MAIN NET ============== #
-
-  validator-mainnet:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
-    env_file:
-      - .env.validator
-    environment:
-      - SYNTHETIC_API_URL=http://synthetic-api:5003
-      - WANDB_PROJECT_NAME=dojo-mainnet
-      - NETUID=52
-      - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
-      - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
     volumes:
       - ./:/app
       - ./.env.validator:/app/.env
