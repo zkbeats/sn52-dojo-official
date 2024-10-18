@@ -6,12 +6,16 @@ volumes:
   postgres-miner-volume:
   redis-miner-volume:
 
+#networks:
+#  external:
+#    driver: bridge
+#    driver_opts:
+#      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
+#  dojo-miner:
+#    driver: bridge
+
 networks:
-  external:
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
-  internal:
+  dojo-miner:
     driver: bridge
 
 services:
@@ -28,7 +32,7 @@ services:
     volumes:
       - redis-miner-volume:/data
     networks:
-      - internal
+      - dojo-miner
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -51,11 +55,11 @@ services:
     expose:
       - 5432
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-miner-volume:/var/lib/postgresql/data
     networks:
-      - internal
+      - dojo-miner
     healthcheck:
       test:
         # looks strange, but double $ (i.e. $$) for variable substitution
@@ -82,7 +86,7 @@ services:
     depends_on:
       - postgres-miner
     networks:
-      - internal
+      - dojo-miner
     logging: *default-logging
 
   sidecar:
@@ -107,7 +111,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - internal
+      - dojo-miner
     logging: *default-logging
 
   worker-api:
@@ -149,7 +153,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - internal
+      - dojo-miner
     logging: *default-logging
 
   worker-ui:
@@ -162,8 +166,7 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - internal
-      - external
+      - dojo-miner
     logging: *default-logging
 
   dojo-cli:
@@ -176,7 +179,7 @@ services:
     tty: true
     stdin_open: true
     networks:
-      - internal
+      - dojo-miner
 
   # ============== MINER ============== #
 
@@ -198,8 +201,7 @@ services:
     ports:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
-      - internal
-      - external
+      - dojo-miner
     logging: *default-logging
 
   miner-centralised:
@@ -215,6 +217,5 @@ services:
     ports:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
-      - internal
-      - external
+      - dojo-miner
     logging: *default-logging
