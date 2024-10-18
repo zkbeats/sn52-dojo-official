@@ -193,7 +193,7 @@ def stash_changes():
 
 def pull_latest_changes():
     logger.info("Pulling latest changes from the main branch.")
-    subprocess.run(["git", "pull", "origin", "main"], check=True)
+    # subprocess.run(["git", "pull", "origin", "main"], check=True)
     subprocess.run(["git", "fetch", "--tags"], check=True)
 
 
@@ -224,7 +224,7 @@ def get_current_version():
 
 
 def update_repo():
-    logger.info("Updating the script and its submodules.")
+    logger.info("Updating the repository..")
     stash_changes()
     pull_latest_changes()
     pop_stash()
@@ -245,21 +245,27 @@ def main(service_name):
     pull_docker_images(config["images"])
     restart_docker(service_name)
 
-    # Start the periodic check loop
-    while True:
-        logger.info("Checking for updates...")
-        has_image_updates = check_for_image_updates(config["images"])
+    try:
+        # Start the periodic check loop
+        while True:
+            logger.info("Checking for updates...")
+            has_image_updates = check_for_image_updates(config["images"])
 
-        if current_dojo_version != new_dojo_version:
-            logger.info("Repository has changed. Updating...")
-            update_repo()
-            current_dojo_version = new_dojo_version
+            if current_dojo_version != new_dojo_version:
+                logger.info("Repository has changed. Updating...")
+                update_repo()
+                current_dojo_version = new_dojo_version
 
-        if current_dojo_version != new_dojo_version or has_image_updates:
-            restart_docker(service_name)
+            if current_dojo_version != new_dojo_version or has_image_updates:
+                restart_docker(service_name)
 
-        logger.info(f"Sleeping for {CHECK_INTERVAL} seconds.")
-        time.sleep(CHECK_INTERVAL)
+            logger.info(f"Sleeping for {CHECK_INTERVAL} seconds.")
+            time.sleep(CHECK_INTERVAL)
+    except KeyboardInterrupt:
+        logger.info("Graceful shutdown initiated.")
+        # Perform any cleanup here if necessary
+        subprocess.run(config["docker_compose_down"].split(), check=True)
+        logger.info("Shutdown complete.")
 
 
 if __name__ == "__main__":
