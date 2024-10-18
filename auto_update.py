@@ -14,26 +14,38 @@ BRANCH = "main"
 
 CONFIG = {
     "validator": {
-        "services": [
-            "redis-service",
-            "synthetic-api",
-            "node-subtensor-testnet",
-            "validator-testnet",
-        ],
+        # "services": [
+        #     "redis-service",
+        #     "synthetic-api",
+        #     "postgres-vali",
+        #     "prisma-setup-vali",
+        #     "validator",
+        # ],
         "images": ["dojo-synthetic-api"],
+        "docker_compose_down": "docker compose --env-file .env.validator -f docker-compose.validator.yaml down",
+        "docker_compose_up": "docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator",
     },
-    "miner": {
-        "services": [
-            "redis-service",
-            "postgres-service",
-            "prisma-setup",
-            "node-subtensor-testnet",
-            "sidecar",
-            "worker-api",
-            "worker-ui",
-            "miner-testnet",
-        ],
+    "miner-decentralised": {
+        # "services": [
+        #     "redis-miner",
+        #     "postgres-miner",
+        #     "sidecar",
+        #     "prisma-setup-miner",
+        #     "worker-api",
+        #     "worker-ui",
+        #     "miner-decentralised",
+        # ],
         "images": ["dojo-worker-api", "dojo-ui"],
+        "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
+        "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-decentralised",
+    },
+    "miner-centralised": {
+        "services": [
+            "miner-centralised",
+        ],
+        "images": [],
+        "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
+        "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-centralised",
     },
 }
 
@@ -141,6 +153,19 @@ def pull_docker_images(list_of_images: list[str]):
 
 
 def check_for_image_updates(images):
+    """
+    Check for updates for a list of Docker images.
+
+    This function iterates over a list of image names, constructs the full image URL,
+    and checks if there is an update available for each image by comparing the local
+    and remote image digests. If any image has an update, pull the images quietly, and returns True.
+
+    Args:
+        images (list[str]): A list of Docker image names to check for updates.
+
+    Returns:
+        bool: True if any of the images have updates available, False otherwise.
+    """
     logger.info(f"Checking images: {images}")
     has_update = False
     for image_name in images:
@@ -178,23 +203,18 @@ def pop_stash():
 
 
 def restart_docker(service_name):
-    service_data = CONFIG.get(service_name, {})
-    services_to_restart = service_data.get("services", [])
-    main_service = "miner-testnet" if service_name == "miner" else "validator-testnet"
-
-    if not services_to_restart:
-        logger.error(f"No services found for {service_name}.")
-        return
-
     logger.info(f"Restarting Docker services for: {service_name}.")
+    # Get the service data e.g. miner or validator
+    service_data = CONFIG.get(service_name, {})
+
+    docker_compose_down: list[str] = service_data.get("docker_compose_down", "").split()
+    docker_compose_up: list[str] = service_data.get("docker_compose_up", "").split()
 
     # Stop the services in a single command
-    # TODO change based on miner/validator services
-    subprocess.run(["docker", "compose", "stop"] + services_to_restart, check=True)
+    subprocess.run(docker_compose_down, check=True)
 
     # Start the services in a single command
-    # TODO change based on miner/validator services
-    subprocess.run(["docker", "compose", "up", "-d", main_service], check=True)
+    subprocess.run(docker_compose_up, check=True)
 
 
 def get_current_version():
@@ -246,7 +266,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the auto-update script.")
     parser.add_argument(
         "service",
-        choices=["miner", "validator"],
+        choices=["miner-decentralised", "miner-centralised", "validator"],
         help="Specify the service to run (miner or validator).",
     )
     args = parser.parse_args()

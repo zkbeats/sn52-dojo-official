@@ -41,10 +41,10 @@ btcli:
 	docker compose -f docker-compose.shared.yaml run --rm btcli
 
 validator-pull:
-	docker compose --env-file .env.validator -f docker-compose.validator.yaml pull
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml pull --include-deps
 
 miner-pull:
-	docker compose --env-file .env.miner -f docker-compose.miner.yaml pull
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml pull --include-deps
 
 # ---------------------------------------------------------------------------- #
 #                                 CORE SERVICES                                #
