@@ -1,3 +1,11 @@
+## [1.1.5](https://github.com/tensorplex-labs/dojo/compare/v1.1.4...v1.1.5) (2024-10-20)
+
+### Bug Fixes
+
+* gracefully shutdown auto_update ([40240cd](https://github.com/tensorplex-labs/dojo/commit/40240cd15632430febdcdb60638443a5e128c4d0))
+* simplify dojo setup ([2bf0c76](https://github.com/tensorplex-labs/dojo/commit/2bf0c769890bda3e7cb4dadfdc01db8b4c033a13))
+* updated makefile, and auto-update script ([0d20bd4](https://github.com/tensorplex-labs/dojo/commit/0d20bd424fb092099cb8a9f2608046637dae69e5))
+
 ## [1.1.4](https://github.com/tensorplex-labs/dojo/compare/v1.1.3...v1.1.4) (2024-10-17)
 
 ### Bug Fixes
