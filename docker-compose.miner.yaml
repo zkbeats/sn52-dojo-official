@@ -7,11 +7,7 @@ volumes:
   redis-miner-volume:
 
 networks:
-  external:
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
-  internal:
+  dojo-miner:
     driver: bridge
 
 services:
@@ -23,12 +19,10 @@ services:
       - .env.miner
     expose:
       - 6379
-    ports:
-      - "127.0.0.1:6379:6379"
     volumes:
       - redis-miner-volume:/data
     networks:
-      - internal
+      - dojo-miner
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -50,12 +44,10 @@ services:
       "
     expose:
       - 5432
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-miner-volume:/var/lib/postgresql/data
     networks:
-      - internal
+      - dojo-miner
     healthcheck:
       test:
         # looks strange, but double $ (i.e. $$) for variable substitution
@@ -82,7 +74,7 @@ services:
     depends_on:
       - postgres-miner
     networks:
-      - internal
+      - dojo-miner
     logging: *default-logging
 
   sidecar:
@@ -107,7 +99,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - internal
+      - dojo-miner
     logging: *default-logging
 
   worker-api:
@@ -149,7 +141,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - internal
+      - dojo-miner
     logging: *default-logging
 
   worker-ui:
@@ -162,8 +154,7 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - internal
-      - external
+      - dojo-miner
     logging: *default-logging
 
   dojo-cli:
@@ -176,11 +167,11 @@ services:
     tty: true
     stdin_open: true
     networks:
-      - internal
+      - dojo-miner
 
-  # ============== TEST NET ============== #
+  # ============== MINER ============== #
 
-  miner-testnet-decentralised:
+  miner-decentralised:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
@@ -190,10 +181,6 @@ services:
       - ./.env.miner:/app/.env
       - $HOME/.bittensor:/root/.bittensor
     command: ["miner"]
-    environment:
-      - NETUID=98
-      - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443
     depends_on:
       worker-api:
         condition: service_healthy
@@ -202,58 +189,10 @@ services:
     ports:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
-      - internal
-      - external
-
-  miner-testnet-centralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
-    env_file:
-      - .env.miner
-    volumes:
-      - ./:/app
-      - ./.env.miner:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
-    command: ["miner"]
-    ports:
-      - ${AXON_PORT}:${AXON_PORT}
-    environment:
-      - NETUID=98
-      - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443
-    networks:
-      - internal
-      - external
-
-  # ============== MAIN NET ============== #
-
-  miner-mainnet-decentralised:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
-    env_file:
-      - .env.miner
-    volumes:
-      - ./:/app
-      - ./.env.miner:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
-    command: ["miner"]
-    environment:
-      - NETUID=52
-      - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
-    depends_on:
-      worker-api:
-        condition: service_healthy
-      worker-ui:
-        condition: service_healthy
-    ports:
-      - ${AXON_PORT}:${AXON_PORT}
-    networks:
-      - internal
-      - external
+      - dojo-miner
     logging: *default-logging
 
-  miner-mainnet-centralised:
+  miner-centralised:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
@@ -265,11 +204,6 @@ services:
     command: ["miner"]
     ports:
       - ${AXON_PORT}:${AXON_PORT}
-    environment:
-      - NETUID=52
-      - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
     networks:
-      - internal
-      - external
+      - dojo-miner
     logging: *default-logging

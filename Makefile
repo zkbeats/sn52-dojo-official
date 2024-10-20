@@ -41,43 +41,23 @@ btcli:
 	docker compose -f docker-compose.shared.yaml run --rm btcli
 
 validator-pull:
-	docker compose --env-file .env.validator -f docker-compose.validator.yaml pull
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml pull --include-deps
 
 miner-pull:
-	docker compose --env-file .env.miner -f docker-compose.miner.yaml pull
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml pull --include-deps
 
 # ---------------------------------------------------------------------------- #
 #                                 CORE SERVICES                                #
 # ---------------------------------------------------------------------------- #
 
 miner-decentralised:
-	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml up -d --build miner-mainnet-decentralised; \
-	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml up -d --build miner-testnet-decentralised; \
-	else \
-		echo "Please specify a valid network: mainnet or testnet"; \
-	fi
-
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml up -d --build miner-decentralised
 
 miner-centralised:
-	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-mainnet-centralised; \
-	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-testnet-centralised; \
-	else \
-		echo "Please specify a valid network: mainnet or testnet"; \
-	fi
-
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-centralised
 
 validator:
-	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator-mainnet; \
-	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator-testnet; \
-	else \
-		echo "Please specify a valid network: mainnet or testnet"; \
-	fi
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator
 
 validator-up-deps:
 	docker compose --env-file .env.validator -f docker-compose.validator.yaml up -d --build synthetic-api postgres-vali prisma-setup-vali
@@ -93,28 +73,10 @@ dojo-cli:
 # ---------------------------------------------------------------------------- #
 
 miner-decentralised-logs:
-	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml logs -f miner-mainnet-decentralised; \
-	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml logs -f miner-testnet-decentralised; \
-	else \
-		echo "Please specify a valid network: mainnet or testnet"; \
-	fi
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml logs -f miner-decentralised
 
 miner-centralised-logs:
-	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml logs -f miner-mainnet-centralised; \
-	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.miner -f docker-compose.miner.yaml logs -f miner-testnet-centralised; \
-	else \
-		echo "Please specify a valid network: mainnet or testnet"; \
-	fi
+	docker compose --env-file .env.miner -f docker-compose.miner.yaml logs -f miner-centralised
 
 validator-logs:
-	@if [ "$(network)" = "mainnet" ]; then \
-		docker compose --env-file .env.validator -f docker-compose.validator.yaml logs -f validator-mainnet; \
-	elif [ "$(network)" = "testnet" ]; then \
-		docker compose --env-file .env.validator -f docker-compose.validator.yaml logs -f validator-testnet; \
-	else \
-		echo "Please specify a valid network: mainnet or testnet"; \
-	fi
+	docker compose --env-file .env.validator -f docker-compose.validator.yaml logs -f validator
