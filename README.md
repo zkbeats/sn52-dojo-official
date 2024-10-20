@@ -232,6 +232,9 @@ btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subt
 
 ## Mining
 
+> **Note:** To connect to testnet, uncomment the testnet related configuration, specifically `NETUID`, `SUBTENSOR_CHAIN_ENDPOINT` and `SUBTENSOR_NETWORK`
+
+
 ### Option 1: Centralised Method
 
 1. Create .env file with the following values first.
@@ -276,10 +279,7 @@ DOJO_API_KEY=# api key from step 2.
 4. Start the miner by running the following commands:
 
 ```bash
-# for mainnet
-make miner-centralised network=mainnet
-# for testnet
-make miner-centralised network=testnet
+make miner-centralised
 ```
 
 ### Option 2: Decentralised Method
@@ -342,16 +342,10 @@ DOJO_API_KEY=# api key from earlier
 5. Now, run the full miner service.
 
 ```bash
-# for mainnet
-make miner-decentralised network=mainnet
-# for testnet
-make miner-decentralised network=testnet
+make miner-decentralised
 
-# read miner logs using the following:
-# for mainnet
-make miner-decentralised-logs network=mainnet
-# for testnet
-make miner-decentralised-logs network=testnet
+# Run this command to read miner logs
+make miner-decentralised-logs
 ```
 
 > [!IMPORTANT]
@@ -378,6 +372,9 @@ Note: URLs are different for testnet and mainnet. Please refer to [docs](https:/
 - Confirmed your subscription is created properly, and that you can view your tasks! ![image](./assets/subscription/tasks_shown.png)
 
 ## Validating
+
+> **Note:** To connect to testnet, uncomment the testnet related configuration, specifically `NETUID`, `SUBTENSOR_CHAIN_ENDPOINT` and `SUBTENSOR_NETWORK`
+
 
 Copy the validator .env file and set up the .env file
 
@@ -411,11 +408,8 @@ DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
 Start the validator
 
 ```bash
-# start the validator
-# for mainnet
-make validator network=mainnet
-# for testnet
-make validator network=testnet
+# To start the validator:
+make validator
 ```
 
 (**WIP**) To start with autoupdate for validators (**optional**)

@@ -9,11 +9,7 @@ volumes:
   prisma-binary:
 
 networks:
-  external:
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.host_binding_ipv4: "0.0.0.0"
-  internal:
+  dojo-validator:
     driver: bridge
 
 services:
@@ -24,12 +20,10 @@ services:
       - .env.validator
     expose:
       - 6379
-    ports:
-      - "127.0.0.1:6379:6379"
     volumes:
       - redis-validator-volume:/data
     networks:
-      - internal
+      - dojo-validator
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -50,10 +44,8 @@ services:
       - REDIS_DB=0
     expose:
       - 5003
-    ports:
-      - "127.0.0.1:5003:5003"
     networks:
-      - internal
+      - dojo-validator
     healthcheck:
       test: ["CMD", "curl", "-f", "http://synthetic-api:5003/health"]
       interval: 10s
@@ -82,12 +74,10 @@ services:
       "
     expose:
       - 5432
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-validator-volume:/var/lib/postgresql/data
     networks:
-      - internal
+      - dojo-validator
     healthcheck:
       test:
         # looks strange, but double $ (i.e. $$) for variable substitution
@@ -110,25 +100,16 @@ services:
       - prisma-binary:/root/prisma-python
       - ./:/app
     networks:
-      - internal
+      - dojo-validator
     depends_on:
       - postgres-vali
     logging: *default-logging
 
-  # ============== TEST NET ============== #
-
-  validator-testnet:
+  validator:
     image: ghcr.io/tensorplex-labs/dojo:main
     working_dir: /app
     env_file:
       - .env.validator
-    environment:
-      - SYNTHETIC_API_URL=http://synthetic-api:5003
-      - WANDB_PROJECT_NAME=dojo-testnet
-      - NETUID=98
-      - SUBTENSOR_NETWORK=test
-      - SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443/
-      - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
     volumes:
       - ./:/app
       - ./.env.validator:/app/.env
@@ -136,40 +117,7 @@ services:
       - prisma-binary:/root/prisma-python
     command: ["validator"]
     networks:
-      - internal
-      - external
-    depends_on:
-      synthetic-api:
-        condition: service_healthy
-      postgres-vali:
-        condition: service_healthy
-      prisma-setup-vali:
-        condition: service_completed_successfully
-    logging: *default-logging
-
-  # ============== MAIN NET ============== #
-
-  validator-mainnet:
-    image: ghcr.io/tensorplex-labs/dojo:main
-    working_dir: /app
-    env_file:
-      - .env.validator
-    environment:
-      - SYNTHETIC_API_URL=http://synthetic-api:5003
-      - WANDB_PROJECT_NAME=dojo-mainnet
-      - NETUID=52
-      - SUBTENSOR_NETWORK=finney
-      - SUBTENSOR_ENDPOINT=wss://entrypoint-finney.opentensor.ai:443
-      - PRISMA_QUERY_ENGINE_BINARY=/root/prisma-python/node_modules/prisma/query-engine-debian-openssl-3.0.x
-    volumes:
-      - ./:/app
-      - ./.env.validator:/app/.env
-      - $HOME/.bittensor:/root/.bittensor
-      - prisma-binary:/root/prisma-python
-    command: ["validator"]
-    networks:
-      - internal
-      - external
+      - dojo-validator
     depends_on:
       synthetic-api:
         condition: service_healthy

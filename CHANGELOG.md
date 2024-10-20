@@ -1,3 +1,20 @@
+## [1.1.4](https://github.com/tensorplex-labs/dojo/compare/v1.1.3...v1.1.4) (2024-10-17)
+
+### Bug Fixes
+
+* set weights even if all zeros ([ca2332a](https://github.com/tensorplex-labs/dojo/commit/ca2332af7623f6f922b25bb31837f4c5a18b997b))
+
+## [1.1.3](https://github.com/tensorplex-labs/dojo/compare/v1.1.2...v1.1.3) (2024-10-16)
+
+### Bug Fixes
+
+* add batching to DB calls, refactor in memory class attrs ([#14](https://github.com/tensorplex-labs/dojo/issues/14)) ([4087de9](https://github.com/tensorplex-labs/dojo/commit/4087de9d8b394572cb46505f9d3c9b2825421f40))
+* added batch_id count ([fa66ea3](https://github.com/tensorplex-labs/dojo/commit/fa66ea327f97e10789bf21a84836124a14abd853))
+* added log retention to avoid storage buildup ([#16](https://github.com/tensorplex-labs/dojo/issues/16)) ([39415dd](https://github.com/tensorplex-labs/dojo/commit/39415dd25a562523daa5b272ad00fd9fdb8c89c7))
+* change validator_hotkeys logic in monitoring func ([066c683](https://github.com/tensorplex-labs/dojo/commit/066c683b72734c4a4673d36a2d118f3b7913b9dc))
+* dubious ownership issue ([1c16d1d](https://github.com/tensorplex-labs/dojo/commit/1c16d1d83f61cd2407f7cedb4788aa545da91246))
+* fixed consensus scoring bugs ([8d8cdf8](https://github.com/tensorplex-labs/dojo/commit/8d8cdf85f62253849558f8026f99b4844038c749))
+
 ## [1.1.2](https://github.com/tensorplex-labs/dojo/compare/v1.1.1...v1.1.2) (2024-10-15)
 
 ### Bug Fixes
