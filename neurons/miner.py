@@ -204,8 +204,7 @@ class Miner(BaseMinerNeuron):
 
         logger.info("Metagraph updated")
 
-    @classmethod
-    async def log_miner_status(cls):
-        while not cls._should_exit:
-            logger.info(f"Miner running... {time.time()}")
+    async def log_miner_status(self):
+        while not self._should_exit:
+            logger.info(f"Miner running... block:{str(self.block)} time: {time.time()}")
             await asyncio.sleep(MINER_STATUS)

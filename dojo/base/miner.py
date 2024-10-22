@@ -56,7 +56,7 @@ class BaseMinerNeuron(BaseNeuron):
         # Start  starts the miner's axon, making it active on the network.
         self.axon.start()
 
-        logger.info(f"Miner starting at block: {self.block}")
+        logger.info(f"Miner starting at block: {str(self.block)}")
 
         # This loop maintains the miner's operations until intentionally stopped.
         try:

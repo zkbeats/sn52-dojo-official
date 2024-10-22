@@ -234,7 +234,6 @@ btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subt
 
 > **Note:** To connect to testnet, uncomment the testnet related configuration, specifically `NETUID`, `SUBTENSOR_CHAIN_ENDPOINT` and `SUBTENSOR_NETWORK`
 
-
 ### Option 1: Centralised Method
 
 1. Create .env file with the following values first.
@@ -375,7 +374,6 @@ Note: URLs are different for testnet and mainnet. Please refer to [docs](https:/
 
 > **Note:** To connect to testnet, uncomment the testnet related configuration, specifically `NETUID`, `SUBTENSOR_CHAIN_ENDPOINT` and `SUBTENSOR_NETWORK`
 
-
 Copy the validator .env file and set up the .env file
 
 ```bash
@@ -393,6 +391,11 @@ WANDB_API_KEY="<wandb_key>"
 # for dojo-synthetic-api
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"
 
+# for langfuse, the free tier is more than enough
+LANGFUSE_SECRET_KEY=# head to langfuse.com
+LANGFUSE_PUBLIC_KEY=# head to langfuse.com
+LANGFUSE_HOST="https://us.cloud.langfuse.com" # 🇺🇸 US region
+
 # Other LLM API providers, Optional or if you've chosen it over Openrouter
 TOGETHER_API_KEY=
 OPENAI_API_KEY=
@@ -404,6 +407,8 @@ DB_USERNAME=#set a non-default username
 DB_PASSWORD=#generate and set a secure password
 DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
 ```
+
+> **Note:** To ensure your validator runs smoothly, enable the auto top-up feature for Openrouter, this ensures that your validator will not fail to call synthetic API during task generation. The estimate cost of generating a task is approximately $0.20 USD.
 
 Start the validator
 
