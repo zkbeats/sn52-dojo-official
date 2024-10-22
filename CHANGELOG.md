@@ -1,3 +1,9 @@
+## [1.1.6](https://github.com/tensorplex-labs/dojo/compare/v1.1.5...v1.1.6) (2024-10-22)
+
+### Bug Fixes
+
+* set weights in separate thread ([#27](https://github.com/tensorplex-labs/dojo/issues/27)) ([af99f93](https://github.com/tensorplex-labs/dojo/commit/af99f93c2184895f805747ed52162329bc90faf5))
+
 ## [1.1.5](https://github.com/tensorplex-labs/dojo/compare/v1.1.4...v1.1.5) (2024-10-20)
 
 ### Bug Fixes
