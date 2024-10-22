@@ -60,3 +60,11 @@ class CreateTaskFailed(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+
+class SetWeightsFailed(Exception):
+    """Exception raised when setting weights fails."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)

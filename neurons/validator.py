@@ -2,9 +2,11 @@ import asyncio
 import copy
 import gc
 import random
+import threading
 import time
 import traceback
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from traceback import print_exception
 from typing import List
@@ -25,6 +27,7 @@ from commons.exceptions import (
     EmptyScores,
     InvalidMinerResponse,
     NoNewUnexpiredTasksYet,
+    SetWeightsFailed,
 )
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.orm import ORM
@@ -56,12 +59,14 @@ from dojo.utils.uids import MinerUidSelector, extract_miner_uids, is_miner
 
 class Validator(BaseNeuron):
     _should_exit: bool = False
-    _lock = asyncio.Lock()
+    _alock = asyncio.Lock()
+    _tlock = threading.Lock()
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
 
     def __init__(self):
         super().__init__()
+        self.loop = asyncio.get_event_loop()
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
@@ -75,6 +80,7 @@ class Validator(BaseNeuron):
         # manually always register and always sync metagraph when application starts
         self.check_registered()
         self.resync_metagraph()
+        self.executor = ThreadPoolExecutor(max_workers=2)
 
         init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
@@ -161,7 +167,8 @@ class Validator(BaseNeuron):
                             processed_request_ids.append(task.request.request_id)
                             continue
 
-                        self.update_scores(hotkey_to_scores=hotkey_to_score)
+                        with self._tlock:
+                            self.update_scores(hotkey_to_scores=hotkey_to_score)
                         await self.send_scores(
                             synapse=ScoringResult(
                                 request_id=task.request.request_id,
@@ -283,7 +290,7 @@ class Validator(BaseNeuron):
                     for uid, axon in enumerate(self.metagraph.axons)
                     if axon.hotkey in active_hotkeys
                 ]
-                async with self._lock:
+                async with self._alock:
                     self._active_miner_uids = set(active_uids)
                 logger.debug(
                     f"⬇️ Heartbeats acknowledged by active miners: {sorted(active_uids)}"
@@ -375,7 +382,7 @@ class Validator(BaseNeuron):
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 
     async def get_miner_uids(self, is_external_request: bool, request_id: str):
-        async with self._lock:
+        async with self._alock:
             if is_external_request:
                 sel_miner_uids = [
                     uid
@@ -556,7 +563,7 @@ class Validator(BaseNeuron):
         return
 
     async def run(self):
-        logger.info(f"Validator starting at block: {self.block}")
+        logger.info(f"Validator starting at block: {str(self.block)}")
 
         # This loop maintains the validator's operations until intentionally stopped.
         try:
@@ -570,7 +577,7 @@ class Validator(BaseNeuron):
                         break
 
                     # Sync metagraph and potentially set weights.
-                    self.sync()
+                    await self.loop.run_in_executor(self.executor, self.sync)
 
                     self.step += 1
                 except Exception as e:
@@ -596,6 +603,7 @@ class Validator(BaseNeuron):
         The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
 
+        # ensure self.scores not being written to by other coroutines
         # Check if self.scores contains any NaN values and log a warning if it does.
         if torch.isnan(self.scores).any():
             logger.warning(
@@ -637,19 +645,90 @@ class Validator(BaseNeuron):
         logger.debug(f"processed weights {processed_weights}")
         logger.debug(f"processed weights uids {processed_weight_uids}")
 
-        # Set the weights on chain via our subtensor connection.
-        result = self.subtensor.set_weights(
-            wallet=self.wallet,
-            netuid=self.config.netuid,
-            uids=processed_weight_uids.tolist(),
-            weights=processed_weights.tolist(),
-            wait_for_finalization=False,
-            wait_for_inclusion=True,
-            version_key=self.spec_version,
-        )
+        self.set_weights_in_thread(processed_weight_uids, processed_weights)
+        return
 
-        logger.info(f"set_weights result: {result}")
+    def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
+        """Wrapper function to set weights in a separate thread
+
+        Args:
+            uids (torch.Tensor): uids to set weights for
+            weights (torch.Tensor): weights to set
+
+        Returns:
+            tuple[bool, str]: Returns the result of _set_weights function
+        """
+        logger.trace("Attempting to set weights in another thread")
+
+        def _set_weights(lock: threading.Lock) -> tuple[bool, str]:
+            """LOCAL FUNCTION to set weights, we pass in a lock because of how
+            we are calling this function from the main thread, sending it
+            to a separate thread to avoid blocking the main thread, so the lock
+            MUST be acquired by the separate thread.
+
+
+            Args:
+                lock (threading.Lock): Lock parameter passed to separate thread
+
+            Returns:
+                tuple[bool, str]: Returns a tuple of a boolean and a string
+                - boolean: True if weights were set successfully, False otherwise
+                - string: Message indicating the result of set weights
+            """
+            with lock:
+                max_attempts = 5
+                attempt = 0
+                while attempt < max_attempts:
+                    try:
+                        logger.trace(f"Set weights attempt {attempt+1}/{max_attempts}")
+                        result, message = self.subtensor.set_weights(
+                            wallet=self.wallet,
+                            netuid=self.config.netuid,  # type: ignore
+                            uids=uids.tolist(),
+                            weights=weights.tolist(),
+                            wait_for_finalization=False,
+                            wait_for_inclusion=False,
+                            version_key=self.spec_version,
+                            max_retries=1,
+                        )
+                        if result:
+                            logger.success(f"Set weights successfully: {message}")
+                            return result, message
+
+                        logger.warning(
+                            f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
+                        )
+                        raise SetWeightsFailed(
+                            f"Failed to set weights with message:{message}"
+                        )
+
+                    except Exception as e:
+                        attempt += 1
+                        logger.warning(f"Attempt {attempt} failed: {e}")
+                        if attempt == max_attempts:
+                            logger.error("Max attempts reached. Could not set weights.")
+                            return False, "Max attempts reached"
+
+                        self._wait_set_weights()
+
+            return False, "Max attempts reached"
+
+        logger.trace("Submitting callable func to executor")
+        future = self.executor.submit(_set_weights, self._tlock)
+        result = future.result()
         return result
+
+    def _wait_set_weights(self):
+        """Waits for 1 block by calling the block number. Otherwise waits until 24s"""
+        logger.trace("Waiting for 1 block before setting weights")
+        current_block = self.block
+        start_time = time.time()
+        while self.block == current_block:
+            # long max wait before retrying, up to 2 blocks
+            if time.time() - start_time > 2 * 12:
+                logger.warning("Waited for 1 block before setting weights, retrying...")
+                break
+            time.sleep(3)
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
@@ -678,7 +757,8 @@ class Validator(BaseNeuron):
             new_moving_average = torch.zeros(self.metagraph.n)
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
-            self.scores = new_moving_average
+            with self._tlock:
+                self.scores = new_moving_average
 
     def update_scores(self, hotkey_to_scores: dict[str, float]):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
@@ -717,6 +797,7 @@ class Validator(BaseNeuron):
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
+        # don't acquire lock here because we're already acquiring it in the CALLER
         self.scores = alpha * rewards + (1 - alpha) * self.scores
         logger.debug(f"Updated scores: {self.scores}")
 
@@ -729,7 +810,8 @@ class Validator(BaseNeuron):
 
         try:
             if np.count_nonzero(self.scores) == 0:
-                raise EmptyScores("Skipping save as scores are all empty")
+                logger.warning("Scores are all zeros, but saving anyway!")
+                # raise EmptyScores("Skipping save as scores are all empty")
 
             await ORM.create_or_update_validator_score(self.scores)
             logger.success(f"📦 Saved validator state with scores: {self.scores}")
@@ -741,8 +823,7 @@ class Validator(BaseNeuron):
     def save_state(self):
         """Saves the state of the validator to a file."""
         try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(self._save_state())
+            self.loop.run_until_complete(self._save_state())
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
             pass
@@ -752,7 +833,7 @@ class Validator(BaseNeuron):
             await connect_db()
             scores = await ORM.get_validator_score()
 
-            if not scores:
+            if scores is None:
                 num_processed_tasks = await ORM.get_num_processed_tasks()
                 if num_processed_tasks > 0:
                     logger.error(
@@ -765,7 +846,8 @@ class Validator(BaseNeuron):
                 return None
 
             logger.success(f"Loaded validator state: {scores=}")
-            self.scores = scores
+            with self._tlock:
+                self.scores = scores
 
         except Exception as e:
             logger.error(
@@ -775,13 +857,17 @@ class Validator(BaseNeuron):
 
     def load_state(self):
         """Loads the state of the validator from a file."""
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self._load_state())
+        try:
+            self.loop.run_until_complete(self._load_state())
+        except Exception as e:
+            logger.error(f"Failed to load validator state: {e}")
+            pass
 
-    @classmethod
-    async def log_validator_status(cls):
-        while not cls._should_exit:
-            logger.info(f"Validator running... {time.time()}")
+    async def log_validator_status(self):
+        while not self._should_exit:
+            logger.info(
+                f"Validator running... block:{str(self.block)} time: {time.time()}"
+            )
             await asyncio.sleep(dojo.VALIDATOR_STATUS)
 
     async def _get_task_results_from_miner(

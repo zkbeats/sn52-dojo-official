@@ -1,6 +1,10 @@
 .env
 .env.miner
 .env.validator
+.env.*
+!.env.miner.example
+!.env.validator.example
+
 .aider*
 package.json
 package-lock.json
