@@ -170,6 +170,12 @@ def add_args(parser):
         help="Whether to always include self in monitoring queries, mainly for testing",
     )
 
+    parser.add_argument(
+        "--service",
+        choices=["miner-decentralised", "miner-centralised", "validator"],
+        help="Specify the service to run (miner or validator) for auto_updater.",
+    )
+
     if neuron_type == "validator":
         parser.add_argument(
             "--neuron.sample_size",
@@ -221,7 +227,7 @@ def source_dotenv():
     """Source env file if provided"""
     config = get_config()
     if config.env_file:
-        load_dotenv(find_dotenv(config.env_file))
+        load_dotenv(find_dotenv(config.env_file), override=True)
         logger.trace(f"Sourcing env vars from {config.env_file}")
         return
 

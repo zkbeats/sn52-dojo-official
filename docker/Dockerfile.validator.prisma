@@ -26,4 +26,4 @@ RUN prisma generate
 RUN [ -n "$$DATABASE_URL" ]
 
 # Push Prisma schema to the database
-CMD ["prisma", "db", "push"]
+CMD ["prisma", "migrate", "deploy"]
