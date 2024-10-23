@@ -770,7 +770,7 @@ class Validator:
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             async with self._alock:
-                self.scores = new_moving_average
+                self.scores = torch.clamp(new_moving_average, min=0.0)
 
     async def update_scores(self, hotkey_to_scores: dict[str, float]):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
@@ -812,6 +812,7 @@ class Validator:
         # don't acquire lock here because we're already acquiring it in the CALLER
         async with self._alock:
             self.scores = alpha * rewards + (1 - alpha) * self.scores
+            self.scores = torch.clamp(self.scores, min=0.0)
         logger.debug(f"Updated scores: {self.scores}")
 
     async def save_state(
@@ -852,7 +853,7 @@ class Validator:
 
             logger.success(f"Loaded validator state: {scores=}")
             async with self._alock:
-                self.scores = scores
+                self.scores = torch.clamp(scores, 0.0)
 
         except Exception as e:
             logger.error(
