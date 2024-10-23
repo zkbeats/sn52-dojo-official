@@ -103,11 +103,11 @@ services:
     logging: *default-logging
 
   worker-api:
+    platform: linux/amd64
     env_file:
       - .env.miner
     volumes:
       - ./.env.miner:/dojo-api/.env
-    platform: linux/amd64
     image: ghcr.io/tensorplex-labs/dojo-worker-api:main
     environment:
       RUNTIME_ENV: local
@@ -139,7 +139,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 30s
+      start_period: 90s # seems too long but let's just give enough time so that healthcheck doesn't fail
     networks:
       - dojo-miner
     logging: *default-logging

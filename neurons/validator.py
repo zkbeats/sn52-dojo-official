@@ -2,7 +2,6 @@ import asyncio
 import copy
 import gc
 import random
-import threading
 import time
 import traceback
 from collections import defaultdict
@@ -30,6 +29,7 @@ from commons.exceptions import (
     SetWeightsFailed,
 )
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
+from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.scoring import Scoring
 from commons.utils import (
@@ -37,10 +37,12 @@ from commons.utils import (
     get_epoch_time,
     get_new_uuid,
     init_wandb,
+    initialise,
     set_expire_time,
+    ttl_get_block,
 )
 from database.client import connect_db
-from dojo.base.neuron import BaseNeuron
+from dojo import __spec_version__
 from dojo.protocol import (
     CompletionResponses,
     CriteriaTypeEnum,
@@ -57,16 +59,36 @@ from dojo.utils.config import get_config
 from dojo.utils.uids import MinerUidSelector, extract_miner_uids, is_miner
 
 
-class Validator(BaseNeuron):
+class Validator:
     _should_exit: bool = False
     _alock = asyncio.Lock()
-    _tlock = threading.Lock()
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
 
+    subtensor: bt.subtensor
+    wallet: bt.wallet
+    metagraph: bt.metagraph
+    spec_version: int = __spec_version__
+
     def __init__(self):
-        super().__init__()
         self.loop = asyncio.get_event_loop()
+        # TODO @dev WIP from BaseNeuron
+        self.config = ObjectManager.get_config()
+
+        # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
+        self.device = self.config.neuron.device
+
+        # Log the configuration for reference.
+        logger.info(self.config)
+
+        self.wallet, self.subtensor, self.metagraph, self.axon = initialise(self.config)
+
+        # Each miner gets a unique identity (UID) in the network for differentiation.
+        self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        logger.info(
+            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid}"
+        )
+        self.step = 0
 
         # Dendrite lets us send messages to other nodes (axons) in the network.
         self.dendrite = bt.dendrite(wallet=self.wallet)
@@ -79,7 +101,6 @@ class Validator(BaseNeuron):
 
         # manually always register and always sync metagraph when application starts
         self.check_registered()
-        self.resync_metagraph()
         self.executor = ThreadPoolExecutor(max_workers=2)
 
         init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
@@ -167,8 +188,7 @@ class Validator(BaseNeuron):
                             processed_request_ids.append(task.request.request_id)
                             continue
 
-                        with self._tlock:
-                            self.update_scores(hotkey_to_scores=hotkey_to_score)
+                        await self.update_scores(hotkey_to_scores=hotkey_to_score)
                         await self.send_scores(
                             synapse=ScoringResult(
                                 request_id=task.request.request_id,
@@ -202,7 +222,7 @@ class Validator(BaseNeuron):
                             mean_weighted_gt_scores = (
                                 torch.stack(
                                     [
-                                        miner_scores.ground_truth.score
+                                        miner_scores.ground_truth
                                         for miner_scores in criteria_to_miner_score.values()
                                     ]
                                 )
@@ -270,7 +290,7 @@ class Validator(BaseNeuron):
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
-            self.resync_metagraph()
+            await self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
                 logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
@@ -565,6 +585,7 @@ class Validator(BaseNeuron):
     async def run(self):
         logger.info(f"Validator starting at block: {str(self.block)}")
 
+        await self.resync_metagraph()
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
@@ -577,7 +598,7 @@ class Validator(BaseNeuron):
                         break
 
                     # Sync metagraph and potentially set weights.
-                    await self.loop.run_in_executor(self.executor, self.sync)
+                    await self.sync()
 
                     self.step += 1
                 except Exception as e:
@@ -597,7 +618,7 @@ class Validator(BaseNeuron):
             logger.error("Error during validation", str(err))
             logger.debug(print_exception(type(err), err, err.__traceback__))
 
-    def set_weights(self):
+    async def set_weights(self):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners.
         The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
@@ -610,45 +631,35 @@ class Validator(BaseNeuron):
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
-        # Calculate the average reward for each uid across non-zero values.
-        # Replace any NaN values with 0.
-        normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
-
-        logger.debug(f"Raw scores: {self.scores}")
-        logger.debug(f"normalized weights: {normalized_weights}")
-        logger.debug(f"normalized weights uids: {self.metagraph.uids}")
         logger.info("Attempting to set weights")
 
         safe_uids = self.metagraph.uids
         if isinstance(self.metagraph.uids, np.ndarray):
-            pass
+            safe_uids = torch.from_numpy(safe_uids).to("cpu")
         elif isinstance(self.metagraph.uids, torch.Tensor):
-            safe_uids = self.metagraph.uids.to("cpu").numpy()
+            pass
+
+        # ensure sum = 1
+        normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
 
         safe_normalized_weights = normalized_weights
         if isinstance(normalized_weights, np.ndarray):
-            pass
+            safe_normalized_weights = torch.from_numpy(normalized_weights).to("cpu")
         elif isinstance(normalized_weights, torch.Tensor):
-            safe_normalized_weights = normalized_weights.to("cpu").numpy()
+            pass
 
-        # Process the raw weights to final_weights via subtensor limitations.
-        (
-            processed_weight_uids,
-            processed_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(  # type: ignore
-            uids=safe_uids,
-            weights=safe_normalized_weights,
-            netuid=self.config.netuid,
-            subtensor=self.subtensor,
-            metagraph=self.metagraph,
-        )
-        logger.debug(f"processed weights {processed_weights}")
-        logger.debug(f"processed weights uids {processed_weight_uids}")
+        min_allowed_weights = self.subtensor.min_allowed_weights(self.config.netuid)
+        max_weight_limit = self.subtensor.max_weight_limit(self.config.netuid)
+        logger.debug(f"min_allowed_weights: {min_allowed_weights}")
+        logger.debug(f"max_weight_limit: {max_weight_limit}")
 
-        self.set_weights_in_thread(processed_weight_uids, processed_weights)
+        logger.debug("Attempting to set weights")
+        logger.debug(f"weights: {safe_normalized_weights}")
+        logger.debug(f"uids: {safe_uids}")
+        await self.set_weights_in_thread(safe_uids, safe_normalized_weights)
         return
 
-    def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
+    async def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
         """Wrapper function to set weights in a separate thread
 
         Args:
@@ -660,7 +671,7 @@ class Validator(BaseNeuron):
         """
         logger.trace("Attempting to set weights in another thread")
 
-        def _set_weights(lock: threading.Lock) -> tuple[bool, str]:
+        def _set_weights() -> tuple[bool, str]:
             """LOCAL FUNCTION to set weights, we pass in a lock because of how
             we are calling this function from the main thread, sending it
             to a separate thread to avoid blocking the main thread, so the lock
@@ -675,47 +686,48 @@ class Validator(BaseNeuron):
                 - boolean: True if weights were set successfully, False otherwise
                 - string: Message indicating the result of set weights
             """
-            with lock:
-                max_attempts = 5
-                attempt = 0
-                while attempt < max_attempts:
-                    try:
-                        logger.trace(f"Set weights attempt {attempt+1}/{max_attempts}")
-                        result, message = self.subtensor.set_weights(
-                            wallet=self.wallet,
-                            netuid=self.config.netuid,  # type: ignore
-                            uids=uids.tolist(),
-                            weights=weights.tolist(),
-                            wait_for_finalization=False,
-                            wait_for_inclusion=False,
-                            version_key=self.spec_version,
-                            max_retries=1,
-                        )
-                        if result:
-                            logger.success(f"Set weights successfully: {message}")
-                            return result, message
+            max_attempts = 5
+            attempt = 0
+            while attempt < max_attempts:
+                try:
+                    logger.trace(f"Set weights attempt {attempt+1}/{max_attempts}")
+                    result, message = self.subtensor.set_weights(
+                        wallet=self.wallet,
+                        netuid=self.config.netuid,  # type: ignore
+                        uids=uids.tolist(),
+                        weights=weights.tolist(),
+                        wait_for_finalization=False,
+                        wait_for_inclusion=False,
+                        version_key=self.spec_version,
+                        max_retries=1,
+                    )
+                    if result:
+                        logger.success(f"Set weights successfully: {message}")
+                        return result, message
 
-                        logger.warning(
-                            f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
-                        )
-                        raise SetWeightsFailed(
-                            f"Failed to set weights with message:{message}"
-                        )
+                    logger.warning(
+                        f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
+                    )
+                    raise SetWeightsFailed(
+                        f"Failed to set weights with message:{message}"
+                    )
 
-                    except Exception as e:
-                        attempt += 1
-                        logger.warning(f"Attempt {attempt} failed: {e}")
-                        if attempt == max_attempts:
-                            logger.error("Max attempts reached. Could not set weights.")
-                            return False, "Max attempts reached"
+                except Exception as e:
+                    attempt += 1
+                    logger.warning(f"Attempt {attempt} failed: {e}")
+                    if attempt == max_attempts:
+                        logger.error("Max attempts reached. Could not set weights.")
+                        return False, "Max attempts reached"
 
-                        self._wait_set_weights()
+                    self._wait_set_weights()
 
             return False, "Max attempts reached"
 
         logger.trace("Submitting callable func to executor")
-        future = self.executor.submit(_set_weights, self._tlock)
-        result = future.result()
+
+        async with self._alock:
+            future = self.loop.run_in_executor(self.executor, _set_weights)
+            result = await future
         return result
 
     def _wait_set_weights(self):
@@ -730,7 +742,7 @@ class Validator(BaseNeuron):
                 break
             time.sleep(3)
 
-    def resync_metagraph(self):
+    async def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
         # Copies state of metagraph before syncing.
         previous_metagraph = copy.deepcopy(self.metagraph)
@@ -757,10 +769,10 @@ class Validator(BaseNeuron):
             new_moving_average = torch.zeros(self.metagraph.n)
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
-            with self._tlock:
-                self.scores = new_moving_average
+            async with self._alock:
+                self.scores = torch.clamp(new_moving_average, min=0.0)
 
-    def update_scores(self, hotkey_to_scores: dict[str, float]):
+    async def update_scores(self, hotkey_to_scores: dict[str, float]):
         """Performs exponential moving average on the scores based on the rewards received from the miners,
         after setting the self.scores variable here, `set_weights` will be called to set the weights on chain.
         """
@@ -798,10 +810,12 @@ class Validator(BaseNeuron):
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
         # don't acquire lock here because we're already acquiring it in the CALLER
-        self.scores = alpha * rewards + (1 - alpha) * self.scores
+        async with self._alock:
+            self.scores = alpha * rewards + (1 - alpha) * self.scores
+            self.scores = torch.clamp(self.scores, min=0.0)
         logger.debug(f"Updated scores: {self.scores}")
 
-    async def _save_state(
+    async def save_state(
         self,
     ):
         """Saves the state of the validator to the database."""
@@ -819,14 +833,6 @@ class Validator(BaseNeuron):
             logger.debug(f"No need to to save validator state: {e}")
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
-
-    def save_state(self):
-        """Saves the state of the validator to a file."""
-        try:
-            self.loop.run_until_complete(self._save_state())
-        except Exception as e:
-            logger.error(f"Failed to save validator state: {e}")
-            pass
 
     async def _load_state(self):
         try:
@@ -846,8 +852,8 @@ class Validator(BaseNeuron):
                 return None
 
             logger.success(f"Loaded validator state: {scores=}")
-            with self._tlock:
-                self.scores = scores
+            async with self._alock:
+                self.scores = torch.clamp(scores, 0.0)
 
         except Exception as e:
             logger.error(
@@ -1043,3 +1049,48 @@ class Validator(BaseNeuron):
             model_id_to_avg_score[model_id] /= num_scores_by_workers
 
         return model_id_to_avg_rank, model_id_to_avg_score
+
+    def should_sync_metagraph(self):
+        """
+        Check if enough epoch blocks have elapsed since the last checkpoint to sync.
+        """
+        return (
+            self.block - self.metagraph.last_update[self.uid]
+        ) > self.config.neuron.epoch_length
+
+    def should_set_weights(self) -> bool:
+        # Don't set weights on initialization.
+        if self.step == 0:
+            return False
+
+        # Define appropriate logic for when set weights.
+        return (
+            self.block - self.metagraph.last_update[self.uid]
+        ) > self.config.neuron.epoch_length
+
+    def check_registered(self):
+        # --- Check for registration.
+        if not self.subtensor.is_hotkey_registered(
+            netuid=self.config.netuid,
+            hotkey_ss58=self.wallet.hotkey.ss58_address,
+        ):
+            logger.error(
+                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+                f" Please register the hotkey using `btcli s register` before trying again"
+            )
+            exit()
+
+    async def sync(self):
+        self.check_registered()
+
+        if self.should_sync_metagraph():
+            await self.resync_metagraph()
+
+        if self.should_set_weights():
+            await self.set_weights()
+
+        await self.save_state()
+
+    @property
+    def block(self):
+        return ttl_get_block(self.subtensor)

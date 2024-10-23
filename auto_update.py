@@ -1,10 +1,20 @@
 import argparse
 import subprocess
+import sys
 import time
+from datetime import datetime
 
 from bittensor.btlogging import logging as logger
 
+from commons.utils import datetime_to_iso8601_str
 from dojo import __version__
+from dojo.utils.config import source_dotenv
+
+source_dotenv()
+
+RED = "\033[91m"
+GREEN = "\033[92m"
+RESET = "\033[0m"
 
 CHECK_INTERVAL = 1800  # 30 minutes
 
@@ -14,27 +24,11 @@ BRANCH = "main"
 
 CONFIG = {
     "validator": {
-        # "services": [
-        #     "redis-service",
-        #     "synthetic-api",
-        #     "postgres-vali",
-        #     "prisma-setup-vali",
-        #     "validator",
-        # ],
         "images": ["dojo-synthetic-api"],
         "docker_compose_down": "docker compose --env-file .env.validator -f docker-compose.validator.yaml down",
         "docker_compose_up": "docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator",
     },
     "miner-decentralised": {
-        # "services": [
-        #     "redis-miner",
-        #     "postgres-miner",
-        #     "sidecar",
-        #     "prisma-setup-miner",
-        #     "worker-api",
-        #     "worker-ui",
-        #     "miner-decentralised",
-        # ],
         "images": ["dojo-worker-api", "dojo-ui"],
         "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
         "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-decentralised",
@@ -180,20 +174,22 @@ def check_for_image_updates(images):
     return has_update
 
 
-def stash_changes():
+def stash_changes(service_name: str):
     result = subprocess.run(
         ["git", "status", "--porcelain"], capture_output=True, text=True
     )
     if result.stdout.strip():
         logger.info("Stashing any local changes.")
-        subprocess.run(["git", "stash"], check=True)
+        current_time_utc = datetime_to_iso8601_str(datetime.now())
+        stash_entry_message = f"dojo auto-updater: {service_name} {current_time_utc}"
+        subprocess.run(["git", "stash", "push", "-m", stash_entry_message], check=True)
     else:
         logger.info("No changes to stash.")
 
 
 def pull_latest_changes():
     logger.info("Pulling latest changes from the main branch.")
-    # subprocess.run(["git", "pull", "origin", "main"], check=True)
+    subprocess.run(["git", "pull", "origin", "main"], check=True)
     subprocess.run(["git", "fetch", "--tags"], check=True)
 
 
@@ -223,40 +219,57 @@ def get_current_version():
     return version
 
 
-def update_repo():
+def update_repo(service_name: str):
     logger.info("Updating the repository..")
-    stash_changes()
+    stash_changes(service_name)
     pull_latest_changes()
     pop_stash()
 
 
+def get_current_branch():
+    """Get the current Git branch name."""
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to get current branch: {e}")
+        sys.exit(1)
+
+
 def main(service_name):
+    # Check if the current branch is 'main'
+    current_branch = get_current_branch()
+    if current_branch != "main":
+        logger.error(f"Current branch is '{current_branch}'. Please switch to 'main'.")
+        sys.exit(1)
+
     logger.info("Starting the main loop.")
     config = CONFIG[service_name]
 
-    # Initial update and start the docker services
-    current_dojo_version = get_current_version()
-    new_dojo_version = get_latest_remote_tag()
-
-    if current_dojo_version != new_dojo_version:
-        update_repo()
-
-    # Pull the latest images
     pull_docker_images(config["images"])
-    restart_docker(service_name)
 
     try:
         # Start the periodic check loop
         while True:
             logger.info("Checking for updates...")
+            current_dojo_version = get_current_version()
+            new_dojo_version = get_latest_remote_tag()
             has_image_updates = check_for_image_updates(config["images"])
 
-            if current_dojo_version != new_dojo_version:
-                logger.info("Repository has changed. Updating...")
-                update_repo()
-                current_dojo_version = new_dojo_version
-
+            # Check if either the version has changed or there are image updates
             if current_dojo_version != new_dojo_version or has_image_updates:
+                if current_dojo_version != new_dojo_version:
+                    logger.info(
+                        f"Repository has changed. {RED}{current_dojo_version}{RESET} -> {GREEN}{new_dojo_version}{RESET}"
+                    )
+                    update_repo(service_name)
+
+                # Restart Docker if there are any updates
                 restart_docker(service_name)
 
             logger.info(f"Sleeping for {CHECK_INTERVAL} seconds.")
@@ -271,11 +284,12 @@ def main(service_name):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the auto-update script.")
     parser.add_argument(
-        "service",
+        "--service",
         choices=["miner-decentralised", "miner-centralised", "validator"],
         help="Specify the service to run (miner or validator).",
     )
-    args = parser.parse_args()
+
+    args, _ = parser.parse_known_args()
 
     logger.info(f"Starting the {args.service} process.")
     main(args.service)

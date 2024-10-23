@@ -157,8 +157,6 @@ class Miner(BaseMinerNeuron):
 
         caller_uid = self.metagraph.hotkeys.index(caller_hotkey)
         validator_neuron: bt.NeuronInfo = self.metagraph.neurons[caller_uid]
-        if is_miner(self.metagraph, caller_uid):
-            return True, "Not a validator"
 
         if get_config().ignore_min_stake:
             message = f"""Ignoring min stake stake required: {VALIDATOR_MIN_STAKE} \
@@ -168,6 +166,9 @@ class Miner(BaseMinerNeuron):
                 False,
                 f"Ignored minimum validator stake requirement of {VALIDATOR_MIN_STAKE}",
             )
+
+        if is_miner(self.metagraph, caller_uid):
+            return True, "Not a validator"
 
         if validator_neuron.stake.tao < float(VALIDATOR_MIN_STAKE):
             logger.warning(

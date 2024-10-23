@@ -12,6 +12,7 @@ from scipy.stats import spearmanr
 from torch.nn import functional as F
 
 from dojo.protocol import (
+    CodeAnswer,
     CompletionResponses,
     CriteriaType,
     FeedbackRequest,
@@ -32,7 +33,6 @@ class GroundTruthScore(BaseModel):
         arbitrary_types_allowed = True
 
     score: torch.Tensor
-    raw_scores_by_miner: torch.Tensor
 
 
 class ConsensusScore(BaseModel):
@@ -48,7 +48,7 @@ class Score(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    ground_truth: GroundTruthScore = Field(description="Raw score from ground truth")
+    ground_truth: torch.Tensor = Field(description="Raw score from ground truth")
     consensus: ConsensusScore = Field(description="Raw score from ground truth")
     weighted_consensus: torch.Tensor | None = Field(
         default=None, description="Weighted score from consensus"
@@ -72,6 +72,14 @@ def _get_ground_truth_by_criteria(criteria, model_with_score_sorted):
     elif isinstance(criteria, MultiScoreCriteria):
         gt = [score for _, score in model_with_score_sorted]
     return np.array(gt)
+
+
+def minmax_scale(tensor: torch.Tensor | np.ndarray) -> torch.Tensor:
+    if isinstance(tensor, np.ndarray):
+        tensor = torch.from_numpy(tensor)
+    min = tensor.min()
+    max = tensor.max()
+    return (tensor - min) / (max - min)
 
 
 class Scoring:
@@ -264,6 +272,86 @@ class Scoring:
         )
 
     @staticmethod
+    def ground_truth_score_V1(
+        criteria: CriteriaType,
+        ground_truth: dict[str, int],
+        miner_responses: List[FeedbackRequest],
+    ):
+        """
+        - Calculate score between all miner outputs and ground truth.
+        - Ensures that the resulting tensor is normalized to sum to 1.
+
+        Args:
+            criteria (CriteriaType): Criteria type
+            ground_truth (dict[str, int]): Ground truth, where key is completion id and value is rank.
+            miner_responses (List[FeedbackRequest]): Miner responses
+
+        Raises:
+            ValueError: If miner responses are empty or contain None values.
+
+        Returns:
+            torch.Tensor: 1D tensor of scores, representing score for each miner based on order in miner_responses.
+        """
+        cid_rank_tuples = [
+            (completion_id, rank) for completion_id, rank in ground_truth.items()
+        ]
+        logger.debug(f"scoring: cid rank tuples\n{cid_rank_tuples}")
+
+        cid_with_rank_sorted = sorted(
+            cid_rank_tuples, key=lambda x: x[1], reverse=False
+        )
+        logger.debug(f"scoring: cid with rank sorted\n{cid_with_rank_sorted}")
+        # sort miner outputs according to ground truth order
+        # we're using this because miners receive a shuffled order of the completions
+        cids_sorted = [cid for cid, _ in cid_with_rank_sorted]
+        miner_outputs = []
+        for response in miner_responses:
+            curr_miner_outputs = []
+            for completion in sorted(
+                response.completion_responses,
+                key=lambda r: cids_sorted.index(r.model),
+            ):
+                curr_miner_outputs.append(
+                    _get_miner_response_by_criteria(criteria, completion)
+                )
+            miner_outputs.append(curr_miner_outputs)
+        if miner_outputs == [] or None in miner_outputs:
+            raise ValueError("Miner outputs cannot be empty or contain None values")
+
+        miner_outputs = np.array(miner_outputs)
+        logger.debug(f"scoring: raw miner outputs\n{miner_outputs}")
+        # convert miner outputs to something ordinal
+        miner_outputs_normalised = np.array([minmax_scale(m) for m in miner_outputs])
+        logger.debug(
+            f"scoring: raw miner outputs with nans\n{miner_outputs_normalised}"
+        )
+
+        miner_outputs = miner_outputs_normalised
+        logger.debug(f"scoring: raw miner outputs with nans\n{miner_outputs}")
+
+        # use minmax scale to ensure ground truth is in the range [0, 1]
+        ground_truth_arr = minmax_scale(
+            np.array([rank for _, rank in cid_with_rank_sorted])
+        ).numpy()
+        logger.debug(f"scoring: ground truth\n{ground_truth_arr}")
+
+        logger.info(f"scoring: Miner outputs\n{miner_outputs}")
+        logger.info(f"scoring: Ground truth\n{ground_truth_arr}")
+
+        l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
+        logger.debug(f"scoring: l1 norm\n{l1_norm}")
+
+        # case where a miner provides the same score for all completions
+        # convert any nans to zero
+        l1_norm = np.where(np.isnan(l1_norm), 0, l1_norm)
+
+        logger.debug(f"scoring: l1 norm no nans\n{l1_norm}")
+        # normalize to ensure sum is 1
+        l1_norm = l1_norm / np.sum(l1_norm)
+        logger.debug(f"scoring: l1 norm normalized (sum=1)\n{l1_norm}")
+        return torch.from_numpy(l1_norm)
+
+    @staticmethod
     def cmp_ground_truth(
         criteria: CriteriaType,
         request: FeedbackRequest,
@@ -316,10 +404,7 @@ class Scoring:
         gt_reward = F.softmax(diff_gt, dim=0)
         logger.debug(f"{gt_reward=}")
 
-        return GroundTruthScore(
-            score=torch.tensor(gt_reward),
-            raw_scores_by_miner=diff_gt,
-        )
+        return torch.tensor(gt_reward)
 
     @staticmethod
     def spm_ground_truth(
@@ -362,10 +447,7 @@ class Scoring:
         )  # Handle NaN values
         gt_reward = F.softmax(torch.tensor(spearman_scores, dtype=torch.float32), dim=0)
 
-        return GroundTruthScore(
-            score=gt_reward,
-            raw_scores_by_miner=spearman_scores,
-        )
+        return gt_reward
 
     @staticmethod
     def calculate_score(
@@ -375,7 +457,10 @@ class Scoring:
     ) -> tuple[dict[CriteriaType, Score], Dict[str, float]]:
         """Combines both consensus score and difference with ground truths scoring to output a final score per miner"""
         criteria_to_miner_scores = defaultdict(Score)
-        hotkey_to_final_score = defaultdict(float)
+        hotkey_to_final_score: dict[str, float] = defaultdict(float)
+        logger.trace(
+            f"Calculating scores for miner responses ... {len(miner_responses)}"
+        )
         for criteria in criteria_types:
             # valid responses
             valid_miner_responses = []
@@ -388,33 +473,46 @@ class Scoring:
                     continue
                 valid_miner_responses.append(response)
 
-            if len(valid_miner_responses) < 2:
-                logger.warning(
-                    f"Skipping scoring for request id: {request.request_id} as not enough valid responses"
-                )
-                for r in valid_miner_responses:
-                    hotkey_to_final_score[r.axon.hotkey] = 0.0
+            # if len(valid_miner_responses) < 2:
+            #     logger.warning(
+            #         f"Skipping scoring for request id: {request.request_id} as not enough valid responses"
+            #     )
+            #     for r in valid_miner_responses:
+            #         hotkey_to_final_score[r.axon.hotkey] = 0.0
 
-                continue
+            #     continue
 
-            if isinstance(criteria, RankingCriteria):
-                gt_score = Scoring.spm_ground_truth(
-                    criteria, request, valid_miner_responses
-                )
-            else:
-                gt_score = Scoring.cmp_ground_truth(
-                    criteria, request, valid_miner_responses
-                )
+            # # if isinstance(criteria, RankingCriteria):
+            # #     gt_score = Scoring.spm_ground_truth(
+            # #         criteria, request, valid_miner_responses
+            # #     )
 
-            consensus_score = Scoring.consensus_score(
-                criteria, request, valid_miner_responses
+            logger.debug(f"Got {len(valid_miner_responses)} valid responses")
+
+            if not isinstance(criteria, MultiScoreCriteria):
+                raise NotImplementedError("Only multi-score criteria is supported atm")
+            gt_score = Scoring.ground_truth_score_V1(
+                criteria, request.ground_truth, valid_miner_responses
+            )
+
+            # TODO @dev add heuristics once scoring is stable
+            # consensus_score = Scoring.consensus_score(
+            #     criteria, request, valid_miner_responses
+            # )
+
+            # dummy for now
+            consensus_score = ConsensusScore(
+                score=torch.zeros(len(valid_miner_responses)),
+                mse_by_miner=torch.zeros(len(valid_miner_responses)),
+                icc_by_miner=torch.zeros(len(valid_miner_responses)),
             )
 
             for i, r in enumerate(valid_miner_responses):
-                consensus = 0.2 * consensus_score.score[i]
-                ground_truth = 0.8 * gt_score.score[i]
+                # consensus = 0.2 * consensus_score.score[i]
+                ground_truth = gt_score[i]
 
-                hotkey_to_final_score[r.axon.hotkey] = (consensus + ground_truth) / len(
+                # NOTE: just use ground truth for now
+                hotkey_to_final_score[r.axon.hotkey] = ground_truth / len(
                     criteria_types
                 )
 
@@ -445,18 +543,249 @@ def _map_ground_truth_rank_to_score(
         min_score: int | float,
         max_score: int | float,
     ):
-        return rank / (max_rank - min_rank) * (max_score - min_score) + min_score
+        # invert the rank because rank with lower number
+        # i.e. rank 1 is best, rank 3 is worst (0-indexed)
+        inverted_rank = max_rank - rank + min_rank
+        return (
+            inverted_rank / (max_rank - min_rank) * (max_score - min_score) + min_score
+        )
 
     completion_id_score_tuples: list[tuple[str, float]] = []
+
+    min_rank = min(list(unique_ranks))
+    max_rank = max(list(unique_ranks))
 
     for completion_id, rank in list(ground_truth.items()):
         score = convert_rank_to_score(
             rank,
-            min(list(unique_ranks)),
-            max(list(unique_ranks)),
+            min_rank,
+            max_rank,
             criteria.min,
             criteria.max,
         )
         completion_id_score_tuples.append((completion_id, float(score)))
 
     return completion_id_score_tuples
+
+
+def _test_ground_truth_score_v1():
+    gt = {
+        "a": 0,
+        "b": 1,
+        "c": 2,
+        "d": 3,
+    }
+
+    a = CompletionResponses(
+        model="a", completion=CodeAnswer(files=[]), completion_id="a"
+    )
+    b = CompletionResponses(
+        model="b", completion=CodeAnswer(files=[]), completion_id="b"
+    )
+    c = CompletionResponses(
+        model="c", completion=CodeAnswer(files=[]), completion_id="c"
+    )
+    d = CompletionResponses(
+        model="d", completion=CodeAnswer(files=[]), completion_id="d"
+    )
+
+    criteria = MultiScoreCriteria(options=["a", "b", "c", "d"], min=0, max=100)
+
+    miner_responses = [
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=56
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=78
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=89
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=100
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=12
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=12
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=12
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=12
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=12
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=23
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=12
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=12
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=56
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=34
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=23
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=23
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=23
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=23
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=34
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=12
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=23
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=23
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=76
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=100
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=1
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=1
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=76
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=100
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=1
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=12
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=23
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=34
+                ),
+            ],
+        ),
+        FeedbackRequest(
+            prompt="test_prompt",
+            task_type="test_task",
+            criteria_types=[criteria],
+            expire_at="",
+            completion_responses=[
+                CompletionResponses(
+                    model="a", completion=a.completion, completion_id="a", score=1
+                ),
+                CompletionResponses(
+                    model="b", completion=b.completion, completion_id="b", score=23
+                ),
+                CompletionResponses(
+                    model="c", completion=c.completion, completion_id="c", score=76
+                ),
+                CompletionResponses(
+                    model="d", completion=d.completion, completion_id="d", score=100
+                ),
+            ],
+        ),
+    ]
+
+    import matplotlib.pyplot as plt
+
+    scores = Scoring.ground_truth_score_V1(criteria, gt, miner_responses)
+    scores = [score / sum(scores) for score in scores]  # Normalize to ensure sum is 1
+
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(len(scores)), scores)
+    plt.xlabel("Miner Response Index")
+    plt.ylabel("Score")
+    plt.title("Ground Truth Scores")
+    plt.show()
+
+
+if __name__ == "__main__":
+    _test_ground_truth_score_v1()

@@ -29,7 +29,6 @@ __spec_version__ = (
     + (1 * int(version_split[2]))
 )
 
-# Import all submodules.
 
 VALIDATOR_MIN_STAKE = 20000
 TASK_DEADLINE = 6 * 60 * 60
@@ -41,6 +40,7 @@ VALIDATOR_UPDATE_SCORE = 3600
 VALIDATOR_STATUS = 60
 MINER_STATUS = 60
 DOJO_TASK_MONITORING = 60
+assert VALIDATOR_UPDATE_SCORE < TASK_DEADLINE
 
 
 def get_dojo_api_base_url() -> str:

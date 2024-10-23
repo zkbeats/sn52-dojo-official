@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+    branches:
+      - main
 
 jobs:
   release:
@@ -21,7 +25,22 @@ jobs:
         with:
           node-version: "18.17.0"
 
+      - name: Semantic Release Dry Run
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == false }}
+        uses: cycjimmy/semantic-release-action@v4.1.1
+        with:
+          branch: main
+          dry_run: true
+          extra_plugins: |
+            @semantic-release/changelog
+            @semantic-release/git
+            @semantic-release/github
+            conventional-changelog-conventionalcommits
+        env:
+          GH_TOKEN: ${{ secrets.PAT }}
+
       - name: Action For Semantic Release
+        if: ${{ github.event_name == 'push' }}
         uses: cycjimmy/semantic-release-action@v4.1.1
         with:
           branch: main
