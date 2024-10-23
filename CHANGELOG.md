@@ -1,3 +1,12 @@
+## [1.1.7](https://github.com/tensorplex-labs/dojo/compare/v1.1.6...v1.1.7) (2024-10-23)
+
+### Bug Fixes
+
+* min weights ([f772ef2](https://github.com/tensorplex-labs/dojo/commit/f772ef20d367d55d1e0080021e3e87ebc13379dc))
+* runtimeerror and asyncio context already entered ([#30](https://github.com/tensorplex-labs/dojo/issues/30)) ([c5b53fb](https://github.com/tensorplex-labs/dojo/commit/c5b53fb188664a5e0ed3dca163a7899a2d853df2))
+* scoring mechanism use ground truth only, use L1 norm ([#31](https://github.com/tensorplex-labs/dojo/issues/31)) ([4085dd8](https://github.com/tensorplex-labs/dojo/commit/4085dd8055a6205b312de54b94d63cd08265184d))
+* updated auto-update script ([#25](https://github.com/tensorplex-labs/dojo/issues/25)) ([0113498](https://github.com/tensorplex-labs/dojo/commit/0113498daf01fe2260582792efd3d19e4e985b2d))
+
 ## [1.1.6](https://github.com/tensorplex-labs/dojo/compare/v1.1.5...v1.1.6) (2024-10-22)
 
 ### Bug Fixes
