@@ -195,18 +195,10 @@ def test_ground_truth_leaderboard_data_normal(mock_get_leaderboard_scores):
             ]
         )
 
-        assert not np.isnan(
-            gt_score.score
-        ).any(), "overall score does not contain NaN values"
-        assert not np.isinf(
-            gt_score.score
-        ).any(), "overall score does not contain inf values"
-        assert not np.isnan(
-            gt_score.raw_scores_by_miner
-        ).any(), "overall score does not contain NaN values"
-        assert not np.isinf(
-            gt_score.raw_scores_by_miner
-        ).any(), "overall score does not contain inf values"
+        assert not np.isnan(gt_score).any(), "overall score does not contain NaN values"
+        assert not np.isinf(gt_score).any(), "overall score does not contain inf values"
+        assert not np.isnan(gt_score).any(), "overall score does not contain NaN values"
+        assert not np.isinf(gt_score).any(), "overall score does not contain inf values"
 
 
 @pytest.mark.skip(reason="Placeholder test, not implemented yet")
@@ -408,19 +400,16 @@ def test_spearman_correlation(scoring_module):
 
         # Ensure no NaN values
         assert not np.isnan(
-            spearman_score.score
+            spearman_score
         ).any(), "Spearman score should not contain NaN values"
 
         # Ensure no inf values
         assert not np.isinf(
-            spearman_score.score
+            spearman_score
         ).any(), "Spearman score should not contain inf values"
 
         # Check if Spearman scores are valid between -1 and 1
-        assert torch.all(
-            (spearman_score.raw_scores_by_miner >= -1)
-            & (spearman_score.raw_scores_by_miner <= 1)
-        )
+        assert torch.all((spearman_score >= -1) & (spearman_score <= 1))
 
 
 def test_spearman_correlation_known_values(scoring_module):
@@ -443,13 +432,13 @@ def test_spearman_correlation_known_values(scoring_module):
 
         # Ensure that the raw scores are cast to float32 before comparison
         assert torch.allclose(
-            spearman_score.raw_scores_by_miner[0].float(),  # Cast to float32
+            spearman_score[0],
             torch.tensor(miner_a_spearman, dtype=torch.float32),
             atol=1e-6,
-        ), f"Expected Spearman score for Miner A: {miner_a_spearman}, got: {spearman_score.raw_scores_by_miner[0]}"
+        ), f"Expected Spearman score for Miner A: {miner_a_spearman}, got: {spearman_score[0]}"
 
         assert torch.allclose(
-            spearman_score.raw_scores_by_miner[1].float(),  # Cast to float32
+            spearman_score[1],
             torch.tensor(miner_b_spearman, dtype=torch.float32),
             atol=1e-6,
-        ), f"Expected Spearman score for Miner B: {miner_b_spearman}, got: {spearman_score.raw_scores_by_miner[1]}"
+        ), f"Expected Spearman score for Miner B: {miner_b_spearman}, got: {spearman_score[1]}"

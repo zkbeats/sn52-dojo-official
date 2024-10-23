@@ -202,7 +202,7 @@ class Validator(BaseNeuron):
                             mean_weighted_gt_scores = (
                                 torch.stack(
                                     [
-                                        miner_scores.ground_truth.score
+                                        miner_scores.ground_truth
                                         for miner_scores in criteria_to_miner_score.values()
                                     ]
                                 )
@@ -610,42 +610,32 @@ class Validator(BaseNeuron):
                 "Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
             )
 
-        # Calculate the average reward for each uid across non-zero values.
-        # Replace any NaN values with 0.
-        normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
-
-        logger.debug(f"Raw scores: {self.scores}")
-        logger.debug(f"normalized weights: {normalized_weights}")
-        logger.debug(f"normalized weights uids: {self.metagraph.uids}")
         logger.info("Attempting to set weights")
 
         safe_uids = self.metagraph.uids
         if isinstance(self.metagraph.uids, np.ndarray):
-            pass
+            safe_uids = torch.from_numpy(safe_uids).to("cpu")
         elif isinstance(self.metagraph.uids, torch.Tensor):
-            safe_uids = self.metagraph.uids.to("cpu").numpy()
+            pass
+
+        # ensure sum = 1
+        normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
 
         safe_normalized_weights = normalized_weights
         if isinstance(normalized_weights, np.ndarray):
-            pass
+            safe_normalized_weights = torch.from_numpy(normalized_weights).to("cpu")
         elif isinstance(normalized_weights, torch.Tensor):
-            safe_normalized_weights = normalized_weights.to("cpu").numpy()
+            pass
 
-        # Process the raw weights to final_weights via subtensor limitations.
-        (
-            processed_weight_uids,
-            processed_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(  # type: ignore
-            uids=safe_uids,
-            weights=safe_normalized_weights,
-            netuid=self.config.netuid,
-            subtensor=self.subtensor,
-            metagraph=self.metagraph,
-        )
-        logger.debug(f"processed weights {processed_weights}")
-        logger.debug(f"processed weights uids {processed_weight_uids}")
+        min_allowed_weights = self.subtensor.min_allowed_weights(self.config.netuid)
+        max_weight_limit = self.subtensor.max_weight_limit(self.config.netuid)
+        logger.debug(f"min_allowed_weights: {min_allowed_weights}")
+        logger.debug(f"max_weight_limit: {max_weight_limit}")
 
-        self.set_weights_in_thread(processed_weight_uids, processed_weights)
+        logger.debug("Attempting to set weights")
+        logger.debug(f"weights: {safe_normalized_weights}")
+        logger.debug(f"uids: {safe_uids}")
+        self.set_weights_in_thread(safe_uids, safe_normalized_weights)
         return
 
     def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
@@ -821,12 +811,10 @@ class Validator(BaseNeuron):
             logger.error(f"Failed to save validator state: {e}")
 
     def save_state(self):
-        """Saves the state of the validator to a file."""
         try:
             self.loop.run_until_complete(self._save_state())
         except Exception as e:
             logger.error(f"Failed to save validator state: {e}")
-            pass
 
     async def _load_state(self):
         try:

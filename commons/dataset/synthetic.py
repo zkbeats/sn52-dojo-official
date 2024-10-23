@@ -51,6 +51,13 @@ class SyntheticAPI:
         return
 
     @classmethod
+    async def close_session(cls):
+        if cls._session is not None:
+            await cls._session.close()
+            cls._session = None
+        logger.debug("Ensured SyntheticAPI session is closed.")
+
+    @classmethod
     async def get_qa(cls) -> SyntheticQA | None:
         await cls.init_session()
 

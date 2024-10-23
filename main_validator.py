@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     validator.executor.shutdown(wait=True)
     wandb.finish()
     validator.save_state()
-    await SyntheticAPI._session.close()
+    await SyntheticAPI.close_session()
     await disconnect_db()
 
 
