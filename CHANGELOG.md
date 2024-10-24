@@ -1,3 +1,13 @@
+## [1.2.0](https://github.com/tensorplex-labs/dojo/compare/v1.1.7...v1.2.0) (2024-10-24)
+
+### Features
+
+* add more logs to wandb ([#29](https://github.com/tensorplex-labs/dojo/issues/29)) ([0e81a5f](https://github.com/tensorplex-labs/dojo/commit/0e81a5fd090a4db351193393151eeab7c7d45ea8))
+
+### Bug Fixes
+
+* auto-updater on start, prisma output files on host machine ([#33](https://github.com/tensorplex-labs/dojo/issues/33)) ([0448f6c](https://github.com/tensorplex-labs/dojo/commit/0448f6cff2578fbd28412374b7a3f18545f2bc71))
+
 ## [1.1.7](https://github.com/tensorplex-labs/dojo/compare/v1.1.6...v1.1.7) (2024-10-23)
 
 ### Bug Fixes
