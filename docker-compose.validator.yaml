@@ -92,6 +92,8 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.validator.prisma
+    command: >
+      sh -c "prisma migrate deploy && prisma generate"
     env_file:
       - .env.validator
     working_dir: /app

@@ -95,7 +95,7 @@ class Validator:
         logger.info(f"Dendrite: {self.dendrite}")
         # Set up initial scoring weights for validation
         self.scores: torch.Tensor = torch.zeros(
-            self.metagraph.n.item(), dtype=torch.float32
+            len(self.metagraph.hotkeys), dtype=torch.float32
         )
         self.load_state()
 
@@ -242,8 +242,27 @@ class Validator:
                                 "ground_truth": mean_weighted_gt_scores,
                             }
 
+                            hotkey_to_dojo_task_scores_and_gt = []
+                            for miner_response in task.miner_responses:
+                                if miner_response.dojo_task_id is not None:
+                                    model_to_score_and_gt_map = await ORM.get_scores_and_ground_truth_by_dojo_task_id(
+                                        miner_response.dojo_task_id
+                                    )
+                                    hotkey_to_dojo_task_scores_and_gt.append(
+                                        {
+                                            "hotkey": miner_response.axon.hotkey,
+                                            "dojo_task_id": miner_response.dojo_task_id,
+                                            "scores_and_gt": model_to_score_and_gt_map,
+                                        }
+                                    )
+
+                            score_data["hotkey_to_dojo_task_scores_and_gt"] = (
+                                hotkey_to_dojo_task_scores_and_gt
+                            )
+
                             wandb_data = jsonable_encoder(
                                 {
+                                    "request_id": task.request.request_id,
                                     "task": task.request.task_type,
                                     "criteria": task.request.criteria_types,
                                     "prompt": task.request.prompt,
@@ -633,12 +652,6 @@ class Validator:
 
         logger.info("Attempting to set weights")
 
-        safe_uids = self.metagraph.uids
-        if isinstance(self.metagraph.uids, np.ndarray):
-            safe_uids = torch.from_numpy(safe_uids).to("cpu")
-        elif isinstance(self.metagraph.uids, torch.Tensor):
-            pass
-
         # ensure sum = 1
         normalized_weights = F.normalize(self.scores.cpu(), p=1, dim=0)
 
@@ -648,6 +661,11 @@ class Validator:
         elif isinstance(normalized_weights, torch.Tensor):
             pass
 
+        # we don't read uids from metagraph because polling metagraph happens
+        # faster than calling set_weights and self.scores is already
+        # based on uids, adjusted based on metagraph during `resync_metagraph`
+        uids = torch.tensor(list(range(len(safe_normalized_weights))))
+
         min_allowed_weights = self.subtensor.min_allowed_weights(self.config.netuid)
         max_weight_limit = self.subtensor.max_weight_limit(self.config.netuid)
         logger.debug(f"min_allowed_weights: {min_allowed_weights}")
@@ -655,8 +673,9 @@ class Validator:
 
         logger.debug("Attempting to set weights")
         logger.debug(f"weights: {safe_normalized_weights}")
-        logger.debug(f"uids: {safe_uids}")
-        await self.set_weights_in_thread(safe_uids, safe_normalized_weights)
+        logger.debug(f"uids: {uids}")
+
+        await self.set_weights_in_thread(uids, safe_normalized_weights)
         return
 
     async def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
@@ -766,7 +785,7 @@ class Validator:
         # If so, we need to add new hotkeys and moving averages.
         if len(previous_metagraph.hotkeys) < len(self.metagraph.hotkeys):
             # Update the size of the moving average scores.
-            new_moving_average = torch.zeros(self.metagraph.n)
+            new_moving_average = torch.zeros(len(self.metagraph.hotkeys))
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
             async with self._alock:
@@ -787,19 +806,16 @@ class Validator:
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
-        rewards = torch.zeros((len(self.metagraph.axons),))
-        neuron_hotkeys: List[str] = [neuron.hotkey for neuron in self.metagraph.neurons]
+        rewards = torch.zeros((len(self.metagraph.hotkeys),))
         for index, (key, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
             if nan_value_indices[index]:
                 rewards[key] = 0.0  # type: ignore
             # search metagraph for hotkey and grab uid
             try:
-                uid = neuron_hotkeys.index(key)
+                uid = self.metagraph.hotkeys.index(key)
             except ValueError:
-                logger.warning(
-                    "Old hotkey found from previous metagraph, skip setting weights"
-                )
+                logger.warning("Old hotkey found from previous metagraph")
                 continue
 
             logger.debug(f"Score for hotkey {key} is {value}")

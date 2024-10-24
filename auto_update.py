@@ -252,6 +252,7 @@ def main(service_name):
     config = CONFIG[service_name]
 
     pull_docker_images(config["images"])
+    restart_docker(service_name)
 
     try:
         # Start the periodic check loop
@@ -259,6 +260,10 @@ def main(service_name):
             logger.info("Checking for updates...")
             current_dojo_version = get_current_version()
             new_dojo_version = get_latest_remote_tag()
+
+            logger.info(f"Current version: {current_dojo_version}")
+            logger.info(f"Latest version: {new_dojo_version}")
+
             has_image_updates = check_for_image_updates(config["images"])
 
             # Check if either the version has changed or there are image updates
@@ -271,7 +276,6 @@ def main(service_name):
 
                 # Restart Docker if there are any updates
                 restart_docker(service_name)
-
             logger.info(f"Sleeping for {CHECK_INTERVAL} seconds.")
             time.sleep(CHECK_INTERVAL)
     except KeyboardInterrupt:

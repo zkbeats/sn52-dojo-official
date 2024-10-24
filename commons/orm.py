@@ -521,3 +521,65 @@ class ORM:
             return None
 
         return torch.tensor(json.loads(score_record.score))
+
+    @staticmethod
+    async def get_scores_and_ground_truth_by_dojo_task_id(
+        dojo_task_id: str,
+    ) -> dict[str, dict[str, float | int | None]]:
+        """
+        Fetch the scores, model IDs from Completion_Response_Model for a given Dojo task ID.
+        Also fetches rank IDs from Ground_Truth_Model for the given Dojo task ID.
+
+        Args:
+            dojo_task_id (str): The Dojo task ID to search for.
+
+        Returns:
+            dict[str, dict[str, float | int | None]]: A dictionary mapping model ID to a dict containing score and rank_id.
+        """
+        try:
+            # First, find the Feedback_Request_Model with the given dojo_task_id
+            feedback_request = await Feedback_Request_Model.prisma().find_first(
+                where=Feedback_Request_ModelWhereInput(dojo_task_id=dojo_task_id),
+                include={
+                    "completions": True,
+                    "parent_request": {"include": {"ground_truths": True}},
+                },
+            )
+
+            if not feedback_request:
+                logger.warning(
+                    f"No Feedback_Request_Model found for dojo_task_id: {dojo_task_id}"
+                )
+                return {}
+
+            parent_request = feedback_request.parent_request
+            if not parent_request:
+                logger.warning(
+                    f"No parent request found for dojo_task_id: {dojo_task_id}"
+                )
+                return {}
+
+            rank_id_map = {
+                gt.obfuscated_model_id: gt.rank_id
+                for gt in parent_request.ground_truths
+            }
+
+            # Extract scores from the completions
+            scores_and_gts = {
+                completion.model: {
+                    "score": completion.score,
+                    "ground_truth_rank_id": rank_id_map.get(completion.completion_id),
+                }
+                for completion in feedback_request.completions
+            }
+
+            logger.debug(
+                f"Found {len(scores_and_gts)} scores and ground truths for dojo_task_id: {dojo_task_id}"
+            )
+            return scores_and_gts
+
+        except Exception as e:
+            logger.error(
+                f"Error fetching completion scores and ground truths for dojo_task_id {dojo_task_id}: {e}"
+            )
+            return {}
