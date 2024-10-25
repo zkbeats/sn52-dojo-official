@@ -570,10 +570,6 @@ class Validator:
                     logger.debug(f"Miner {miner_hotkey} must provide the dojo task id")
                     continue
 
-                logger.debug(
-                    f"Successfully mapped obfuscated model names for {miner_hotkey}"
-                )
-
                 # update the miner response with the real model ids
                 valid_miner_responses.append(miner_response)
         except Exception as e:
@@ -1039,9 +1035,20 @@ class Validator:
                                 request_id, task.miner_responses
                             )
 
-                            logger.info(
-                                f"Updating task {request_id} with miner's completion data, success ? {success}"
-                            )
+                            if success:
+                                hotkeys = [m.axon.hotkey for m in task.miner_responses]
+                                uids = [
+                                    self.metagraph.hotkeys.index(hotkey)
+                                    for hotkey in hotkeys
+                                    if hotkey in self.metagraph.hotkeys
+                                ]
+                                logger.success(
+                                    f"Successfully updated miner completions for request id: {request_id}, uids: {uids}"
+                                )
+                            else:
+                                logger.error(
+                                    f"Failed to update miner completions for request id: {request_id}, uids: {uids}"
+                                )
                         await asyncio.sleep(0.2)
             except NoNewUnexpiredTasksYet as e:
                 logger.info(f"No new unexpired tasks yet: {e}")
