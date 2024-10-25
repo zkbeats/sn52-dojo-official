@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
 from torch.nn import functional as F
 
+from commons.utils import _terminal_plot
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponses,
@@ -50,6 +51,7 @@ def _reward_cubic(
     scaling: float,
     translation: float,
     offset: float,
+    visualize: bool = False,
 ) -> np.ndarray:
     """Calculate cubic reward based on miner outputs and ground truth.
 
@@ -82,12 +84,15 @@ def _reward_cubic(
     # convert any nans to zero
     points = np.where(np.isnan(points), 0, points)
     logger.debug(f"scoring: cubic reward no nans\n{points}")
+    if visualize:
+        _terminal_plot("scoring: cubic reward (raw)", points, sort=True)
 
     # ensure all values are in the range [0, 1]
     points = minmax_scale(points)
     logger.debug(f"scoring: cubic reward minmax scaled\n{points}")
-
     points = points.numpy()
+    if visualize:
+        _terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
 
     assert isinstance(points, np.ndarray)
     return points
@@ -394,7 +399,7 @@ class Scoring:
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         cubic_reward: np.ndarray = _reward_cubic(
-            miner_outputs, ground_truth_arr, 0.04, 7, 2
+            miner_outputs, ground_truth_arr, 0.04, 7, 2, visualize=True
         )
         logger.debug(f"scoring: cubic reward\n{cubic_reward}")
 
@@ -405,9 +410,12 @@ class Scoring:
 
         # calculate sum for each segment of the cubic reward
         try:
-            segment_size = len(cubic_reward) // 5
+            # create a copy of cubic reward
+            cubic_reward_copy = np.copy(cubic_reward)
+            cubic_reward_copy.sort()
+            segment_size = len(cubic_reward_copy) // 5
             segment_sums = [
-                np.sum(cubic_reward[i * segment_size : (i + 1) * segment_size])
+                np.sum(cubic_reward_copy[i * segment_size : (i + 1) * segment_size])
                 for i in range(5)
             ]
             logger.debug(f"scoring: segment sums\n{segment_sums}")
@@ -553,7 +561,7 @@ class Scoring:
             # #         criteria, request, valid_miner_responses
             # #     )
 
-            logger.debug(f"Got {len(valid_miner_responses)} valid responses")
+            logger.error(f"📝 Filtered {len(valid_miner_responses)} valid responses")
 
             if not isinstance(criteria, MultiScoreCriteria):
                 raise NotImplementedError("Only multi-score criteria is supported atm")
