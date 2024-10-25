@@ -91,7 +91,7 @@ validator-logs:
 	docker compose --env-file .env.validator -f docker-compose.validator.yaml logs -f validator
 
 # ---------------------------------------------------------------------------- #
-#                             Subtensor                             #
+#                             LOCAL SUBTENSOR                                  #
 # ---------------------------------------------------------------------------- #
 
 subtensor-mainnet:

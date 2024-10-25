@@ -86,7 +86,7 @@ services:
       - .env.miner
     read_only: true
     environment:
-      SAS_SUBSTRATE_URL: ${SUBTENSOR_ENDPOINT:-wss://entrypoint-finney.opentensor.ai:443}
+      SAS_SUBSTRATE_URL: ${SUBTENSOR_ENDPOINT:-wss://entrypoint-finney.opentensor.ai}
       SAS_EXPRESS_PORT: 8081
     expose:
       - 8081
