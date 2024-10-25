@@ -310,6 +310,17 @@ WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 AXON_PORT=8888 # port to serve requests over the public network for validators to call
 
+
+# Mainnet related config
+NETUID=52 
+SUBTENSOR_NETWORK=finney
+SUBTENSOR_ENDPOINT=ws://mainnet-lite:9944
+
+# Testnet related config
+# NETUID=98
+# SUBTENSOR_NETWORK=test
+# SUBTENSOR_ENDPOINT=ws://testnet-lite:9944
+
 # for dojo-ui
 NEXT_PUBLIC_BACKEND_URL=http://localhost:3000
 
