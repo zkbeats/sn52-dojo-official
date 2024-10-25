@@ -2,9 +2,6 @@
 
 set -e
 
-SUBTENSOR_NETWORK="${SUBTENSOR_NETWORK:-finney}"
-SUBTENSOR_ENDPOINT="${SUBTENSOR_ENDPOINT:-wss://entrypoint-finney.opentensor.ai:443}"
-
 # run bash
 if [ "$1" = 'btcli' ]; then
     exec /bin/bash -c "btcli --help && exec /bin/bash"
