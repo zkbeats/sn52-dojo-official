@@ -33,6 +33,7 @@ from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.scoring import Scoring
 from commons.utils import (
+    _terminal_plot,
     datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
@@ -579,7 +580,7 @@ class Validator:
             logger.error(f"Failed to map obfuscated model to original model: {e}")
             pass
 
-        logger.info(f"⬇️ Got {len(valid_miner_responses)} valid responses")
+        logger.info(f"⬇️ Received {len(valid_miner_responses)} valid responses")
 
         if valid_miner_responses is None or len(valid_miner_responses) == 0:
             logger.info("No valid miner responses to process... skipping")
@@ -728,7 +729,7 @@ class Validator:
                         netuid=self.config.netuid,  # type: ignore
                         uids=uids.tolist(),
                         weights=weights.tolist(),
-                        wait_for_finalization=False,
+                        wait_for_finalization=True,
                         wait_for_inclusion=False,
                         version_key=self.spec_version,
                         max_retries=1,
@@ -840,8 +841,14 @@ class Validator:
         alpha: float = self.config.neuron.moving_average_alpha
         # don't acquire lock here because we're already acquiring it in the CALLER
         async with self._alock:
+            _terminal_plot(
+                f"scores before update, block: {self.block}", self.scores.numpy()
+            )
             self.scores = alpha * rewards + (1 - alpha) * self.scores
             self.scores = torch.clamp(self.scores, min=0.0)
+            _terminal_plot(
+                f"scores after update, block: {self.block}", self.scores.numpy()
+            )
         logger.debug(f"Updated scores: {self.scores}")
 
     async def save_state(
@@ -883,6 +890,9 @@ class Validator:
             logger.success(f"Loaded validator state: {scores=}")
             async with self._alock:
                 self.scores = torch.clamp(scores, 0.0)
+                _terminal_plot(
+                    f"scores on load, block: {self.block}", self.scores.numpy()
+                )
 
         except Exception as e:
             logger.error(
@@ -1005,9 +1015,6 @@ class Validator:
                             )
 
                             if not task_results and not len(task_results) > 0:
-                                logger.debug(
-                                    f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
-                                )
                                 continue
 
                             # Process task result
