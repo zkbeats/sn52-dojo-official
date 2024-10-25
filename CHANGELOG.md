@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/tensorplex-labs/dojo/compare/v1.2.0...v1.2.1) (2024-10-25)
+
+### Bug Fixes
+
+* add aynscio lock for send request ([8a006d7](https://github.com/tensorplex-labs/dojo/commit/8a006d774db82089efa5dda209df1b8d9cff0e0f))
+* add batching for sending feedback requests ([88eebb3](https://github.com/tensorplex-labs/dojo/commit/88eebb3edc17330fdea4b2f8514f4b2dc9c3c7d7))
+
 ## [1.2.0](https://github.com/tensorplex-labs/dojo/compare/v1.1.7...v1.2.0) (2024-10-24)
 
 ### Features
