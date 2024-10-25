@@ -9,6 +9,9 @@ volumes:
 networks:
   dojo-miner:
     driver: bridge
+  # Applicable only for sidecar and miner service
+  subtensor:
+    name: subtensor
 
 services:
   # ============== COMMON SERVICES ============== #
@@ -100,6 +103,7 @@ services:
       start_period: 30s
     networks:
       - dojo-miner
+      - subtensor
     logging: *default-logging
 
   worker-api:
@@ -190,6 +194,7 @@ services:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
       - dojo-miner
+      - subtensor
     logging: *default-logging
 
   miner-centralised:
@@ -206,4 +211,5 @@ services:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
       - dojo-miner
+      - subtensor
     logging: *default-logging

@@ -11,6 +11,8 @@ volumes:
 networks:
   dojo-validator:
     driver: bridge
+  subtensor:
+    name: subtensor
 
 services:
   # ============== COMMON SERVICES ============== #
@@ -120,6 +122,7 @@ services:
     command: ["validator"]
     networks:
       - dojo-validator
+      - subtensor
     depends_on:
       synthetic-api:
         condition: service_healthy
