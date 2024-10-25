@@ -345,58 +345,73 @@ class Validator:
         dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: FeedbackRequest
     ) -> list[FeedbackRequest]:
         """Based on the initial synapse, send shuffled ordering of responses so that miners cannot guess ordering of ground truth"""
-        tasks = []
-        for axon in axons:
-            # shuffle synapse Responses
-            shuffled_completions = random.sample(
-                synapse.completion_responses,
-                k=len(synapse.completion_responses),
-            )
+        all_responses = []
+        batch_size = 10
+        batch_timeout = 3
 
-            # Apply obfuscation to each completion's files
-            # TODO re-nable obfuscation
-            # await Validator._obfuscate_completion_files(shuffled_completions)
+        for i in range(0, len(axons), batch_size):
+            batch_axons = axons[i : i + batch_size]
+            tasks = []
 
-            criteria_types = []
-            # ensure criteria options same order as completion_responses
-            for criteria in synapse.criteria_types:
-                if not isinstance(criteria, MultiScoreCriteria):
-                    logger.trace(f"Skipping non multi score criteria: {criteria}")
-                    continue
-                options = [completion.model for completion in shuffled_completions]
-                criteria = MultiScoreCriteria(
-                    options=options,
-                    min=criteria.min,
-                    max=criteria.max,
+            for axon in batch_axons:
+                # shuffle synapse Responses
+                shuffled_completions = random.sample(
+                    synapse.completion_responses,
+                    k=len(synapse.completion_responses),
                 )
-                criteria_types.append(criteria)
 
-            shuffled_synapse = FeedbackRequest(
-                epoch_timestamp=synapse.epoch_timestamp,
-                request_id=synapse.request_id,
-                prompt=synapse.prompt,
-                completion_responses=shuffled_completions,
-                task_type=synapse.task_type,
-                criteria_types=criteria_types,
-                expire_at=synapse.expire_at,
-            )
+                # Apply obfuscation to each completion's files
+                # TODO re-nable obfuscation
+                # await Validator._obfuscate_completion_files(shuffled_completions)
 
-            tasks.append(
-                dendrite.forward(
-                    axons=[axon],
-                    synapse=shuffled_synapse,
-                    deserialize=False,
-                    timeout=12,
+                criteria_types = []
+                # ensure criteria options same order as completion_responses
+                for criteria in synapse.criteria_types:
+                    if not isinstance(criteria, MultiScoreCriteria):
+                        logger.trace(f"Skipping non multi score criteria: {criteria}")
+                        continue
+                    options = [completion.model for completion in shuffled_completions]
+                    criteria = MultiScoreCriteria(
+                        options=options,
+                        min=criteria.min,
+                        max=criteria.max,
+                    )
+                    criteria_types.append(criteria)
+
+                shuffled_synapse = FeedbackRequest(
+                    epoch_timestamp=synapse.epoch_timestamp,
+                    request_id=synapse.request_id,
+                    prompt=synapse.prompt,
+                    completion_responses=shuffled_completions,
+                    task_type=synapse.task_type,
+                    criteria_types=criteria_types,
+                    expire_at=synapse.expire_at,
                 )
+
+                tasks.append(
+                    dendrite.forward(
+                        axons=[axon],
+                        synapse=shuffled_synapse,
+                        deserialize=False,
+                        timeout=12,
+                    )
+                )
+
+            # Gather results for this batch and flatten the list
+            batch_responses = await asyncio.gather(*tasks)
+            flat_batch_responses = [
+                response for sublist in batch_responses for response in sublist
+            ]
+            all_responses.extend(flat_batch_responses)
+
+            logger.info(
+                f"Processed batch {i//batch_size + 1} of {(len(axons)-1)//batch_size + 1}"
             )
+            # Add timeout between batches, but not after the last batch
+            if i + batch_size < len(axons):
+                await asyncio.sleep(batch_timeout)
 
-        # Gather results and flatten the list
-        nested_responses = await asyncio.gather(*tasks)
-        flat_responses = [
-            response for sublist in nested_responses for response in sublist
-        ]
-
-        return flat_responses
+        return all_responses
 
     @staticmethod
     async def _obfuscate_completion_files(
