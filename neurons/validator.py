@@ -62,6 +62,7 @@ from dojo.utils.uids import MinerUidSelector, extract_miner_uids, is_miner
 class Validator:
     _should_exit: bool = False
     _alock = asyncio.Lock()
+    _request_alock = asyncio.Lock()
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
 
@@ -347,7 +348,6 @@ class Validator:
         """Based on the initial synapse, send shuffled ordering of responses so that miners cannot guess ordering of ground truth"""
         all_responses = []
         batch_size = 10
-        batch_timeout = 3
 
         for i in range(0, len(axons), batch_size):
             batch_axons = axons[i : i + batch_size]
@@ -407,9 +407,6 @@ class Validator:
             logger.info(
                 f"Processed batch {i//batch_size + 1} of {(len(axons)-1)//batch_size + 1}"
             )
-            # Add timeout between batches, but not after the last batch
-            if i + batch_size < len(axons):
-                await asyncio.sleep(batch_timeout)
 
         return all_responses
 
@@ -624,7 +621,8 @@ class Validator:
         try:
             while True:
                 try:
-                    await self.send_request()
+                    async with self._request_alock:
+                        await self.send_request()
 
                     # # Check if we should exit.
                     if self._should_exit:
