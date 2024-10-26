@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
     logger.info("Performing shutdown tasks...")
     validator._should_exit = True
     validator.executor.shutdown(wait=True)
+    validator.subtensor.substrate.close()
     wandb.finish()
     await validator.save_state()
     await SyntheticAPI.close_session()

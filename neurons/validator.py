@@ -62,7 +62,8 @@ from dojo.utils.uids import MinerUidSelector, extract_miner_uids, is_miner
 
 class Validator:
     _should_exit: bool = False
-    _alock = asyncio.Lock()
+    _scores_alock = asyncio.Lock()
+    _uids_alock = asyncio.Lock()
     _request_alock = asyncio.Lock()
     _threshold = 0.1
     _active_miner_uids: set[int] = set()
@@ -74,6 +75,7 @@ class Validator:
 
     def __init__(self):
         self.loop = asyncio.get_event_loop()
+        self.set_weights_loop = asyncio.new_event_loop()
         # TODO @dev WIP from BaseNeuron
         self.config = ObjectManager.get_config()
 
@@ -331,7 +333,7 @@ class Validator:
                     for uid, axon in enumerate(self.metagraph.axons)
                     if axon.hotkey in active_hotkeys
                 ]
-                async with self._alock:
+                async with self._uids_alock:
                     self._active_miner_uids = set(active_uids)
                 logger.debug(
                     f"⬇️ Heartbeats acknowledged by active miners: {sorted(active_uids)}"
@@ -434,7 +436,7 @@ class Validator:
                             logger.error(f"Error obfuscating {file.filename}: {e}")
 
     async def get_miner_uids(self, is_external_request: bool, request_id: str):
-        async with self._alock:
+        async with self._uids_alock:
             if is_external_request:
                 sel_miner_uids = [
                     uid
@@ -547,9 +549,6 @@ class Validator:
                 miner_hotkey = (
                     miner_response.axon.hotkey if miner_response.axon else "??"
                 )
-                logger.debug(
-                    f"Received response from miner: {miner_hotkey, miner_response.dojo_task_id}"
-                )
                 # map obfuscated model names back to the original model names
                 real_model_ids = []
 
@@ -577,7 +576,6 @@ class Validator:
             pass
 
         logger.info(f"⬇️ Received {len(valid_miner_responses)} valid responses")
-
         if valid_miner_responses is None or len(valid_miner_responses) == 0:
             logger.info("No valid miner responses to process... skipping")
             return
@@ -681,11 +679,18 @@ class Validator:
         logger.debug(f"min_allowed_weights: {min_allowed_weights}")
         logger.debug(f"max_weight_limit: {max_weight_limit}")
 
-        logger.debug("Attempting to set weights")
         logger.debug(f"weights: {safe_normalized_weights}")
         logger.debug(f"uids: {uids}")
 
-        await self.set_weights_in_thread(uids, safe_normalized_weights)
+        # dependent on underlying `set_weights` call
+        result, message = await self.set_weights_in_thread(
+            uids, safe_normalized_weights
+        )
+        if not result:
+            logger.error(f"Failed to set weights: {message}")
+            return
+
+        logger.success(f"Set weights successfully: {message}")
         return
 
     async def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
@@ -700,7 +705,7 @@ class Validator:
         """
         logger.trace("Attempting to set weights in another thread")
 
-        def _set_weights() -> tuple[bool, str]:
+        async def _set_weights() -> tuple[bool, str]:
             """LOCAL FUNCTION to set weights, we pass in a lock because of how
             we are calling this function from the main thread, sending it
             to a separate thread to avoid blocking the main thread, so the lock
@@ -719,7 +724,10 @@ class Validator:
             attempt = 0
             while attempt < max_attempts:
                 try:
-                    logger.trace(f"Set weights attempt {attempt+1}/{max_attempts}")
+                    logger.debug(
+                        f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
+                    )
+                    await self._ensure_subtensor_ws_connected()
                     result, message = self.subtensor.set_weights(
                         wallet=self.wallet,
                         netuid=self.config.netuid,  # type: ignore
@@ -748,18 +756,21 @@ class Validator:
                         logger.error("Max attempts reached. Could not set weights.")
                         return False, "Max attempts reached"
 
-                    self._wait_set_weights()
+                    await self._wait_set_weights()
 
             return False, "Max attempts reached"
 
         logger.trace("Submitting callable func to executor")
 
-        async with self._alock:
-            future = self.loop.run_in_executor(self.executor, _set_weights)
-            result = await future
-        return result
+        try:
+            result, message = await asyncio.wait_for(_set_weights(), timeout=90)
+        except asyncio.TimeoutError:
+            logger.error("Setting weights timed out after 90 seconds")
+            return False, "Failed to set weights within time limit"
 
-    def _wait_set_weights(self):
+        return result, message
+
+    async def _wait_set_weights(self):
         """Waits for 1 block by calling the block number. Otherwise waits until 24s"""
         logger.trace("Waiting for 1 block before setting weights")
         current_block = self.block
@@ -798,7 +809,7 @@ class Validator:
             new_moving_average = torch.zeros(len(self.metagraph.hotkeys))
             min_len = min(len(previous_metagraph.hotkeys), len(self.scores))
             new_moving_average[:min_len] = self.scores[:min_len]
-            async with self._alock:
+            async with self._scores_alock:
                 self.scores = torch.clamp(new_moving_average, min=0.0)
 
     async def update_scores(self, hotkey_to_scores: dict[str, float]):
@@ -836,7 +847,7 @@ class Validator:
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
         # don't acquire lock here because we're already acquiring it in the CALLER
-        async with self._alock:
+        async with self._scores_alock:
             _terminal_plot(
                 f"scores before update, block: {self.block}", self.scores.numpy()
             )
@@ -884,7 +895,7 @@ class Validator:
                 return None
 
             logger.success(f"Loaded validator state: {scores=}")
-            async with self._alock:
+            async with self._scores_alock:
                 self.scores = torch.clamp(scores, 0.0)
                 _terminal_plot(
                     f"scores on load, block: {self.block}", self.scores.numpy()
@@ -985,13 +996,12 @@ class Validator:
 
                     for task in task_batch:
                         request_id = task.request.request_id
-                        miner_responses = task.miner_responses
 
                         obfuscated_to_real_model_id = await ORM.get_real_model_ids(
                             request_id
                         )
 
-                        for miner_response in miner_responses:
+                        for miner_response in task.miner_responses:
                             if (
                                 not miner_response.axon
                                 or not miner_response.axon.hotkey
@@ -1030,25 +1040,35 @@ class Validator:
                                 if model_id in model_id_to_avg_score:
                                     completion.score = model_id_to_avg_score[model_id]
 
-                            # Update miner responses in the database
-                            success = await ORM.update_miner_completions_by_request_id(
-                                request_id, task.miner_responses
-                            )
+                        # Update miner responses in the database
+                        (
+                            success,
+                            failed_response_ids,
+                        ) = await ORM.update_miner_completions_by_request_id(
+                            request_id, task.miner_responses
+                        )
 
-                            if success:
-                                hotkeys = [m.axon.hotkey for m in task.miner_responses]
-                                uids = [
-                                    self.metagraph.hotkeys.index(hotkey)
-                                    for hotkey in hotkeys
-                                    if hotkey in self.metagraph.hotkeys
-                                ]
-                                logger.success(
-                                    f"Successfully updated miner completions for request id: {request_id}, uids: {uids}"
-                                )
-                            else:
-                                logger.error(
-                                    f"Failed to update miner completions for request id: {request_id}, uids: {uids}"
-                                )
+                        if success:
+                            hotkeys = [m.axon.hotkey for m in task.miner_responses]
+                            uids = [
+                                self.metagraph.hotkeys.index(hotkey)
+                                for hotkey in hotkeys
+                                if hotkey in self.metagraph.hotkeys
+                            ]
+                            logger.success(
+                                f"Successfully updated miner completions for request id: {request_id}, uids: {uids}"
+                            )
+                        else:
+                            failed_miner_responses = [
+                                task.miner_responses[i] for i in failed_response_ids
+                            ]
+                            failed_uids = [
+                                self.metagraph.hotkeys.index(m.axon.hotkey)
+                                for m in failed_miner_responses
+                            ]
+                            logger.error(
+                                f"Failed to update miner completions for request id: {request_id}, uids: {failed_uids}"
+                            )
                         await asyncio.sleep(0.2)
             except NoNewUnexpiredTasksYet as e:
                 logger.info(f"No new unexpired tasks yet: {e}")
@@ -1113,6 +1133,7 @@ class Validator:
 
     def check_registered(self):
         # --- Check for registration.
+        self.loop.run_until_complete(self._ensure_subtensor_ws_connected())
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
@@ -1137,3 +1158,33 @@ class Validator:
     @property
     def block(self):
         return ttl_get_block(self.subtensor)
+
+    async def _ensure_subtensor_ws_connected(
+        self, max_attempts: int = 5, sleep: int = 3
+    ):
+        if not self.subtensor.substrate.websocket:
+            logger.warning("Substrate websocket not initialized, skipping connection")
+            return False
+
+        attempts = 0
+        while (
+            not self.subtensor.substrate.websocket.connected and attempts < max_attempts
+        ):
+            self.subtensor.substrate.connect_websocket()
+            attempts += 1
+            if self.subtensor.substrate.websocket.connected:
+                logger.debug(
+                    f"Successfully connected to substrate websocket on attempt {attempts}"
+                )
+                return True
+            else:
+                await asyncio.sleep(sleep)
+
+        if not self.subtensor.substrate.websocket.connected:
+            logger.error(
+                "Failed to connect to substrate websocket after maximum attempts"
+            )
+            return False
+
+        logger.debug("Substrate websocket is already connected")
+        return True

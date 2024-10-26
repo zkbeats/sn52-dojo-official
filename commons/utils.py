@@ -43,7 +43,7 @@ def _terminal_plot(
         y = y_copy
 
     # plot actual points first
-    plotext.scatter(x, y, marker="fhd", color="red")  # show the points exactly
+    plotext.scatter(x, y, marker="bitcoin", color="orange")  # show the points exactly
     plotext.title(title)
     plotext.ticks_color("red")
     plotext.xfrequency(1)  # Set frequency to 1 for better alignment

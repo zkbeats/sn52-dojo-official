@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-from dojo.utils.config import source_dotenv
+from dojo.utils.config import get_config, source_dotenv
 
 source_dotenv()
 
@@ -41,6 +41,17 @@ VALIDATOR_STATUS = 60
 MINER_STATUS = 60
 DOJO_TASK_MONITORING = 60
 assert VALIDATOR_UPDATE_SCORE < TASK_DEADLINE
+
+if get_config().fast_mode:
+    print("Running in fast mode for testing purposes...")
+    VALIDATOR_MIN_STAKE = 20000
+    TASK_DEADLINE = 180
+    VALIDATOR_RUN = 60
+    VALIDATOR_HEARTBEAT = 15
+    VALIDATOR_UPDATE_SCORE = 120
+    VALIDATOR_STATUS = 1200
+    MINER_STATUS = 1200
+    DOJO_TASK_MONITORING = 15
 
 
 def get_dojo_api_base_url() -> str:
