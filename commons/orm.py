@@ -442,7 +442,7 @@ class ORM:
         """
         try:
             feedback_request_model: Feedback_Request_Model | None = None
-            async with transaction() as tx:
+            async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
                 logger.trace("Starting transaction for saving task.")
 
                 feedback_request_model = await tx.feedback_request_model.create(
