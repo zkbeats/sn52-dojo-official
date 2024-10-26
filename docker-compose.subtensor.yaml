@@ -28,6 +28,9 @@ services:
       - "9933"
     environment:
       - CARGO_HOME=/var/www/node-subtensor/.cargo
+    logging:
+      options:
+        max-size: "100m"
 
   mainnet-lite:
     <<: *common
