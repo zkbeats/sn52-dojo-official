@@ -4,7 +4,11 @@ from datetime import datetime, timezone
 import bittensor as bt
 from loguru import logger
 
-from commons.exceptions import InvalidMinerResponse, InvalidValidatorRequest
+from commons.exceptions import (
+    InvalidCompletion,
+    InvalidMinerResponse,
+    InvalidValidatorRequest,
+)
 from commons.utils import (
     datetime_as_utc,
     datetime_to_iso8601_str,
@@ -12,7 +16,10 @@ from commons.utils import (
 )
 from database.prisma import Json
 from database.prisma.enums import CriteriaTypeEnum
-from database.prisma.models import Criteria_Type_Model, Feedback_Request_Model
+from database.prisma.models import (
+    Criteria_Type_Model,
+    Feedback_Request_Model,
+)
 from database.prisma.types import (
     Completion_Response_ModelCreateInput,
     Criteria_Type_ModelCreateInput,
@@ -196,6 +203,9 @@ def map_feedback_request_model_to_feedback_request(
         ]
 
         # Map completion responses
+        if not model.completions:
+            raise InvalidCompletion("No completion responses found to map")
+
         completion_responses = [
             CompletionResponses(
                 completion_id=completion.completion_id,
@@ -204,7 +214,7 @@ def map_feedback_request_model_to_feedback_request(
                 rank_id=completion.rank_id,
                 score=completion.score,
             )
-            for completion in model.completions or []
+            for completion in model.completions
         ]
 
         ground_truth: dict[str, int] = {}

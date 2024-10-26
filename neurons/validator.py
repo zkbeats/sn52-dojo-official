@@ -33,6 +33,7 @@ from commons.objects import ObjectManager
 from commons.orm import ORM
 from commons.scoring import Scoring
 from commons.utils import (
+    _terminal_plot,
     datetime_as_utc,
     get_epoch_time,
     get_new_uuid,
@@ -569,17 +570,13 @@ class Validator:
                     logger.debug(f"Miner {miner_hotkey} must provide the dojo task id")
                     continue
 
-                logger.debug(
-                    f"Successfully mapped obfuscated model names for {miner_hotkey}"
-                )
-
                 # update the miner response with the real model ids
                 valid_miner_responses.append(miner_response)
         except Exception as e:
             logger.error(f"Failed to map obfuscated model to original model: {e}")
             pass
 
-        logger.info(f"⬇️ Got {len(valid_miner_responses)} valid responses")
+        logger.info(f"⬇️ Received {len(valid_miner_responses)} valid responses")
 
         if valid_miner_responses is None or len(valid_miner_responses) == 0:
             logger.info("No valid miner responses to process... skipping")
@@ -728,7 +725,7 @@ class Validator:
                         netuid=self.config.netuid,  # type: ignore
                         uids=uids.tolist(),
                         weights=weights.tolist(),
-                        wait_for_finalization=False,
+                        wait_for_finalization=True,
                         wait_for_inclusion=False,
                         version_key=self.spec_version,
                         max_retries=1,
@@ -840,8 +837,14 @@ class Validator:
         alpha: float = self.config.neuron.moving_average_alpha
         # don't acquire lock here because we're already acquiring it in the CALLER
         async with self._alock:
+            _terminal_plot(
+                f"scores before update, block: {self.block}", self.scores.numpy()
+            )
             self.scores = alpha * rewards + (1 - alpha) * self.scores
             self.scores = torch.clamp(self.scores, min=0.0)
+            _terminal_plot(
+                f"scores after update, block: {self.block}", self.scores.numpy()
+            )
         logger.debug(f"Updated scores: {self.scores}")
 
     async def save_state(
@@ -883,6 +886,9 @@ class Validator:
             logger.success(f"Loaded validator state: {scores=}")
             async with self._alock:
                 self.scores = torch.clamp(scores, 0.0)
+                _terminal_plot(
+                    f"scores on load, block: {self.block}", self.scores.numpy()
+                )
 
         except Exception as e:
             logger.error(
@@ -1005,9 +1011,6 @@ class Validator:
                             )
 
                             if not task_results and not len(task_results) > 0:
-                                logger.debug(
-                                    f"Task ID: {task_id} by miner: {miner_hotkey} has not been completed yet or no task results."
-                                )
                                 continue
 
                             # Process task result
@@ -1032,9 +1035,20 @@ class Validator:
                                 request_id, task.miner_responses
                             )
 
-                            logger.info(
-                                f"Updating task {request_id} with miner's completion data, success ? {success}"
-                            )
+                            if success:
+                                hotkeys = [m.axon.hotkey for m in task.miner_responses]
+                                uids = [
+                                    self.metagraph.hotkeys.index(hotkey)
+                                    for hotkey in hotkeys
+                                    if hotkey in self.metagraph.hotkeys
+                                ]
+                                logger.success(
+                                    f"Successfully updated miner completions for request id: {request_id}, uids: {uids}"
+                                )
+                            else:
+                                logger.error(
+                                    f"Failed to update miner completions for request id: {request_id}, uids: {uids}"
+                                )
                         await asyncio.sleep(0.2)
             except NoNewUnexpiredTasksYet as e:
                 logger.info(f"No new unexpired tasks yet: {e}")
