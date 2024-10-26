@@ -1,3 +1,10 @@
+## [1.3.0](https://github.com/tensorplex-labs/dojo/compare/v1.2.2...v1.3.0) (2024-10-26)
+
+### Features
+
+* add plotting of weights in terminal for logging ([0376aa5](https://github.com/tensorplex-labs/dojo/commit/0376aa577cbc93bab58f56d969e8fba2ca980b4e))
+* tune cubic function for scores ([0a23e1d](https://github.com/tensorplex-labs/dojo/commit/0a23e1db42da41078626df2cc0352323dd5c0bf8))
+
 ## [1.2.2](https://github.com/tensorplex-labs/dojo/compare/v1.2.1...v1.2.2) (2024-10-25)
 
 ## [1.2.1](https://github.com/tensorplex-labs/dojo/compare/v1.2.0...v1.2.1) (2024-10-25)
