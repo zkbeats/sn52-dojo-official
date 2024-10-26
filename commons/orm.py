@@ -364,10 +364,6 @@ class ORM:
                                 completion, curr_miner_response.id
                             )
                         )
-
-            logger.success(
-                f"Successfully updated completion data for miners: {miner_hotkeys}"
-            )
             return True
         except Exception as e:
             logger.error(f"Failed to update completion data for miner responses: {e}")

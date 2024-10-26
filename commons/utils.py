@@ -12,12 +12,53 @@ from typing import Any, Tuple
 
 import bittensor as bt
 import jsonref
+import numpy as np
+import plotext
 import requests
 import torch
 import wandb
 from bittensor.btlogging import logging as logger
 from Crypto.Hash import keccak
 from tenacity import RetryError, Retrying, stop_after_attempt, wait_exponential_jitter
+
+
+def _terminal_plot(
+    title: str, y: np.ndarray, x: np.ndarray | None = None, sort: bool = False
+):
+    """Plot a scatter plot on the terminal.
+    It is crucial that we don't modify the original order of y or x, so we make a copy first.
+
+    Args:
+        title (str): Title of the plot.
+        y (np.ndarray): Y values to plot.
+        x (np.ndarray | None, optional): X values to plot. If None, will use a np.linspace from 0 to len(y).
+        sort (bool, optional): Whether to sort the y values. Defaults to False.
+    """
+    if x is None:
+        x = np.linspace(0, len(y), len(y) + 1)
+
+    if sort:
+        y_copy = np.copy(y)
+        y_copy.sort()
+        y = y_copy
+
+    # plot actual points first
+    plotext.scatter(x, y, marker="fhd", color="red")  # show the points exactly
+    plotext.title(title)
+    plotext.ticks_color("red")
+    plotext.xfrequency(1)  # Set frequency to 1 for better alignment
+    plotext.xticks(x)  # Directly use x for xticks
+    plotext.ticks_style("bold")
+    plotext.grid(horizontal=True, vertical=True)
+    plotext.plotsize(
+        width=int(plotext.terminal_width() * 0.95),
+        height=int(plotext.terminal_height() * 0.95),
+    )
+    plotext.canvas_color(color=None)
+    plotext.theme("clear")
+
+    plotext.show()
+    plotext.clear_figure()
 
 
 def get_new_uuid():

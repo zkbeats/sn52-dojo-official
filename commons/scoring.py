@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from scipy.stats import spearmanr
 from torch.nn import functional as F
 
+from commons.utils import _terminal_plot
 from dojo.protocol import (
     CodeAnswer,
     CompletionResponses,
@@ -42,6 +43,63 @@ class ConsensusScore(BaseModel):
     score: torch.Tensor
     mse_by_miner: torch.Tensor
     icc_by_miner: torch.Tensor
+
+
+def _reward_cubic(
+    miner_outputs: np.ndarray,
+    ground_truth: np.ndarray,
+    scaling: float,
+    translation: float,
+    offset: float,
+    visualize: bool = False,
+) -> np.ndarray:
+    """Calculate cubic reward based on miner outputs and ground truth.
+
+    Args:
+        miner_outputs (np.ndarray): 2D array of miner outputs (shape: num_miners x num_completions).
+        ground_truth (np.ndarray): 1D array of ground truth values (shape: num_completions).
+        scaling (float): Scaling factor for the cubic function.
+        translation (float): Translation factor for the cubic function.
+        offset (float): Offset for the cubic function.
+
+    Returns:
+        np.ndarray: Transformed points based on the cubic function.
+    """
+    # ensure ground truth is a column vector for broadcasting
+    # shape: (1, num_completions)
+    ground_truth = ground_truth.reshape(1, -1)
+
+    # ensure dims for broadcasting
+    assert len(ground_truth.shape) == 2
+    assert len(miner_outputs.shape) == 2
+
+    # Shape: (num_miners, num_completions)
+    x = miner_outputs - ground_truth
+
+    # apply the cubic transformation
+    points = (scaling * (x - translation) ** 3 + offset).flatten()
+    logger.debug(f"scoring: cubic reward\n{points}")
+
+    # case where a miner provides the same score for all completions
+    # convert any nans to zero
+    points = np.where(np.isnan(points), 0, points)
+    logger.debug(f"scoring: cubic reward no nans\n{points}")
+    if visualize:
+        _terminal_plot("scoring: cubic reward (raw)", points, sort=True)
+
+    # ensure all values are in the range [0, 1]
+    points = minmax_scale(points)
+    logger.debug(f"scoring: cubic reward minmax scaled\n{points}")
+    points = points.numpy()
+    if visualize:
+        _terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
+
+    assert isinstance(points, np.ndarray)
+    return points
+
+
+def _reward_l1_norm(miner_outputs: np.ndarray, ground_truth: np.ndarray):
+    return np.linalg.norm(miner_outputs - ground_truth, axis=1)
 
 
 class Score(BaseModel):
@@ -338,18 +396,34 @@ class Scoring:
         logger.info(f"scoring: Miner outputs\n{miner_outputs}")
         logger.info(f"scoring: Ground truth\n{ground_truth_arr}")
 
-        l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
-        logger.debug(f"scoring: l1 norm\n{l1_norm}")
+        # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
+        # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
+        cubic_reward: np.ndarray = _reward_cubic(
+            miner_outputs, ground_truth_arr, 0.04, 7, 2, visualize=True
+        )
+        logger.debug(f"scoring: cubic reward\n{cubic_reward}")
 
-        # case where a miner provides the same score for all completions
-        # convert any nans to zero
-        l1_norm = np.where(np.isnan(l1_norm), 0, l1_norm)
-
-        logger.debug(f"scoring: l1 norm no nans\n{l1_norm}")
         # normalize to ensure sum is 1
-        l1_norm = l1_norm / np.sum(l1_norm)
-        logger.debug(f"scoring: l1 norm normalized (sum=1)\n{l1_norm}")
-        return torch.from_numpy(l1_norm)
+        cubic_reward = cubic_reward / np.sum(cubic_reward)
+
+        logger.debug(f"scoring: cubic reward normalized (sum=1)\n{cubic_reward}")
+
+        # calculate sum for each segment of the cubic reward
+        try:
+            # create a copy of cubic reward
+            cubic_reward_copy = np.copy(cubic_reward)
+            cubic_reward_copy.sort()
+            segment_size = len(cubic_reward_copy) // 5
+            segment_sums = [
+                np.sum(cubic_reward_copy[i * segment_size : (i + 1) * segment_size])
+                for i in range(5)
+            ]
+            logger.debug(f"scoring: segment sums\n{segment_sums}")
+        except Exception as e:
+            logger.debug(f"scoring: error calculating segment sums: {e}")
+            pass
+
+        return torch.from_numpy(cubic_reward)
 
     @staticmethod
     def cmp_ground_truth(
@@ -487,7 +561,7 @@ class Scoring:
             # #         criteria, request, valid_miner_responses
             # #     )
 
-            logger.debug(f"Got {len(valid_miner_responses)} valid responses")
+            logger.error(f"📝 Filtered {len(valid_miner_responses)} valid responses")
 
             if not isinstance(criteria, MultiScoreCriteria):
                 raise NotImplementedError("Only multi-score criteria is supported atm")
@@ -777,13 +851,47 @@ def _test_ground_truth_score_v1():
     import matplotlib.pyplot as plt
 
     scores = Scoring.ground_truth_score_V1(criteria, gt, miner_responses)
-    scores = [score / sum(scores) for score in scores]  # Normalize to ensure sum is 1
+    scores, _ = torch.sort(scores, descending=False)
+    # Check if the sum of scores is 1
+    print(f"{scores=}")
 
     plt.figure(figsize=(10, 6))
-    plt.bar(range(len(scores)), scores)
+    (line,) = plt.plot(range(len(scores)), scores, marker="o")
     plt.xlabel("Miner Response Index")
     plt.ylabel("Score")
     plt.title("Ground Truth Scores")
+
+    annot = plt.gca().annotate(
+        "",
+        xy=(0, 0),
+        xytext=(20, 20),
+        textcoords="offset points",
+        bbox=dict(boxstyle="round", fc="w"),
+        arrowprops=dict(arrowstyle="->"),
+    )
+    annot.set_visible(False)
+
+    def update_annot(line, ind):
+        x, y = line.get_data()
+        annot.xy = (x[ind["ind"][0]], y[ind["ind"][0]])
+        text = f"{y[ind['ind'][0]]:.2f}"
+        annot.set_text(text)
+        annot.get_bbox_patch().set_alpha(0.4)
+
+    def hover(event):
+        vis = annot.get_visible()
+        if event.inaxes == plt.gca():
+            cont, ind = line.contains(event)
+            if cont:
+                update_annot(line, ind)
+                annot.set_visible(True)
+                plt.gcf().canvas.draw_idle()
+            else:
+                if vis:
+                    annot.set_visible(False)
+                    plt.gcf().canvas.draw_idle()
+
+    plt.gcf().canvas.mpl_connect("motion_notify_event", hover)
     plt.show()
 
 
