@@ -145,13 +145,6 @@ def add_args(parser):
     )
 
     parser.add_argument(
-        "--neuron.epoch_length",
-        type=int,
-        help="The default epoch length (how often we set weights, measured in 12 second blocks).",
-        default=100,
-    )
-
-    parser.add_argument(
         "--api.port",
         type=int,
         help="FastAPI port for uvicorn to run on, should be different from axon.port as these will serve external requests.",
@@ -174,6 +167,25 @@ def add_args(parser):
         "--service",
         choices=["miner-decentralised", "miner-centralised", "validator"],
         help="Specify the service to run (miner or validator) for auto_updater.",
+    )
+
+    parser.add_argument(
+        "--fast_mode",
+        action="store_true",
+        help="Whether to run in fast mode, for developers to test locally.",
+    )
+
+    epoch_length = 100
+    known_args, _ = parser.parse_known_args()
+    if known_args := vars(known_args):
+        if known_args["fast_mode"]:
+            epoch_length = 10
+
+    parser.add_argument(
+        "--neuron.epoch_length",
+        type=int,
+        help="The default epoch length (how often we set weights, measured in 12 second blocks).",
+        default=epoch_length,
     )
 
     if neuron_type == "validator":

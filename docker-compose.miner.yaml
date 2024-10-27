@@ -9,6 +9,9 @@ volumes:
 networks:
   dojo-miner:
     driver: bridge
+  # Applicable only for sidecar and miner service
+  subtensor:
+    name: subtensor
 
 services:
   # ============== COMMON SERVICES ============== #
@@ -79,9 +82,11 @@ services:
 
   sidecar:
     image: docker.io/parity/substrate-api-sidecar:v19.0.2
+    env_file:
+      - .env.miner
     read_only: true
     environment:
-      SAS_SUBSTRATE_URL: wss://test.finney.opentensor.ai
+      SAS_SUBSTRATE_URL: ${SUBTENSOR_ENDPOINT:-wss://entrypoint-finney.opentensor.ai}
       SAS_EXPRESS_PORT: 8081
     expose:
       - 8081
@@ -100,6 +105,7 @@ services:
       start_period: 30s
     networks:
       - dojo-miner
+      - subtensor
     logging: *default-logging
 
   worker-api:
@@ -190,6 +196,7 @@ services:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
       - dojo-miner
+      - subtensor
     logging: *default-logging
 
   miner-centralised:
@@ -206,4 +213,5 @@ services:
       - ${AXON_PORT}:${AXON_PORT}
     networks:
       - dojo-miner
+      - subtensor
     logging: *default-logging

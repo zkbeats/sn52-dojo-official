@@ -204,7 +204,17 @@ docker --version
 docker compose version
 ```
 
-4. Create your wallets if they aren't created yet
+4. Start local subtensor node (__optional__)
+> The included subtensor service only expose 30333 (p2p) to the public, 9933 and 9944 are only accesssible internally in the docker network, feel free to change the configuration if required.
+```bash
+# Mainnet
+make subtensor-mainnet
+
+# Testnet
+make subtensor-testnet
+```
+
+5. Create your wallets if they aren't created yet
 
 ```bash
 # run btcli
@@ -214,12 +224,14 @@ btcli wallet new_coldkey
 btcli wallet new_hotkey
 ```
 
-5. Get some TAO and ensure you have enough TAO to cover the registration cost
+6. Get some TAO and ensure you have enough TAO to cover the registration cost
 
 ```bash
 # for Testnet
+# If using local subtensor, use ws://mainnet-lite:9944 (mainnet) or ws://testnet-lite:9944 (testnet)
 btcli s list --subtensor.network test
-# output from the `btcli s list ...` command
+
+# Output from the `btcli s list ...` command
 NETUID    N    MAX_N   EMISSION  TEMPO  RECYCLE        POW       SUDO
  0      128   128.00   0.00%     10    τ1.00000     10.00 M     5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM
 ...
@@ -236,9 +248,11 @@ NETUID    N    MAX_N   EMISSION  TEMPO  RECYCLE        POW       SUDO
 # run the dockerized btcli
 make btcli
 # register your wallet to our subnet
-# for mainnet
+# If using local subtensor, use ws://mainnet-lite:9944 (mainnet) or ws://testnet-lite:9944 (testnet)
+
+# Mainnet
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 52 --subtensor.network finney
-# for testnet
+# Testnet
 btcli s register --wallet.name coldkey --wallet.hotkey hotkey --netuid 98 --subtensor.network test
 ```
 

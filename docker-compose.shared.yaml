@@ -1,9 +1,15 @@
+networks:
+  subtensor:
+    name: subtensor
+
 services:
   btcli:
     image: ghcr.io/tensorplex-labs/dojo:main
     volumes:
       - ./:/app
       - $HOME/.bittensor:/root/.bittensor
+    networks:
+      - subtensor
     command: ["btcli"]
     tty: true
     stdin_open: true

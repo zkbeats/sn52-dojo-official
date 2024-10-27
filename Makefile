@@ -89,3 +89,13 @@ miner-centralised-logs:
 
 validator-logs:
 	docker compose --env-file .env.validator -f docker-compose.validator.yaml logs -f validator
+
+# ---------------------------------------------------------------------------- #
+#                             LOCAL SUBTENSOR                                  #
+# ---------------------------------------------------------------------------- #
+
+subtensor-mainnet:
+	docker compose -f docker-compose.subtensor.yaml up -d mainnet-lite
+
+subtensor-testnet:
+	docker compose -f docker-compose.subtensor.yaml up -d testnet-lite
