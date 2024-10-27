@@ -16,6 +16,7 @@ import numpy as np
 import torch
 import wandb
 from bittensor.btlogging import logging as logger
+from bittensor.utils.weight_utils import process_weights_for_netuid
 from fastapi.encoders import jsonable_encoder
 from tenacity import RetryError
 from torch.nn import functional as F
@@ -173,13 +174,29 @@ class Validator:
                         f"📝 Processing batch {batch_id}, batch size: {batch_size}"
                     )
                     for task in task_batch:
-                        criteria_to_miner_score, hotkey_to_score = (
-                            Scoring.calculate_score(
-                                criteria_types=task.request.criteria_types,
-                                request=task.request,
-                                miner_responses=task.miner_responses,
+                        if not task.miner_responses:
+                            logger.warning(
+                                "📝 No miner responses, skipping task in batch"
                             )
-                        )
+                            continue
+
+                        criteria_to_miner_score, hotkey_to_score = {}, {}
+                        try:
+                            criteria_to_miner_score, hotkey_to_score = (
+                                Scoring.calculate_score(
+                                    criteria_types=task.request.criteria_types,
+                                    request=task.request,
+                                    miner_responses=task.miner_responses,
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"📝 Error occurred while calculating scores: {e}"
+                            )
+                            # append so we can mark them as processed later
+                            processed_request_ids.append(task.request.request_id)
+                            continue
+
                         logger.debug(f"📝 Got hotkey to score: {hotkey_to_score}")
                         logger.debug(
                             f"📝 Initially had {len(task.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
@@ -189,7 +206,7 @@ class Validator:
                             logger.info(
                                 "📝 Did not manage to generate a dict of hotkey to score"
                             )
-                            # append it anyways so we can cut off later
+                            # append so we can mark them as processed later
                             processed_request_ids.append(task.request.request_id)
                             continue
 
@@ -675,27 +692,57 @@ class Validator:
         # based on uids, adjusted based on metagraph during `resync_metagraph`
         uids = torch.tensor(list(range(len(safe_normalized_weights))))
 
-        min_allowed_weights = self.subtensor.min_allowed_weights(self.config.netuid)
-        max_weight_limit = self.subtensor.max_weight_limit(self.config.netuid)
-        logger.debug(f"min_allowed_weights: {min_allowed_weights}")
-        logger.debug(f"max_weight_limit: {max_weight_limit}")
+        (
+            final_uids,
+            final_weights,
+        ) = process_weights_for_netuid(  # type: ignore
+            uids=uids.numpy(),
+            weights=safe_normalized_weights.numpy(),
+            netuid=self.config.netuid,  # type: ignore
+            subtensor=self.subtensor,
+            metagraph=self.metagraph,
+        )
 
-        logger.debug(f"weights: {safe_normalized_weights}")
-        logger.debug(f"uids: {uids}")
+        if isinstance(final_weights, np.ndarray):
+            final_weights = torch.from_numpy(final_weights).to("cpu")
+        if isinstance(final_uids, np.ndarray):
+            final_uids = torch.from_numpy(final_uids).to("cpu")
+
+        logger.debug(f"weights:\n{safe_normalized_weights}")
+        logger.debug(f"uids:\n{uids}")
+
+        _terminal_plot(
+            f"pre-processed weights, block: {self.block}",
+            safe_normalized_weights.numpy(),
+        )
+
+        logger.debug(f"final weights:\n{final_weights}")
+        logger.debug(f"final uids:\n{final_uids}")
+
+        _terminal_plot(
+            f"final weights, block: {self.block}",
+            final_weights.numpy(),
+        )
 
         # dependent on underlying `set_weights` call
-        result, message = await self.set_weights_in_thread(
-            uids, safe_normalized_weights
-        )
-        if not result:
-            logger.error(f"Failed to set weights: {message}")
+        try:
+            result, message = await asyncio.wait_for(
+                self._set_weights(final_uids, final_weights), timeout=90
+            )
+            if not result:
+                logger.error(f"Failed to set weights: {message}")
+                return
+
+            logger.success(f"Set weights successfully: {message}")
+        except asyncio.TimeoutError:
+            logger.error("Setting weights timed out after 90 seconds")
             return
 
-        logger.success(f"Set weights successfully: {message}")
         return
 
-    async def set_weights_in_thread(self, uids: torch.Tensor, weights: torch.Tensor):
-        """Wrapper function to set weights in a separate thread
+    async def _set_weights(self, uids: torch.Tensor, weights: torch.Tensor):
+        """Wrapper function to set weights so we can ensure set weights happens
+        within a timeout.
 
         Args:
             uids (torch.Tensor): uids to set weights for
@@ -704,76 +751,52 @@ class Validator:
         Returns:
             tuple[bool, str]: Returns the result of _set_weights function
         """
-        logger.trace("Attempting to set weights in another thread")
 
-        async def _set_weights() -> tuple[bool, str]:
-            """LOCAL FUNCTION to set weights, we pass in a lock because of how
-            we are calling this function from the main thread, sending it
-            to a separate thread to avoid blocking the main thread, so the lock
-            MUST be acquired by the separate thread.
-
-            Returns:
-                tuple[bool, str]: Returns a tuple of a boolean and a string
-                - boolean: True if weights were set successfully, False otherwise
-                - string: Message indicating the result of set weights
-            """
-            max_attempts = 5
-            attempt = 0
-            result = False
-            while attempt < max_attempts and not result:
+        max_attempts = 5
+        attempt = 0
+        result = False
+        while attempt < max_attempts and not result:
+            try:
+                logger.debug(
+                    f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
+                )
                 try:
-                    logger.debug(
-                        f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
+                    await asyncio.wait_for(
+                        self._ensure_subtensor_ws_connected(), timeout=10
                     )
-                    try:
-                        await asyncio.wait_for(
-                            self._ensure_subtensor_ws_connected(), timeout=10
-                        )
-                    except asyncio.TimeoutError:
-                        pass
+                except asyncio.TimeoutError:
+                    pass
 
-                    result, message = self.subtensor.set_weights(
-                        wallet=self.wallet,
-                        netuid=self.config.netuid,  # type: ignore
-                        uids=uids.tolist(),
-                        weights=weights.tolist(),
-                        wait_for_finalization=True,
-                        wait_for_inclusion=False,
-                        version_key=self.spec_version,
-                        max_retries=1,
-                    )
-                    if result:
-                        logger.success(f"Set weights successfully: {message}")
-                        return result, message
+                result, message = self.subtensor.set_weights(
+                    wallet=self.wallet,
+                    netuid=self.config.netuid,  # type: ignore
+                    uids=uids.tolist(),
+                    weights=weights.tolist(),
+                    wait_for_finalization=True,
+                    wait_for_inclusion=False,
+                    version_key=self.spec_version,
+                    max_retries=1,
+                )
+                if result:
+                    logger.success(f"Set weights successfully: {message}")
+                    return result, message
 
-                    raise SetWeightsFailed(
-                        f"Failed to set weights with message:{message}"
-                    )
+                raise SetWeightsFailed(f"Failed to set weights with message:{message}")
 
-                except Exception:
-                    logger.warning(
-                        f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
-                    )
+            except Exception:
+                logger.warning(
+                    f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
+                )
 
-                    if attempt == max_attempts:
-                        logger.error("Max attempts reached. Could not set weights.")
-                        return False, "Max attempts reached"
+                if attempt == max_attempts:
+                    logger.error("Max attempts reached. Could not set weights.")
+                    return False, "Max attempts reached"
 
-                    await asyncio.sleep(12)
-                finally:
-                    attempt += 1
+                await asyncio.sleep(12)
+            finally:
+                attempt += 1
 
-            return False, "Max attempts reached"
-
-        logger.trace("Submitting callable func to executor")
-
-        try:
-            result, message = await asyncio.wait_for(_set_weights(), timeout=90)
-        except asyncio.TimeoutError:
-            logger.error("Setting weights timed out after 90 seconds")
-            return False, "Failed to set weights within time limit"
-
-        return result, message
+        return False, "Max attempts reached"
 
     async def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""

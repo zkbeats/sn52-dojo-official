@@ -341,7 +341,7 @@ class ORM:
 
                 # NOTE: @dev we must nest the transaction so after __aexit__ is
                 # called (when no exceptions occur) then tx.commit() is called
-                async with prisma.tx(timeout=timedelta(seconds=10)) as tx:
+                async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
                     # find the feedback request ids
                     miner_hotkeys = []
                     for miner_response in batch_responses:
