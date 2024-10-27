@@ -1,3 +1,11 @@
+## [1.3.1](https://github.com/tensorplex-labs/dojo/compare/v1.3.0...v1.3.1) (2024-10-27)
+
+### Bug Fixes
+
+* increase save_task timeout from 5 to 30s ([5dc8171](https://github.com/tensorplex-labs/dojo/commit/5dc8171865aa8547153e7c009b383ec72366d911))
+* set weights call hanging ([638a3a5](https://github.com/tensorplex-labs/dojo/commit/638a3a54bfd0a4840acec310981478f4b58ecd35))
+* set weights, mini batching update miner responses, update logs ([#48](https://github.com/tensorplex-labs/dojo/issues/48)) ([2e72093](https://github.com/tensorplex-labs/dojo/commit/2e72093465e2ce65cfe554a63c9191bc7c91f680))
+
 ## [1.3.0](https://github.com/tensorplex-labs/dojo/compare/v1.2.2...v1.3.0) (2024-10-26)
 
 ### Features
