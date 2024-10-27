@@ -174,13 +174,29 @@ class Validator:
                         f"📝 Processing batch {batch_id}, batch size: {batch_size}"
                     )
                     for task in task_batch:
-                        criteria_to_miner_score, hotkey_to_score = (
-                            Scoring.calculate_score(
-                                criteria_types=task.request.criteria_types,
-                                request=task.request,
-                                miner_responses=task.miner_responses,
+                        if not task.miner_responses:
+                            logger.warning(
+                                "📝 No miner responses, skipping task in batch"
                             )
-                        )
+                            continue
+
+                        criteria_to_miner_score, hotkey_to_score = {}, {}
+                        try:
+                            criteria_to_miner_score, hotkey_to_score = (
+                                Scoring.calculate_score(
+                                    criteria_types=task.request.criteria_types,
+                                    request=task.request,
+                                    miner_responses=task.miner_responses,
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"📝 Error occurred while calculating scores: {e}"
+                            )
+                            # append so we can mark them as processed later
+                            processed_request_ids.append(task.request.request_id)
+                            continue
+
                         logger.debug(f"📝 Got hotkey to score: {hotkey_to_score}")
                         logger.debug(
                             f"📝 Initially had {len(task.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
@@ -190,7 +206,7 @@ class Validator:
                             logger.info(
                                 "📝 Did not manage to generate a dict of hotkey to score"
                             )
-                            # append it anyways so we can cut off later
+                            # append so we can mark them as processed later
                             processed_request_ids.append(task.request.request_id)
                             continue
 
