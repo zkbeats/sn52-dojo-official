@@ -712,10 +712,6 @@ class Validator:
             to a separate thread to avoid blocking the main thread, so the lock
             MUST be acquired by the separate thread.
 
-
-            Args:
-                lock (threading.Lock): Lock parameter passed to separate thread
-
             Returns:
                 tuple[bool, str]: Returns a tuple of a boolean and a string
                 - boolean: True if weights were set successfully, False otherwise
