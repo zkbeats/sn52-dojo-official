@@ -19,6 +19,7 @@ from bittensor.btlogging import logging as logger
 from fastapi.encoders import jsonable_encoder
 from tenacity import RetryError
 from torch.nn import functional as F
+from websocket import create_connection
 
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
@@ -722,12 +723,19 @@ class Validator:
             """
             max_attempts = 5
             attempt = 0
-            while attempt < max_attempts:
+            result = False
+            while attempt < max_attempts and not result:
                 try:
                     logger.debug(
                         f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
                     )
-                    await self._ensure_subtensor_ws_connected()
+                    try:
+                        await asyncio.wait_for(
+                            self._ensure_subtensor_ws_connected(), timeout=10
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+
                     result, message = self.subtensor.set_weights(
                         wallet=self.wallet,
                         netuid=self.config.netuid,  # type: ignore
@@ -742,21 +750,22 @@ class Validator:
                         logger.success(f"Set weights successfully: {message}")
                         return result, message
 
-                    logger.warning(
-                        f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
-                    )
                     raise SetWeightsFailed(
                         f"Failed to set weights with message:{message}"
                     )
 
-                except Exception as e:
-                    attempt += 1
-                    logger.warning(f"Attempt {attempt} failed: {e}")
+                except Exception:
+                    logger.warning(
+                        f"Failed to set weights with attempt {attempt+1}/{max_attempts} due to: {message}"
+                    )
+
                     if attempt == max_attempts:
                         logger.error("Max attempts reached. Could not set weights.")
                         return False, "Max attempts reached"
 
-                    await self._wait_set_weights()
+                    await asyncio.sleep(12)
+                finally:
+                    attempt += 1
 
             return False, "Max attempts reached"
 
@@ -769,18 +778,6 @@ class Validator:
             return False, "Failed to set weights within time limit"
 
         return result, message
-
-    async def _wait_set_weights(self):
-        """Waits for 1 block by calling the block number. Otherwise waits until 24s"""
-        logger.trace("Waiting for 1 block before setting weights")
-        current_block = self.block
-        start_time = time.time()
-        while self.block == current_block:
-            # long max wait before retrying, up to 2 blocks
-            if time.time() - start_time > 2 * 12:
-                logger.warning("Waited for 1 block before setting weights, retrying...")
-                break
-            time.sleep(3)
 
     async def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
@@ -1133,7 +1130,6 @@ class Validator:
 
     def check_registered(self):
         # --- Check for registration.
-        self.loop.run_until_complete(self._ensure_subtensor_ws_connected())
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
@@ -1170,15 +1166,21 @@ class Validator:
         while (
             not self.subtensor.substrate.websocket.connected and attempts < max_attempts
         ):
-            self.subtensor.substrate.connect_websocket()
-            attempts += 1
-            if self.subtensor.substrate.websocket.connected:
-                logger.debug(
-                    f"Successfully connected to substrate websocket on attempt {attempts}"
+            try:
+                self.subtensor.substrate.websocket = create_connection(
+                    url=self.subtensor.substrate.url,  # type: ignore
+                    timeout=10,
+                    **self.subtensor.substrate.ws_options,
                 )
-                return True
-            else:
-                await asyncio.sleep(sleep)
+                if self.subtensor.substrate.websocket.connected:
+                    logger.debug(
+                        f"Successfully connected to substrate websocket on attempt {attempts}"
+                    )
+                    return True
+                else:
+                    await asyncio.sleep(sleep)
+            finally:
+                attempts += 1
 
         if not self.subtensor.substrate.websocket.connected:
             logger.error(
