@@ -16,6 +16,7 @@ import numpy as np
 import torch
 import wandb
 from bittensor.btlogging import logging as logger
+from bittensor.utils.weight_utils import process_weights_for_netuid
 from fastapi.encoders import jsonable_encoder
 from tenacity import RetryError
 from torch.nn import functional as F
@@ -678,13 +679,19 @@ class Validator:
         (
             final_uids,
             final_weights,
-        ) = bt.utils.weight_utils.process_weights_for_netuid(  # type: ignore
-            uids=uids,
-            weights=safe_normalized_weights,
-            netuid=self.config.netuid,
+        ) = process_weights_for_netuid(  # type: ignore
+            uids=uids.numpy(),
+            weights=safe_normalized_weights.numpy(),
+            netuid=self.config.netuid,  # type: ignore
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
+
+        if isinstance(final_weights, np.ndarray):
+            final_weights = torch.from_numpy(final_weights).to("cpu")
+        if isinstance(final_uids, np.ndarray):
+            final_uids = torch.from_numpy(final_uids).to("cpu")
+
         logger.debug(f"weights:\n{safe_normalized_weights}")
         logger.debug(f"uids:\n{uids}")
 
