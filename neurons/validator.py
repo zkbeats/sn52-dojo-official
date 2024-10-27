@@ -675,18 +675,36 @@ class Validator:
         # based on uids, adjusted based on metagraph during `resync_metagraph`
         uids = torch.tensor(list(range(len(safe_normalized_weights))))
 
-        min_allowed_weights = self.subtensor.min_allowed_weights(self.config.netuid)
-        max_weight_limit = self.subtensor.max_weight_limit(self.config.netuid)
-        logger.debug(f"min_allowed_weights: {min_allowed_weights}")
-        logger.debug(f"max_weight_limit: {max_weight_limit}")
+        (
+            final_uids,
+            final_weights,
+        ) = bt.utils.weight_utils.process_weights_for_netuid(  # type: ignore
+            uids=uids,
+            weights=safe_normalized_weights,
+            netuid=self.config.netuid,
+            subtensor=self.subtensor,
+            metagraph=self.metagraph,
+        )
+        logger.debug(f"weights:\n{safe_normalized_weights}")
+        logger.debug(f"uids:\n{uids}")
 
-        logger.debug(f"weights: {safe_normalized_weights}")
-        logger.debug(f"uids: {uids}")
+        _terminal_plot(
+            f"pre-processed weights, block: {self.block}",
+            safe_normalized_weights.numpy(),
+        )
+
+        logger.debug(f"final weights:\n{final_weights}")
+        logger.debug(f"final uids:\n{final_uids}")
+
+        _terminal_plot(
+            f"final weights, block: {self.block}",
+            final_weights.numpy(),
+        )
 
         # dependent on underlying `set_weights` call
         try:
             result, message = await asyncio.wait_for(
-                self._set_weights(uids, safe_normalized_weights), timeout=90
+                self._set_weights(final_uids, final_weights), timeout=90
             )
             if not result:
                 logger.error(f"Failed to set weights: {message}")
