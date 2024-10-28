@@ -760,12 +760,14 @@ class Validator:
                 logger.debug(
                     f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
                 )
-                try:
-                    await asyncio.wait_for(
-                        self._ensure_subtensor_ws_connected(), timeout=10
-                    )
-                except asyncio.TimeoutError:
-                    pass
+
+                # Disable this for now to check validator hanging issue
+                # try:
+                #     await asyncio.wait_for(
+                #         self._ensure_subtensor_ws_connected(), timeout=10
+                #     )
+                # except asyncio.TimeoutError:
+                #     pass
 
                 result, message = self.subtensor.set_weights(
                     wallet=self.wallet,
