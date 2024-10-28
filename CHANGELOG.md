@@ -1,3 +1,11 @@
+## [1.3.3](https://github.com/tensorplex-labs/dojo/compare/v1.3.2...v1.3.3) (2024-10-28)
+
+### Bug Fixes
+
+* disabled the _ensure_subtensor_ws_connected func ([#52](https://github.com/tensorplex-labs/dojo/issues/52)) ([0142023](https://github.com/tensorplex-labs/dojo/commit/0142023bbae39e75a32b22d644f3177413a437d9))
+* scores shapes ([#55](https://github.com/tensorplex-labs/dojo/issues/55)) ([72c4f04](https://github.com/tensorplex-labs/dojo/commit/72c4f0469af44f1212eb54be6221aff3fbf0caa9))
+* set wait for finalization = False ([2911fb0](https://github.com/tensorplex-labs/dojo/commit/2911fb09c9ffca4b473f65342593999917e6f007))
+
 ## [1.3.2](https://github.com/tensorplex-labs/dojo/compare/v1.3.1...v1.3.2) (2024-10-27)
 
 ### Bug Fixes
