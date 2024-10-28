@@ -774,7 +774,7 @@ class Validator:
                     netuid=self.config.netuid,  # type: ignore
                     uids=uids.tolist(),
                     weights=weights.tolist(),
-                    wait_for_finalization=True,
+                    wait_for_finalization=False,
                     wait_for_inclusion=False,
                     version_key=self.spec_version,
                     max_retries=1,
