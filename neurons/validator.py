@@ -331,7 +331,6 @@ class Validator:
         """Perform a health check periodically to ensure miners are reachable"""
         while True:
             await asyncio.sleep(dojo.VALIDATOR_HEARTBEAT)
-            await self.resync_metagraph()
             try:
                 all_miner_uids = extract_miner_uids(metagraph=self.metagraph)
                 logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
@@ -629,7 +628,6 @@ class Validator:
     async def run(self):
         logger.info(f"Validator starting at block: {str(self.block)}")
 
-        await self.resync_metagraph()
         # This loop maintains the validator's operations until intentionally stopped.
         try:
             while True:
@@ -760,19 +758,21 @@ class Validator:
                 logger.debug(
                     f"Set weights attempt {attempt+1}/{max_attempts} at block: {self.block},time: {time.time()}"
                 )
-                try:
-                    await asyncio.wait_for(
-                        self._ensure_subtensor_ws_connected(), timeout=10
-                    )
-                except asyncio.TimeoutError:
-                    pass
+
+                # Disable this for now to check validator hanging issue
+                # try:
+                #     await asyncio.wait_for(
+                #         self._ensure_subtensor_ws_connected(), timeout=10
+                #     )
+                # except asyncio.TimeoutError:
+                #     pass
 
                 result, message = self.subtensor.set_weights(
                     wallet=self.wallet,
                     netuid=self.config.netuid,  # type: ignore
                     uids=uids.tolist(),
                     weights=weights.tolist(),
-                    wait_for_finalization=True,
+                    wait_for_finalization=False,
                     wait_for_inclusion=False,
                     version_key=self.spec_version,
                     max_retries=1,
@@ -844,6 +844,7 @@ class Validator:
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # scores dimensions might have been updated after resyncing... len(uids) != len(self.scores)
         rewards = torch.zeros((len(self.metagraph.hotkeys),))
+        existing_scores = torch.zeros((len(self.metagraph.hotkeys),))
         for index, (key, value) in enumerate(hotkey_to_scores.items()):
             # handle nan values
             if nan_value_indices[index]:
@@ -858,6 +859,13 @@ class Validator:
             logger.debug(f"Score for hotkey {key} is {value}")
             rewards[uid] = value
 
+            # self.scores is a tensor already based on uids
+            # use this logic to ensure
+            # 1. rewards and existing_scores are the same length
+            # 2. if hotkey is deregistered, the new participant will not benefit from existing scores
+            if uid < len(self.scores):
+                existing_scores[uid] = self.scores[uid]
+
         logger.debug(f"Rewards: {rewards}")
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
@@ -867,7 +875,11 @@ class Validator:
             _terminal_plot(
                 f"scores before update, block: {self.block}", self.scores.numpy()
             )
-            self.scores = alpha * rewards + (1 - alpha) * self.scores
+            assert (
+                existing_scores.shape == rewards.shape
+            ), "Scores and rewards must be the same length when calculating moving average"
+
+            self.scores = alpha * rewards + (1 - alpha) * existing_scores
             self.scores = torch.clamp(self.scores, min=0.0)
             _terminal_plot(
                 f"scores after update, block: {self.block}", self.scores.numpy()
@@ -912,7 +924,18 @@ class Validator:
 
             logger.success(f"Loaded validator state: {scores=}")
             async with self._scores_alock:
-                self.scores = torch.clamp(scores, 0.0)
+                if len(scores) < len(self.metagraph.hotkeys):
+                    logger.warning(
+                        "Scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
+                    )
+                    # length adjusted scores
+                    adjusted_scores = torch.zeros(len(self.metagraph.hotkeys))
+                    adjusted_scores[: len(scores)] = scores
+                    logger.info(
+                        f"Load state: adjusted scores shape from {scores.shape} to {adjusted_scores.shape}"
+                    )
+
+                self.scores = torch.clamp(adjusted_scores, 0.0)
                 _terminal_plot(
                     f"scores on load, block: {self.block}", self.scores.numpy()
                 )
