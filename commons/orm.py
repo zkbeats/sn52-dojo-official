@@ -94,19 +94,21 @@ class ORM:
     async def get_expired_tasks(
         validator_hotkeys: list[str],
         batch_size: int = 10,
-        expire_at: datetime | None = None,
+        expire_from: datetime | None = None,
+        expire_to: datetime | None = None,
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
         """Returns a batch of Feedback_Request_Model and a boolean indicating if there are more batches.
-        Depending on the `expire_at` provided, it will return different results.
+        Depending on the `expire_from` and `expire_to` provided, it will return different results.
 
-        YOUR LOGIC ON WHETHER TASKS ARE EXPIRED OR NON-EXPIRED SHOULD BE HANDLED BY SETTING EXPIRE_AT YOURSELF.
+        YOUR LOGIC ON WHETHER TASKS ARE EXPIRED OR NON-EXPIRED SHOULD BE HANDLED BY SETTING EXPIRE_FROM and EXPIRE_TO YOURSELF.
 
         Args:
             validator_hotkeys (list[str]): List of validator hotkeys.
             batch_size (int, optional): Number of tasks to return in a batch. Defaults to 10.
 
             1 task == 1 validator request, N miner responses
-            expire_at: (datetime | None) If provided, only tasks with expire_at after the provided datetime will be returned.
+            expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
+            expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
 
         Raises:
@@ -128,8 +130,17 @@ class ORM:
             }
         )
 
-        if not expire_at:
-            expire_at = datetime_as_utc(datetime.now(timezone.utc))
+        # Set default expiry timeframe of 6 hours before the latest expired tasks
+        if not expire_from:
+            expire_from = (
+                datetime_as_utc(datetime.now(timezone.utc))
+                - timedelta(seconds=TASK_DEADLINE)
+                - timedelta(hour=6)
+            )
+        if not expire_to:
+            expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+                seconds=TASK_DEADLINE
+            )
 
         vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
             {
@@ -137,7 +148,8 @@ class ORM:
                 "child_requests": {"some": {}},
                 # only check for expire at since miner may lie
                 "expire_at": {
-                    "lt": expire_at,
+                    "gt": expire_from,
+                    "lt": expire_to,
                 },
                 "is_processed": {"equals": False},
             }
