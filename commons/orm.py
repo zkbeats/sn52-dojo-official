@@ -9,6 +9,7 @@ import torch
 from bittensor.btlogging import logging as logger
 
 from commons.exceptions import (
+    ExpiredFromMoreThanExpireTo,
     InvalidCompletion,
     InvalidMinerResponse,
     InvalidTask,
@@ -99,6 +100,12 @@ class ORM:
         if not expire_to:
             expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
                 seconds=TASK_DEADLINE
+            )
+
+        # Check that expire_from is lesser than expire_to
+        if expire_from > expire_to:
+            raise ExpiredFromMoreThanExpireTo(
+                "expire_from should be less than expire_to."
             )
 
         vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
