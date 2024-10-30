@@ -933,6 +933,8 @@ class Validator:
     async def update_score_and_send_feedback(self):
         while True:
             await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
+            # for each hotkey, a list of scores from all tasks being scored
+            hotkey_to_all_scores = defaultdict(list)
             try:
                 validator_hotkeys: List[str] = self._get_validator_hotkeys()
 
@@ -967,9 +969,11 @@ class Validator:
                         continue
 
                     for task in task_batch:
-                        processed_id = await self._score_task(task)
+                        processed_id, hotkey_to_score = await self._score_task(task)
                         if processed_id:
                             processed_request_ids.append(processed_id)
+                        for hotkey, score in hotkey_to_score.items():
+                            hotkey_to_all_scores[hotkey].append(score)
 
                 if processed_request_ids:
                     await ORM.mark_tasks_processed_by_request_ids(processed_request_ids)
@@ -977,11 +981,20 @@ class Validator:
                 logger.success(
                     f"📝 All tasks processed, total tasks: {len(processed_request_ids)}"
                 )
-                gc.collect()
+
+                # average scores across all tasks being scored by this trigger to update_scores
+                # so miners moving average decay is lower and we incentivise quality > quantity
+                hotkey_to_score = {
+                    hotkey: sum(scores) / len(scores)
+                    for hotkey, scores in hotkey_to_all_scores.items()
+                }
+                await self.update_scores(hotkey_to_scores=hotkey_to_score)
 
             except Exception:
                 traceback.print_exc()
                 pass
+            finally:
+                gc.collect()
 
     async def update_task_completions(
         self, validator_hotkeys: List[str], expire_from: datetime, expire_to: datetime
@@ -1198,7 +1211,7 @@ class Validator:
                     logger.warning(f"Error during attempt {attempt+1}, retrying: {e}")
                     await asyncio.sleep(2**attempt)
 
-    async def _score_task(self, task: DendriteQueryResponse) -> str:
+    async def _score_task(self, task: DendriteQueryResponse) -> tuple[str, dict]:
         """Process a task and calculate the scores for the miner responses"""
         if not task.miner_responses:
             logger.warning("📝 No miner responses, skipping task")
@@ -1227,7 +1240,6 @@ class Validator:
             logger.info("📝 Did not manage to generate a dict of hotkey to score")
             return task.request.request_id
 
-        await self.update_scores(hotkey_to_scores=hotkey_to_score)
         await self.send_scores(
             synapse=ScoringResult(
                 request_id=task.request.request_id,
@@ -1240,7 +1252,7 @@ class Validator:
             self._log_wandb(task, criteria_to_miner_score, hotkey_to_score)
         )
 
-        return task.request.request_id
+        return task.request.request_id, hotkey_to_score
 
     async def _log_wandb(
         self,
