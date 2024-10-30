@@ -50,47 +50,6 @@ from dojo.protocol import (
 
 class ORM:
     @staticmethod
-    async def get_last_expire_at_cutoff(
-        validator_hotkeys: list[str],
-        expire_at: datetime = datetime_as_utc(
-            datetime.now(timezone.utc) - timedelta(seconds=TASK_DEADLINE)
-        ),
-    ) -> datetime:
-        """
-        Get the expire at cutoff for the query to `get_unexpired_tasks`
-        We use 1.5 * TASK_DEADLINE to overlap with the `expire_at` field in the
-        database so we don't miss out any data.
-
-        Args:
-            validator_hotkeys (list[str]): List of validator hotkeys.
-            expire_at (datetime, optional): _description_. Defaults to datetime_as_utc( datetime.now(timezone.utc) - 1.5 * timedelta(seconds=TASK_DEADLINE) ).
-
-        Raises:
-            ValueError: Unable to determine expire at cutoff
-
-        Returns:
-            datetime: Expire at cutoff
-        """
-        logger.debug(f"Expire at cutoff: {expire_at}")
-        vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
-            {
-                "hotkey": {"in": validator_hotkeys, "mode": "insensitive"},
-                "child_requests": {"some": {}},
-                "expire_at": {"gt": expire_at},
-                "is_processed": {"equals": False},
-            }
-        )
-
-        found = await Feedback_Request_Model.prisma().find_first(
-            where=vali_where_query_unprocessed,
-            order={"expire_at": "asc"},
-        )
-        if found:
-            return datetime_as_utc(found.expire_at)
-
-        raise ValueError("Unable to determine expire at cutoff")
-
-    @staticmethod
     async def get_expired_tasks(
         validator_hotkeys: list[str],
         batch_size: int = 10,
