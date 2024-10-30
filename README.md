@@ -428,9 +428,6 @@ LANGFUSE_SECRET_KEY=# head to langfuse.com
 LANGFUSE_PUBLIC_KEY=# head to langfuse.com
 LANGFUSE_HOST="https://us.cloud.langfuse.com" # 🇺🇸 US region
 
-# Other LLM API providers, Optional or if you've chosen it over Openrouter
-TOGETHER_API_KEY=
-OPENAI_API_KEY=
 
 # postgres details for validator
 DB_HOST=postgres-vali:5432
