@@ -984,11 +984,15 @@ class Validator:
 
                 # average scores across all tasks being scored by this trigger to update_scores
                 # so miners moving average decay is lower and we incentivise quality > quantity
-                hotkey_to_score = {
+                final_hotkey_to_score = {
                     hotkey: sum(scores) / len(scores)
                     for hotkey, scores in hotkey_to_all_scores.items()
+                    if scores
                 }
-                await self.update_scores(hotkey_to_scores=hotkey_to_score)
+                logger.debug(
+                    f"📝 Got hotkey to score across all tasks between expire_at from:{expire_from} and expire_at to:{expire_to}: {final_hotkey_to_score}"
+                )
+                await self.update_scores(hotkey_to_scores=final_hotkey_to_score)
 
             except Exception:
                 traceback.print_exc()
@@ -1215,7 +1219,7 @@ class Validator:
         """Process a task and calculate the scores for the miner responses"""
         if not task.miner_responses:
             logger.warning("📝 No miner responses, skipping task")
-            return task.request.request_id
+            return task.request.request_id, {}
 
         criteria_to_miner_score, hotkey_to_score = {}, {}
         try:
@@ -1228,7 +1232,7 @@ class Validator:
             logger.error(
                 f"📝 Error occurred while calculating scores: {e}. Request ID: {task.request.request_id}"
             )
-            return task.request.request_id
+            return task.request.request_id, {}
 
         logger.debug(f"📝 Got hotkey to score: {hotkey_to_score}")
         logger.debug(
@@ -1238,7 +1242,7 @@ class Validator:
 
         if not hotkey_to_score:
             logger.info("📝 Did not manage to generate a dict of hotkey to score")
-            return task.request.request_id
+            return task.request.request_id, {}
 
         await self.send_scores(
             synapse=ScoringResult(
