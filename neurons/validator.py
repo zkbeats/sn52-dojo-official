@@ -7,7 +7,7 @@ import time
 import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from traceback import print_exception
 from typing import AsyncGenerator, Dict, List
 
@@ -800,9 +800,6 @@ class Validator:
             )
 
             if response and response[0]:
-                logger.debug(
-                    f"Received task result from miner {miner_hotkey} for task {task_id}, {response}"
-                )
                 return response[0].task_results
             else:
                 logger.debug(
@@ -938,18 +935,33 @@ class Validator:
             await asyncio.sleep(dojo.VALIDATOR_UPDATE_SCORE)
             try:
                 validator_hotkeys: List[str] = self._get_validator_hotkeys()
-                expire_at = datetime_as_utc(datetime.now(timezone.utc))
-                logger.debug(f"Updating with expire_at: {expire_at}")
+
+                # Grab tasks that were expired TASK_DEADLINE duration ago
+                expire_from = (
+                    datetime_as_utc(datetime.now(timezone.utc))
+                    - timedelta(seconds=dojo.TASK_DEADLINE)
+                    - timedelta(hours=2)
+                )
+                expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+                    seconds=dojo.TASK_DEADLINE
+                )
+                logger.debug(
+                    f"Updating with expire_from: {expire_from} and expire_to: {expire_to}"
+                )
 
                 # Get latest task completions before scoring
-                await self.update_task_completions(validator_hotkeys, expire_at)
+                await self.update_task_completions(
+                    validator_hotkeys=validator_hotkeys,
+                    expire_from=expire_from,
+                    expire_to=expire_to,
+                )
 
                 logger.info("📝 performing scoring ...")
                 processed_request_ids = []
 
                 batch_size = 10
                 async for task_batch in self._get_task_batches(
-                    validator_hotkeys, batch_size, expire_at
+                    validator_hotkeys, batch_size, expire_from, expire_to
                 ):
                     if not task_batch:
                         continue
@@ -972,7 +984,7 @@ class Validator:
                 pass
 
     async def update_task_completions(
-        self, validator_hotkeys: List[str], expire_at: datetime
+        self, validator_hotkeys: List[str], expire_from: datetime, expire_to: datetime
     ) -> None:
         try:
             logger.info("Updating Dojo task completions...")
@@ -982,7 +994,7 @@ class Validator:
             all_request_ids = []
 
             async for task_batch in self._get_task_batches(
-                validator_hotkeys, batch_size, expire_at
+                validator_hotkeys, batch_size, expire_from, expire_to
             ):
                 if not task_batch:
                     continue
@@ -1030,13 +1042,18 @@ class Validator:
         return validator_hotkeys
 
     async def _get_task_batches(
-        self, validator_hotkeys: list[str], batch_size: int, expire_at: datetime
+        self,
+        validator_hotkeys: list[str],
+        batch_size: int,
+        expire_from: datetime,
+        expire_to: datetime,
     ) -> AsyncGenerator[List[DendriteQueryResponse], None]:
         """Get task in batches from the database"""
         async for task_batch, has_more_batches in ORM.get_expired_tasks(
             validator_hotkeys=validator_hotkeys,
             batch_size=batch_size,
-            expire_at=expire_at,
+            expire_from=expire_from,
+            expire_to=expire_to,
         ):
             if not has_more_batches:
                 logger.success(
@@ -1050,7 +1067,6 @@ class Validator:
         """
         Returns a list of updated miner responses
         """
-        logger.info(f"Processing task: {task.request.request_id}")
         request_id: str = task.request.request_id
         obfuscated_to_real_model_id: Dict[str, str] = await ORM.get_real_model_ids(
             request_id
@@ -1073,14 +1089,14 @@ class Validator:
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             for result in results:
-                if isinstance(result, FeedbackRequest):
+                if result is None:
+                    pass
+                elif isinstance(result, FeedbackRequest):
                     updated_miner_responses.append(result)
                 elif isinstance(result, InvalidMinerResponse):
                     logger.error(f"Invalid miner response: {result}")
                 elif isinstance(result, Exception):
                     logger.error(f"Unexpected error: {result}")
-                else:
-                    logger.error(f"Unexpected return type: {type(result)}")
 
         logger.success(
             f"Completed processing {len(updated_miner_responses)} miner responses in {num_batches} batches"
