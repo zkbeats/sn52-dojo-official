@@ -6,6 +6,14 @@ class NoNewExpiredTasksYet(Exception):
         super().__init__(self.message)
 
 
+class ExpiredFromMoreThanExpireTo(Exception):
+    """Exception raised when expired_from is more than expired_to."""
+
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+
 class UnexpiredTasksAlreadyProcessed(Exception):
     """Exception raised when all unexpired tasks have already been processed."""
 
