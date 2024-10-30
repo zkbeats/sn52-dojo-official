@@ -736,6 +736,7 @@ class Validator:
 
             logger.success(f"Loaded validator state: {scores=}")
             async with self._scores_alock:
+                # if metagraph has more hotkeys than scores, adjust length
                 if len(scores) < len(self.metagraph.hotkeys):
                     logger.warning(
                         "Scores state is less than current metagraph hotkeys length, adjusting length. This should only happen when subnet is not at max UIDs yet."
@@ -746,8 +747,10 @@ class Validator:
                     logger.info(
                         f"Load state: adjusted scores shape from {scores.shape} to {adjusted_scores.shape}"
                     )
+                    self.scores = torch.clamp(adjusted_scores, 0.0)
+                else:
+                    self.scores = torch.clamp(scores, 0.0)
 
-                self.scores = torch.clamp(adjusted_scores, 0.0)
                 _terminal_plot(
                     f"scores on load, block: {self.block}", self.scores.numpy()
                 )
