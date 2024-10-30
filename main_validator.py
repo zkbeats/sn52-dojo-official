@@ -56,7 +56,6 @@ async def main():
         asyncio.create_task(validator.log_validator_status()),
         asyncio.create_task(validator.run()),
         asyncio.create_task(validator.update_score_and_send_feedback()),
-        asyncio.create_task(validator.monitor_task_completions()),
         asyncio.create_task(validator.send_heartbeats()),
     ]
 

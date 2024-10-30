@@ -1,5 +1,5 @@
-class NoNewUnexpiredTasksYet(Exception):
-    """Exception raised when no unexpired tasks are found for processing."""
+class NoNewExpiredTasksYet(Exception):
+    """Exception raised when no expired tasks are found for processing."""
 
     def __init__(self, message):
         self.message = message
