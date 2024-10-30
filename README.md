@@ -204,8 +204,9 @@ docker --version
 docker compose version
 ```
 
-4. Start local subtensor node (__optional__)
-> The included subtensor service only expose 30333 (p2p) to the public, 9933 and 9944 are only accesssible internally in the docker network, feel free to change the configuration if required.
+4. Start local subtensor node (**optional**)
+   > The included subtensor service only expose 30333 (p2p) to the public, 9933 and 9944 are only accesssible internally in the docker network, feel free to change the configuration if required.
+
 ```bash
 # Mainnet
 make subtensor-mainnet
@@ -277,6 +278,8 @@ DOJO_API_KEY= # blank for now
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 AXON_PORT=8888 # port to serve requests over the public network for validators to call
+# Task related config
+TASK_MAX_RESULT=4 # this means that each miner can have up to 4 workers fill in responses
 ```
 
 2. Run the CLI to retrieve API Key and Subscription Key, see [Dojo CLI](#dojo-cli) for usage.
@@ -323,6 +326,8 @@ DOJO_API_KEY=# blank for now
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 AXON_PORT=8888 # port to serve requests over the public network for validators to call
+# Task related config
+TASK_MAX_RESULT=4 # this means that each miner can have up to 4 workers fill in responses
 
 # for dojo-ui
 NEXT_PUBLIC_BACKEND_URL=http://localhost:3000

@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, List
 
 import httpx
@@ -13,6 +14,14 @@ from dojo.protocol import FeedbackRequest, MultiScoreCriteria, RankingCriteria
 DOJO_API_BASE_URL = get_dojo_api_base_url()
 # to be able to get the curlify requests
 # DEBUG = False
+
+
+def _get_max_results_param() -> int:
+    max_results = os.getenv("TASK_MAX_RESULTS")
+    if not max_results:
+        logger.warning("TASK_MAX_RESULTS is not set, defaulting to 1")
+        max_results = 1
+    return int(max_results)
 
 
 class DojoAPI:
@@ -37,15 +46,16 @@ class DojoAPI:
     @classmethod
     async def get_task_results_by_task_id(cls, task_id: str) -> List[Dict] | None:
         """Gets task results from task id to prepare for scoring later on"""
-        task_response = await cls._get_task_by_id(task_id)
-        task_status = task_response.get("body", {}).get("status", None)
-        is_completed = task_status and task_status.lower() == "completed"
-        if is_completed is None:
-            logger.error(f"Failed to read status field for task_id: {task_id}")
-            return
+        # task_response = await cls._get_task_by_id(task_id)
+        # task_status = task_response.get("body", {}).get("status", None)
+        # is_completed = task_status and task_status.lower() == "completed"
+        # if is_completed is None:
+        #     logger.error(f"Failed to read status field for task_id: {task_id}")
+        #     return
 
-        if is_completed is False:
-            return
+        # if is_completed is False:
+        #     return
+
         task_results_response = await cls._get_task_results_by_task_id(task_id)
         task_results = task_results_response.get("body", {}).get("taskResults")
         if task_results is None:
@@ -109,12 +119,13 @@ class DojoAPI:
 
             expire_at = set_expire_time(dojo.TASK_DEADLINE)
 
+            max_results = _get_max_results_param()
             form_body = {
                 "title": ("", "LLM Code Generation Task"),
                 "body": ("", feedback_request.prompt),
                 "expireAt": ("", expire_at),
                 "taskData": ("", json.dumps([taskData])),
-                "maxResults": ("", "1"),
+                "maxResults": ("", str(max_results)),
             }
 
             payload_size = sum(len(str(v[1])) for v in form_body.values())

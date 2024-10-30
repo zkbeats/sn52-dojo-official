@@ -77,7 +77,6 @@ class Validator:
 
     def __init__(self):
         self.loop = asyncio.get_event_loop()
-        self.set_weights_loop = asyncio.new_event_loop()
         # TODO @dev WIP from BaseNeuron
         self.config = ObjectManager.get_config()
 
