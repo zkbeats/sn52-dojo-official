@@ -1200,7 +1200,8 @@ class Validator:
 
         logger.debug(f"📝 Got hotkey to score: {hotkey_to_score}")
         logger.debug(
-            f"📝 Initially had {len(task.miner_responses)} responses from miners, but only {len(hotkey_to_score.keys())} valid responses"
+            f"📝 Received {len(task.miner_responses)} responses from miners. "
+            f"Processed {len(hotkey_to_score.keys())} responses for scoring."
         )
 
         if not hotkey_to_score:
