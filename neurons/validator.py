@@ -940,7 +940,7 @@ class Validator:
                 expire_from = (
                     datetime_as_utc(datetime.now(timezone.utc))
                     - timedelta(seconds=dojo.TASK_DEADLINE)
-                    - timedelta(hour=2)
+                    - timedelta(hours=2)
                 )
                 expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
                     seconds=dojo.TASK_DEADLINE

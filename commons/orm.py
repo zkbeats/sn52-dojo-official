@@ -95,7 +95,7 @@ class ORM:
             expire_from = (
                 datetime_as_utc(datetime.now(timezone.utc))
                 - timedelta(seconds=TASK_DEADLINE)
-                - timedelta(hour=6)
+                - timedelta(hours=6)
             )
         if not expire_to:
             expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
