@@ -59,7 +59,6 @@ class DojoAPI:
         task_results_response = await cls._get_task_results_by_task_id(task_id)
         task_results = task_results_response.get("body", {}).get("taskResults")
         if task_results is None:
-            logger.error(f"Failed to read task results for task_id: {task_id}")
             return
 
         if not task_results:
