@@ -1,3 +1,22 @@
+## [1.4.0](https://github.com/tensorplex-labs/dojo/compare/v1.3.3...v1.4.0) (2024-10-31)
+
+### Features
+
+* allow miners to set TASK_MAX_RESULTS ([#58](https://github.com/tensorplex-labs/dojo/issues/58)) ([ef9af28](https://github.com/tensorplex-labs/dojo/commit/ef9af28c30cd010cb2d14ca5ea52ec2d02cc16c4))
+
+### Bug Fixes
+
+* local variable ([54eb11f](https://github.com/tensorplex-labs/dojo/commit/54eb11f86681540fea82555df5db2d816c486497))
+* update correct param names ([c5e1823](https://github.com/tensorplex-labs/dojo/commit/c5e182390503ce174886f7372cd265569d95f511))
+
+### Performance Improvements
+
+* add validation for expiry times ([272efbb](https://github.com/tensorplex-labs/dojo/commit/272efbb12782cfad57bbf32385a2b204241db372))
+* add validation for expiry times ([e75c9a5](https://github.com/tensorplex-labs/dojo/commit/e75c9a51db5aa507bb94aeca338075b53416d6fd))
+* ensure miner scores updated per func call, not per task ([#62](https://github.com/tensorplex-labs/dojo/issues/62)) ([5339f09](https://github.com/tensorplex-labs/dojo/commit/5339f09704a85f726394b948c23c7298e6128322))
+* remove unused function ([a64b66e](https://github.com/tensorplex-labs/dojo/commit/a64b66e5b37d4caaeb6328da4bef08bce00249ce))
+* update completions timing logic ([5b8adfb](https://github.com/tensorplex-labs/dojo/commit/5b8adfb9ecc795584ffdd45b2f48a32456b1c127))
+
 ## [1.3.3](https://github.com/tensorplex-labs/dojo/compare/v1.3.2...v1.3.3) (2024-10-28)
 
 ### Bug Fixes
