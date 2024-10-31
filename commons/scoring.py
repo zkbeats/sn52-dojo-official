@@ -373,8 +373,11 @@ class Scoring:
                     _get_miner_response_by_criteria(criteria, completion)
                 )
             miner_outputs.append(curr_miner_outputs)
-        if miner_outputs == [] or None in miner_outputs:
-            raise ValueError("Miner outputs cannot be empty or contain None values")
+        if miner_outputs == []:
+            raise ValueError("Miner outputs cannot be empty")
+
+        if None in miner_outputs:
+            raise ValueError("Miner outputs cannot contain None values")
 
         miner_outputs = np.array(miner_outputs)
         logger.debug(f"scoring: raw miner outputs\n{miner_outputs}")
@@ -460,8 +463,11 @@ class Scoring:
                     _get_miner_response_by_criteria(criteria, completion)
                 )
             miner_outputs.append(curr_miner_outputs)
-        if miner_outputs == [] or None in miner_outputs:
-            raise ValueError("Miner outputs cannot be empty or contain None values")
+        if miner_outputs == []:
+            raise ValueError("Miner outputs cannot be empty")
+
+        if None in miner_outputs:
+            raise ValueError("Miner outputs cannot contain None values")
 
         miner_outputs = np.array(miner_outputs)
 
@@ -547,6 +553,23 @@ class Scoring:
                     continue
                 valid_miner_responses.append(response)
 
+            if not len(valid_miner_responses):
+                logger.info(f"📝 No valid responses for {request.request_id}")
+
+                for r in miner_responses:
+                    hotkey_to_final_score[r.axon.hotkey] = 0.0  # type: ignore
+                consensus_score = ConsensusScore(
+                    score=torch.zeros(len(miner_responses)),
+                    mse_by_miner=torch.zeros(len(miner_responses)),
+                    icc_by_miner=torch.zeros(len(miner_responses)),
+                )
+
+                criteria_to_miner_scores[criteria.type] = Score(
+                    ground_truth=torch.zeros(len(miner_responses)),
+                    consensus=consensus_score,
+                )
+                return criteria_to_miner_scores, hotkey_to_final_score
+
             # if len(valid_miner_responses) < 2:
             #     logger.warning(
             #         f"Skipping scoring for request id: {request.request_id} as not enough valid responses"
@@ -561,7 +584,9 @@ class Scoring:
             # #         criteria, request, valid_miner_responses
             # #     )
 
-            logger.error(f"📝 Filtered {len(valid_miner_responses)} valid responses")
+            logger.info(
+                f"📝 Filtered {len(valid_miner_responses)} valid responses for request id {request.request_id}"
+            )
 
             if not isinstance(criteria, MultiScoreCriteria):
                 raise NotImplementedError("Only multi-score criteria is supported atm")

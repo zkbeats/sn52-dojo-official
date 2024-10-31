@@ -9,11 +9,11 @@ import torch
 from bittensor.btlogging import logging as logger
 
 from commons.exceptions import (
+    ExpiredFromMoreThanExpireTo,
     InvalidCompletion,
     InvalidMinerResponse,
     InvalidTask,
-    NoNewUnexpiredTasksYet,
-    UnexpiredTasksAlreadyProcessed,
+    NoNewExpiredTasksYet,
 )
 from commons.utils import datetime_as_utc
 from database.client import prisma, transaction
@@ -51,68 +51,28 @@ from dojo.protocol import (
 
 class ORM:
     @staticmethod
-    async def get_last_expire_at_cutoff(
-        validator_hotkeys: list[str],
-        expire_at: datetime = datetime_as_utc(
-            datetime.now(timezone.utc) - timedelta(seconds=TASK_DEADLINE)
-        ),
-    ) -> datetime:
-        """
-        Get the expire at cutoff for the query to `get_unexpired_tasks`
-        We use 1.5 * TASK_DEADLINE to overlap with the `expire_at` field in the
-        database so we don't miss out any data.
-
-        Args:
-            validator_hotkeys (list[str]): List of validator hotkeys.
-            expire_at (datetime, optional): _description_. Defaults to datetime_as_utc( datetime.now(timezone.utc) - 1.5 * timedelta(seconds=TASK_DEADLINE) ).
-
-        Raises:
-            ValueError: Unable to determine expire at cutoff
-
-        Returns:
-            datetime: Expire at cutoff
-        """
-        logger.debug(f"Expire at cutoff: {expire_at}")
-        vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
-            {
-                "hotkey": {"in": validator_hotkeys, "mode": "insensitive"},
-                "child_requests": {"some": {}},
-                "expire_at": {"gt": expire_at},
-                "is_processed": {"equals": False},
-            }
-        )
-
-        found = await Feedback_Request_Model.prisma().find_first(
-            where=vali_where_query_unprocessed,
-            order={"expire_at": "asc"},
-        )
-        if found:
-            return datetime_as_utc(found.expire_at)
-
-        raise ValueError("Unable to determine expire at cutoff")
-
-    @staticmethod
     async def get_expired_tasks(
         validator_hotkeys: list[str],
         batch_size: int = 10,
-        expire_at: datetime | None = None,
+        expire_from: datetime | None = None,
+        expire_to: datetime | None = None,
     ) -> AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]:
         """Returns a batch of Feedback_Request_Model and a boolean indicating if there are more batches.
-        Depending on the `expire_at` provided, it will return different results.
+        Depending on the `expire_from` and `expire_to` provided, it will return different results.
 
-        YOUR LOGIC ON WHETHER TASKS ARE EXPIRED OR NON-EXPIRED SHOULD BE HANDLED BY SETTING EXPIRE_AT YOURSELF.
+        YOUR LOGIC ON WHETHER TASKS ARE EXPIRED OR NON-EXPIRED SHOULD BE HANDLED BY SETTING EXPIRE_FROM and EXPIRE_TO YOURSELF.
 
         Args:
             validator_hotkeys (list[str]): List of validator hotkeys.
             batch_size (int, optional): Number of tasks to return in a batch. Defaults to 10.
 
             1 task == 1 validator request, N miner responses
-            expire_at: (datetime | None) If provided, only tasks with expire_at after the provided datetime will be returned.
+            expire_from: (datetime | None) If provided, only tasks with expire_at after expire_from will be returned.
+            expire_to: (datetime | None) If provided, only tasks with expire_at before expire_to will be returned.
             You must determine the `expire_at` cutoff yourself, otherwise it defaults to current time UTC.
 
         Raises:
-            NoNewUnexpiredTasksYet: If no unexpired tasks are found for processing.
-            UnexpiredTasksAlreadyProcessed: If all unexpired tasks have already been processed.
+            NoNewExpiredTasksYet: If no expired tasks are found for processing.
 
         Yields:
             Iterator[AsyncGenerator[tuple[List[DendriteQueryResponse], bool], None]]:
@@ -130,9 +90,23 @@ class ORM:
             }
         )
 
-        now = datetime_as_utc(datetime.now(timezone.utc))
-        if expire_at:
-            now = expire_at
+        # Set default expiry timeframe of 6 hours before the latest expired tasks
+        if not expire_from:
+            expire_from = (
+                datetime_as_utc(datetime.now(timezone.utc))
+                - timedelta(seconds=TASK_DEADLINE)
+                - timedelta(hours=6)
+            )
+        if not expire_to:
+            expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+                seconds=TASK_DEADLINE
+            )
+
+        # Check that expire_from is lesser than expire_to
+        if expire_from > expire_to:
+            raise ExpiredFromMoreThanExpireTo(
+                "expire_from should be less than expire_to."
+            )
 
         vali_where_query_unprocessed = Feedback_Request_ModelWhereInput(
             {
@@ -140,21 +114,10 @@ class ORM:
                 "child_requests": {"some": {}},
                 # only check for expire at since miner may lie
                 "expire_at": {
-                    "gt": now,
+                    "gt": expire_from,
+                    "lt": expire_to,
                 },
                 "is_processed": {"equals": False},
-            }
-        )
-
-        vali_where_query_processed = Feedback_Request_ModelWhereInput(
-            {
-                "hotkey": {"in": validator_hotkeys, "mode": "insensitive"},
-                "child_requests": {"some": {}},
-                # only check for expire at since miner may lie
-                "expire_at": {
-                    "gt": now,
-                },
-                "is_processed": {"equals": True},
             }
         )
 
@@ -163,29 +126,15 @@ class ORM:
             where=vali_where_query_unprocessed,
         )
 
-        task_count_processed = await Feedback_Request_Model.prisma().count(
-            where=vali_where_query_processed,
-        )
-
         logger.debug(f"Count of unprocessed tasks: {task_count_unprocessed}")
-        logger.debug(f"Count of processed tasks: {task_count_processed}")
-
-        logger.debug(
-            f"Count of unprocessed tasks: {task_count_unprocessed}, count of processed tasks: {task_count_processed}"
-        )
 
         if not task_count_unprocessed:
-            if task_count_processed:
-                raise UnexpiredTasksAlreadyProcessed(
-                    f"No remaining unexpired tasks found for processing, but don't worry as you have processed {task_count_processed} tasks."
-                )
-            else:
-                raise NoNewUnexpiredTasksYet(
-                    f"No unexpired tasks found for processing, please wait for tasks to pass the task deadline of {TASK_DEADLINE} seconds."
-                )
+            raise NoNewExpiredTasksYet(
+                f"No expired tasks found for processing, please wait for tasks to pass the task deadline of {TASK_DEADLINE} seconds."
+            )
 
         for i in range(0, task_count_unprocessed, batch_size):
-            # find all validator requests
+            # find all unprocesed validator requests
             validator_requests = await Feedback_Request_Model.prisma().find_many(
                 include=include_query,
                 where=vali_where_query_unprocessed,
@@ -195,12 +144,11 @@ class ORM:
             )
 
             # find all miner responses
-            validator_request_ids = [r.id for r in validator_requests]
-
+            unprocessed_validator_request_ids = [r.id for r in validator_requests]
             miner_responses = await Feedback_Request_Model.prisma().find_many(
                 include=include_query,
                 where={
-                    "parent_id": {"in": validator_request_ids},
+                    "parent_id": {"in": unprocessed_validator_request_ids},
                     "is_processed": {"equals": False},
                 },
                 order={"created_at": "desc"},
@@ -321,9 +269,12 @@ class ORM:
 
     @staticmethod
     async def update_miner_completions_by_request_id(
-        request_id: str, miner_responses: List[FeedbackRequest], batch_size: int = 10
+        miner_responses: List[FeedbackRequest],
+        batch_size: int = 10,
+        max_retries: int = 20,
     ) -> tuple[bool, list[int]]:
-        """Update the miner's provided rank_id / scores etc. for a given request id that it is responding to validator. This exists because over the course of a task, a miner may recruit multiple workers and we
+        """
+        Update the miner's provided rank_id / scores etc. for a list of miner responses that it is responding to validator. This exists because over the course of a task, a miner may recruit multiple workers and we
         need to recalculate the average score / rank_id etc. across all workers.
         """
         if not len(miner_responses):
@@ -331,93 +282,94 @@ class ORM:
             return True, []
 
         num_batches = math.ceil(len(miner_responses) / batch_size)
-        num_failed_batches = 0
         failed_batch_indices = []
-        batch_id = 0
-        for i in range(0, len(miner_responses), batch_size):
-            safe_lim = min(len(miner_responses), i + batch_size)
-            try:
-                batch_responses = miner_responses[i:safe_lim]
 
-                # NOTE: @dev we must nest the transaction so after __aexit__ is
-                # called (when no exceptions occur) then tx.commit() is called
-                async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
-                    # find the feedback request ids
-                    miner_hotkeys = []
-                    for miner_response in batch_responses:
-                        if not miner_response.axon or not miner_response.axon.hotkey:
-                            raise InvalidMinerResponse(
-                                f"Miner response {miner_response} must have a hotkey"
-                            )
-                        miner_hotkeys.append(miner_response.axon.hotkey)
+        for batch_id in range(num_batches):
+            start_idx = batch_id * batch_size
+            end_idx = min((batch_id + 1) * batch_size, len(miner_responses))
+            batch_responses = miner_responses[start_idx:end_idx]
 
-                    # update the completion_responses data
-                    for miner_response in batch_responses:
-                        # find the particular request
-                        hotkey = miner_response.axon.hotkey  # type: ignore
-                        curr_miner_response = (
-                            await tx.feedback_request_model.find_first(
-                                where=Feedback_Request_ModelWhereInput(
-                                    request_id=request_id,
-                                    hotkey=hotkey,  # type: ignore
+            for attempt in range(max_retries):
+                try:
+                    async with prisma.tx(timeout=timedelta(seconds=30)) as tx:
+                        for miner_response in batch_responses:
+                            if (
+                                not miner_response.axon
+                                or not miner_response.axon.hotkey
+                            ):
+                                raise InvalidMinerResponse(
+                                    f"Miner response {miner_response} must have a hotkey"
+                                )
+
+                            hotkey = miner_response.axon.hotkey
+                            request_id = miner_response.request_id
+
+                            curr_miner_response = (
+                                await tx.feedback_request_model.find_first(
+                                    where=Feedback_Request_ModelWhereInput(
+                                        request_id=request_id,
+                                        hotkey=hotkey,
+                                    )
                                 )
                             )
-                        )
 
-                        if not curr_miner_response:
-                            raise ValueError("Miner response not found")
+                            if not curr_miner_response:
+                                raise ValueError(
+                                    f"Miner response not found for request_id: {request_id}, hotkey: {hotkey}"
+                                )
 
-                        # the actual completion_ids NOT the ids of the records in DB
-                        completion_ids = [
-                            c.completion_id for c in miner_response.completion_responses
-                        ]
+                            completion_ids = [
+                                c.completion_id
+                                for c in miner_response.completion_responses
+                            ]
 
-                        # find completion ids of the miner response
-                        completion_records = (
-                            await tx.completion_response_model.find_many(
-                                where=Completion_Response_ModelWhereInput(
-                                    feedback_request_id=curr_miner_response.id,
-                                    completion_id={"in": completion_ids},
+                            completion_records = (
+                                await tx.completion_response_model.find_many(
+                                    where=Completion_Response_ModelWhereInput(
+                                        feedback_request_id=curr_miner_response.id,
+                                        completion_id={"in": completion_ids},
+                                    )
                                 )
                             )
+
+                            completion_id_record_id = {
+                                c.completion_id: c.id for c in completion_records
+                            }
+
+                            for completion in miner_response.completion_responses:
+                                await tx.completion_response_model.update(
+                                    data={
+                                        "score": completion.score,
+                                        "rank_id": completion.rank_id,
+                                    },
+                                    where=Completion_Response_ModelWhereUniqueInput(
+                                        id=completion_id_record_id[
+                                            completion.completion_id
+                                        ],
+                                    ),
+                                )
+
+                    logger.debug(
+                        f"Updating completion responses: updated batch {batch_id+1}/{num_batches}"
+                    )
+                    break
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        logger.error(
+                            f"Failed to update batch {batch_id+1}/{num_batches} after {max_retries} attempts: {e}"
                         )
+                        failed_batch_indices.extend(range(start_idx, end_idx))
+                    else:
+                        logger.warning(
+                            f"Retrying batch {batch_id+1}/{num_batches}, attempt {attempt+2}/{max_retries}"
+                        )
+                        await asyncio.sleep(2**attempt)
 
-                        # actual completion_id TO id of record in DB
-                        completion_id_record_id = {
-                            c.completion_id: c.id for c in completion_records
-                        }
+                await asyncio.sleep(0.1)
 
-                        # update the completions
-                        for completion in miner_response.completion_responses:
-                            await tx.completion_response_model.update(
-                                data={
-                                    "score": completion.score,
-                                    "rank_id": completion.rank_id,
-                                },
-                                where=Completion_Response_ModelWhereUniqueInput(
-                                    id=completion_id_record_id[
-                                        completion.completion_id
-                                    ],
-                                ),
-                            )
-
-                logger.debug(
-                    f"Updating completion responses: updated batch {batch_id+1}/{num_batches} "
-                )
-            except Exception as e:
-                logger.error(
-                    f"Updating completion responses: failed for batch {batch_id+1}/{num_batches}, error: {e}"
-                )
-                num_failed_batches += 1
-                failed_batch_indices.extend(range(i, safe_lim))
-            finally:
-                batch_id += 1
-
-            await asyncio.sleep(0.1)
-
-        if num_failed_batches == 0:
+        if not failed_batch_indices:
             logger.success(
-                f"Updating completion responses: successfully in {num_batches} batches for {len(miner_responses)} responses"
+                f"Successfully updated all {num_batches} batches for {len(miner_responses)} responses"
             )
             gc.collect()
             return True, []
@@ -624,9 +576,6 @@ class ORM:
                 for completion in feedback_request.completions
             }
 
-            logger.debug(
-                f"Found {len(scores_and_gts)} scores and ground truths for dojo_task_id: {dojo_task_id}"
-            )
             return scores_and_gts
 
         except Exception as e:
