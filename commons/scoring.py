@@ -68,6 +68,9 @@ def _reward_cubic(
     # ensure ground truth is a column vector for broadcasting
     # shape: (1, num_completions)
     ground_truth = ground_truth.reshape(1, -1)
+    logger.debug(
+        f"scoring: Reshaped ground truth shape: {ground_truth.shape}\n array: {ground_truth}"
+    )
 
     # ensure dims for broadcasting
     assert len(ground_truth.shape) == 2
@@ -75,21 +78,29 @@ def _reward_cubic(
 
     # Shape: (num_miners, num_completions)
     x = miner_outputs - ground_truth
+    x_1d = np.sum(x, axis=1)
+    logger.debug(f"scoring: output minus gt shape: {x_1d.shape}\n array: {x_1d}")
 
     # apply the cubic transformation
-    points = (scaling * (x - translation) ** 3 + offset).flatten()
-    logger.debug(f"scoring: cubic reward\n{points}")
+    points = (scaling * (x_1d - translation) ** 3 + offset).flatten()
+    logger.debug(
+        f"scoring: cubic reward points shape: {points.shape}\n array: {points}"
+    )
 
     # case where a miner provides the same score for all completions
     # convert any nans to zero
     points = np.where(np.isnan(points), 0, points)
-    logger.debug(f"scoring: cubic reward no nans\n{points}")
+    logger.debug(
+        f"scoring: cubic reward no nans shape: {points.shape}\n array: {points}"
+    )
     if visualize:
         _terminal_plot("scoring: cubic reward (raw)", points, sort=True)
 
     # ensure all values are in the range [0, 1]
     points = minmax_scale(points)
-    logger.debug(f"scoring: cubic reward minmax scaled\n{points}")
+    logger.debug(
+        f"scoring: cubic reward minmax scaled shape: {points.shape}\n array: {points}"
+    )
     points = points.numpy()
     if visualize:
         _terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
@@ -250,9 +261,11 @@ class Scoring:
                 x.score
                 for x in sorted(
                     response.completion_responses,
-                    key=lambda x: model_id_to_avg_score[x.model]
-                    if criteria == MultiScoreCriteria
-                    else model_id_to_avg_rank[x.model],
+                    key=lambda x: (
+                        model_id_to_avg_score[x.model]
+                        if criteria == MultiScoreCriteria
+                        else model_id_to_avg_rank[x.model]
+                    ),
                 )
             ]
             # order scores based on order in model_id_to_avg_score
