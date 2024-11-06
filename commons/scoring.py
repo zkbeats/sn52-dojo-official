@@ -76,14 +76,22 @@ def _reward_cubic(
     assert len(ground_truth.shape) == 2
     assert len(miner_outputs.shape) == 2
 
-    # Shape: (num_miners, num_completions)
-    x = miner_outputs - ground_truth
-    x_1d = np.sum(x, axis=1)
-    assert x_1d.shape[0] == miner_outputs.shape[0]
-    logger.debug(f"scoring: output minus gt shape: {x_1d.shape}\n array: {x_1d}")
+    # shape: (num_miners,)
+    # number range [-1, 1]
+    x = F.cosine_similarity(
+        torch.from_numpy(miner_outputs), torch.from_numpy(ground_truth), dim=1
+    ).numpy()
+    x = np.where(np.isnan(x), 0, x)
+
+    # transform from range [-1, 1] to [0, 1]
+    x = (x + 1) / 2
+    logger.debug(f"scoring: cosine similarity shape: {x.shape}\n array: {x}")
+    # ensure sum is 1
+    x = F.normalize(torch.from_numpy(x), p=1, dim=0)
+    assert x.shape[0] == miner_outputs.shape[0]
 
     # apply the cubic transformation
-    points = (scaling * (x_1d - translation) ** 3 + offset).flatten()
+    points = scaling * (x - translation) ** 3 + offset
     logger.debug(
         f"scoring: cubic reward points shape: {points.shape}\n array: {points}"
     )
@@ -416,7 +424,7 @@ class Scoring:
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         cubic_reward: np.ndarray = _reward_cubic(
-            miner_outputs, ground_truth_arr, 0.04, 7, 2, visualize=True
+            miner_outputs, ground_truth_arr, 0.006, 7, 2, visualize=True
         )
         logger.debug(f"scoring: cubic reward\n{cubic_reward}")
 
