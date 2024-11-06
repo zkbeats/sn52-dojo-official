@@ -79,6 +79,7 @@ def _reward_cubic(
     # Shape: (num_miners, num_completions)
     x = miner_outputs - ground_truth
     x_1d = np.sum(x, axis=1)
+    assert x_1d.shape[0] == miner_outputs.shape[0]
     logger.debug(f"scoring: output minus gt shape: {x_1d.shape}\n array: {x_1d}")
 
     # apply the cubic transformation
