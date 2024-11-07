@@ -81,7 +81,8 @@ def _reward_cubic(
     x = F.cosine_similarity(
         torch.from_numpy(miner_outputs), torch.from_numpy(ground_truth), dim=1
     ).numpy()
-    x = np.where(np.isnan(x), 0, x)
+    # Convert nans to -1 to send it to the bottom
+    x = np.where(np.isnan(x), -1, x)
 
     # transform from range [-1, 1] to [0, 1]
     x = (x + 1) / 2
@@ -973,7 +974,7 @@ def _test_reward_cubic():
             [0.25, 0.75, 0.75, 0.25],
             [0.75, 0.25, 0.25, 0.75],
             [0.1, 0.9, 0.9, 0.1],
-            [0.9, 0.1, 0.1, 0.9],
+            [1, 0.6666667, 0.33333334, 0],
             [0.0, 0.0, 0.0, 0.0],
         ]
     )
@@ -994,7 +995,7 @@ def _test_reward_cubic():
     ), "All values should be in the range [0, 1]"
 
     # Visualize the result using _terminal_plot
-    _terminal_plot("Cubic Reward Test Result", result, sort=True)
+    _terminal_plot("Cubic Reward Test Result", result, sort=False)
 
     print("test_reward_cubic passed.")
 
