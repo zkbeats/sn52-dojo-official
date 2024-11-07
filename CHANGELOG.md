@@ -1,3 +1,47 @@
+## [1.4.0](https://github.com/tensorplex-labs/dojo/compare/v1.3.3...v1.4.0) (2024-10-31)
+
+### Features
+
+* allow miners to set TASK_MAX_RESULTS ([#58](https://github.com/tensorplex-labs/dojo/issues/58)) ([ef9af28](https://github.com/tensorplex-labs/dojo/commit/ef9af28c30cd010cb2d14ca5ea52ec2d02cc16c4))
+
+### Bug Fixes
+
+* local variable ([54eb11f](https://github.com/tensorplex-labs/dojo/commit/54eb11f86681540fea82555df5db2d816c486497))
+* update correct param names ([c5e1823](https://github.com/tensorplex-labs/dojo/commit/c5e182390503ce174886f7372cd265569d95f511))
+
+### Performance Improvements
+
+* add validation for expiry times ([272efbb](https://github.com/tensorplex-labs/dojo/commit/272efbb12782cfad57bbf32385a2b204241db372))
+* add validation for expiry times ([e75c9a5](https://github.com/tensorplex-labs/dojo/commit/e75c9a51db5aa507bb94aeca338075b53416d6fd))
+* ensure miner scores updated per func call, not per task ([#62](https://github.com/tensorplex-labs/dojo/issues/62)) ([5339f09](https://github.com/tensorplex-labs/dojo/commit/5339f09704a85f726394b948c23c7298e6128322))
+* remove unused function ([a64b66e](https://github.com/tensorplex-labs/dojo/commit/a64b66e5b37d4caaeb6328da4bef08bce00249ce))
+* update completions timing logic ([5b8adfb](https://github.com/tensorplex-labs/dojo/commit/5b8adfb9ecc795584ffdd45b2f48a32456b1c127))
+
+## [1.3.3](https://github.com/tensorplex-labs/dojo/compare/v1.3.2...v1.3.3) (2024-10-28)
+
+### Bug Fixes
+
+* disabled the _ensure_subtensor_ws_connected func ([#52](https://github.com/tensorplex-labs/dojo/issues/52)) ([0142023](https://github.com/tensorplex-labs/dojo/commit/0142023bbae39e75a32b22d644f3177413a437d9))
+* scores shapes ([#55](https://github.com/tensorplex-labs/dojo/issues/55)) ([72c4f04](https://github.com/tensorplex-labs/dojo/commit/72c4f0469af44f1212eb54be6221aff3fbf0caa9))
+* set wait for finalization = False ([2911fb0](https://github.com/tensorplex-labs/dojo/commit/2911fb09c9ffca4b473f65342593999917e6f007))
+
+## [1.3.2](https://github.com/tensorplex-labs/dojo/compare/v1.3.1...v1.3.2) (2024-10-27)
+
+### Bug Fixes
+
+* add try except for calculating scores ([53285ff](https://github.com/tensorplex-labs/dojo/commit/53285ffbd6e67ad716b77dfe18ae196f9599867a))
+* convert to np array and back to torch ([fa7bacc](https://github.com/tensorplex-labs/dojo/commit/fa7baccdb3a44b93d5d398404a5dd3bf2048f100))
+* increase prisma tx timeout, poll tasks every 5 min ([b109592](https://github.com/tensorplex-labs/dojo/commit/b109592d00a2d59580bcf96f17b0f6b52ca16d94))
+* reuse weight_utils function ([2e45a0a](https://github.com/tensorplex-labs/dojo/commit/2e45a0a4c50d69a6c3929c697ed210b0e1f4749a))
+
+## [1.3.1](https://github.com/tensorplex-labs/dojo/compare/v1.3.0...v1.3.1) (2024-10-27)
+
+### Bug Fixes
+
+* increase save_task timeout from 5 to 30s ([5dc8171](https://github.com/tensorplex-labs/dojo/commit/5dc8171865aa8547153e7c009b383ec72366d911))
+* set weights call hanging ([638a3a5](https://github.com/tensorplex-labs/dojo/commit/638a3a54bfd0a4840acec310981478f4b58ecd35))
+* set weights, mini batching update miner responses, update logs ([#48](https://github.com/tensorplex-labs/dojo/issues/48)) ([2e72093](https://github.com/tensorplex-labs/dojo/commit/2e72093465e2ce65cfe554a63c9191bc7c91f680))
+
 ## [1.3.0](https://github.com/tensorplex-labs/dojo/compare/v1.2.2...v1.3.0) (2024-10-26)
 
 ### Features
