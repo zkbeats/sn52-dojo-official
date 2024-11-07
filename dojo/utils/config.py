@@ -49,13 +49,16 @@ class CustomFormatter(logging.Formatter):
             caller_info = f"{record.filename}:{record.funcName}:{record.lineno}".rjust(
                 40
             )
-        record.caller_info = caller_info
+        module_name, function_name, line_no = caller_info.split(":")
+        record.name = module_name
+        record.filename = function_name
+        record.lineno = int(line_no)
+
         return super().format(record)
 
 
-log_format = "%(caller_info)s | %(message)s"
 date_format = "%Y-%m-%d %H:%M:%S"
-custom_formatter = CustomFormatter(fmt=log_format, datefmt=date_format)
+custom_formatter = CustomFormatter(datefmt=date_format)
 
 
 def apply_custom_logging_format():

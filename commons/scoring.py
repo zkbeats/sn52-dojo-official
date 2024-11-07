@@ -68,28 +68,49 @@ def _reward_cubic(
     # ensure ground truth is a column vector for broadcasting
     # shape: (1, num_completions)
     ground_truth = ground_truth.reshape(1, -1)
+    logger.debug(
+        f"scoring: Reshaped ground truth shape: {ground_truth.shape}\n array: {ground_truth}"
+    )
 
     # ensure dims for broadcasting
     assert len(ground_truth.shape) == 2
     assert len(miner_outputs.shape) == 2
 
-    # Shape: (num_miners, num_completions)
-    x = miner_outputs - ground_truth
+    # shape: (num_miners,)
+    # number range [-1, 1]
+    x = F.cosine_similarity(
+        torch.from_numpy(miner_outputs), torch.from_numpy(ground_truth), dim=1
+    ).numpy()
+    # Convert nans to -1 to send it to the bottom
+    x = np.where(np.isnan(x), -1, x)
+
+    # transform from range [-1, 1] to [0, 1]
+    x = (x + 1) / 2
+    logger.debug(f"scoring: cosine similarity shape: {x.shape}\n array: {x}")
+    # ensure sum is 1
+    x = F.normalize(torch.from_numpy(x), p=1, dim=0)
+    assert x.shape[0] == miner_outputs.shape[0]
 
     # apply the cubic transformation
-    points = (scaling * (x - translation) ** 3 + offset).flatten()
-    logger.debug(f"scoring: cubic reward\n{points}")
+    points = scaling * (x - translation) ** 3 + offset
+    logger.debug(
+        f"scoring: cubic reward points shape: {points.shape}\n array: {points}"
+    )
 
     # case where a miner provides the same score for all completions
     # convert any nans to zero
     points = np.where(np.isnan(points), 0, points)
-    logger.debug(f"scoring: cubic reward no nans\n{points}")
+    logger.debug(
+        f"scoring: cubic reward no nans shape: {points.shape}\n array: {points}"
+    )
     if visualize:
         _terminal_plot("scoring: cubic reward (raw)", points, sort=True)
 
     # ensure all values are in the range [0, 1]
     points = minmax_scale(points)
-    logger.debug(f"scoring: cubic reward minmax scaled\n{points}")
+    logger.debug(
+        f"scoring: cubic reward minmax scaled shape: {points.shape}\n array: {points}"
+    )
     points = points.numpy()
     if visualize:
         _terminal_plot("scoring: cubic reward (minmax scaled)", points, sort=True)
@@ -250,9 +271,11 @@ class Scoring:
                 x.score
                 for x in sorted(
                     response.completion_responses,
-                    key=lambda x: model_id_to_avg_score[x.model]
-                    if criteria == MultiScoreCriteria
-                    else model_id_to_avg_rank[x.model],
+                    key=lambda x: (
+                        model_id_to_avg_score[x.model]
+                        if criteria == MultiScoreCriteria
+                        else model_id_to_avg_rank[x.model]
+                    ),
                 )
             ]
             # order scores based on order in model_id_to_avg_score
@@ -402,7 +425,7 @@ class Scoring:
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         # l1_norm = np.linalg.norm(miner_outputs - ground_truth_arr, axis=1)
         cubic_reward: np.ndarray = _reward_cubic(
-            miner_outputs, ground_truth_arr, 0.04, 7, 2, visualize=True
+            miner_outputs, ground_truth_arr, 0.006, 7, 2, visualize=True
         )
         logger.debug(f"scoring: cubic reward\n{cubic_reward}")
 
@@ -920,5 +943,63 @@ def _test_ground_truth_score_v1():
     plt.show()
 
 
+def _test_reward_cubic():
+    miner_outputs = np.array(
+        [
+            [0.1, 0.2, 0.3, 0.4],
+            [0.5, 0.6, 0.7, 0.8],
+            [0.9, 0.1, 0.2, 0.3],
+            [0.4, 0.5, 0.6, 0.7],
+            [0.8, 0.9, 0.1, 0.2],
+            [0.3, 0.4, 0.5, 0.6],
+            [0.7, 0.8, 0.9, 0.1],
+            [0.2, 0.3, 0.4, 0.5],
+            [0.6, 0.7, 0.8, 0.9],
+            [np.nan, np.nan, np.nan, np.nan],
+            [0.15, 0.25, 0.35, 0.45],
+            [0.55, 0.65, 0.75, 0.85],
+            [0.95, 0.05, 0.15, 0.25],
+            [0.45, 0.55, 0.65, 0.75],
+            [0.85, 0.95, 0.05, 0.15],
+            [0.35, 0.45, 0.55, 0.65],
+            [0.75, 0.85, 0.95, 0.05],
+            [0.25, 0.35, 0.45, 0.55],
+            [0.65, 0.75, 0.85, 0.95],
+            [0.05, 0.15, 0.25, 0.35],
+            [1.0, 0.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0, 0.0],
+            [0.99, 0.01, 0.01, 0.99],
+            [0.01, 0.99, 0.99, 0.01],
+            [0.5, 0.5, 0.5, 0.5],
+            [0.25, 0.75, 0.75, 0.25],
+            [0.75, 0.25, 0.25, 0.75],
+            [0.1, 0.9, 0.9, 0.1],
+            [1, 0.6666667, 0.33333334, 0],
+            [0.0, 0.0, 0.0, 0.0],
+        ]
+    )
+    ground_truth = np.array([0, 0.33333334, 0.6666667, 1])
+    scaling = 0.006
+    translation = 7
+    offset = 2
+
+    expected_shape = (30,)
+    result = _reward_cubic(miner_outputs, ground_truth, scaling, translation, offset)
+
+    assert isinstance(result, np.ndarray), "Result should be a numpy array"
+    assert (
+        result.shape == expected_shape
+    ), f"Expected shape {expected_shape}, but got {result.shape}"
+    assert np.all(result >= 0) and np.all(
+        result <= 1
+    ), "All values should be in the range [0, 1]"
+
+    # Visualize the result using _terminal_plot
+    _terminal_plot("Cubic Reward Test Result", result, sort=False)
+
+    print("test_reward_cubic passed.")
+
+
 if __name__ == "__main__":
-    _test_ground_truth_score_v1()
+    # _test_ground_truth_score_v1()
+    _test_reward_cubic()

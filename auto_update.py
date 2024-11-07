@@ -24,12 +24,12 @@ BRANCH = "main"
 
 CONFIG = {
     "validator": {
-        "images": ["dojo-synthetic-api"],
+        "images": ["dojo-synthetic-api", "dojo"],
         "docker_compose_down": "docker compose --env-file .env.validator -f docker-compose.validator.yaml down",
         "docker_compose_up": "docker compose --env-file .env.validator -f docker-compose.validator.yaml up --build -d validator",
     },
     "miner-decentralised": {
-        "images": ["dojo-worker-api", "dojo-ui"],
+        "images": ["dojo-worker-api", "dojo-ui", "dojo"],
         "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
         "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-decentralised",
     },
@@ -37,7 +37,7 @@ CONFIG = {
         "services": [
             "miner-centralised",
         ],
-        "images": [],
+        "images": ["dojo"],
         "docker_compose_down": "docker compose --env-file .env.miner -f docker-compose.miner.yaml down",
         "docker_compose_up": "docker compose --env-file .env.miner -f docker-compose.miner.yaml up --build -d miner-centralised",
     },
