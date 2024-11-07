@@ -103,11 +103,11 @@ class Validator:
         self.scores: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
-        self.load_state()
-
         # manually always register and always sync metagraph when application starts
         self.check_registered()
         self.executor = ThreadPoolExecutor(max_workers=2)
+
+        self.load_state()
 
         init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
 
@@ -451,6 +451,9 @@ class Validator:
                     if self._should_exit:
                         logger.debug("Validator should stop...")
                         break
+
+                    # Clear the dendrite synapse history to avoid memory leak.
+                    self.dendrite.synapse_history = []
 
                     # Sync metagraph and potentially set weights.
                     await self.sync()
