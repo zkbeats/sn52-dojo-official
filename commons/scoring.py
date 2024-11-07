@@ -942,5 +942,63 @@ def _test_ground_truth_score_v1():
     plt.show()
 
 
+def _test_reward_cubic():
+    miner_outputs = np.array(
+        [
+            [0.1, 0.2, 0.3, 0.4],
+            [0.5, 0.6, 0.7, 0.8],
+            [0.9, 0.1, 0.2, 0.3],
+            [0.4, 0.5, 0.6, 0.7],
+            [0.8, 0.9, 0.1, 0.2],
+            [0.3, 0.4, 0.5, 0.6],
+            [0.7, 0.8, 0.9, 0.1],
+            [0.2, 0.3, 0.4, 0.5],
+            [0.6, 0.7, 0.8, 0.9],
+            [np.nan, np.nan, np.nan, np.nan],
+            [0.15, 0.25, 0.35, 0.45],
+            [0.55, 0.65, 0.75, 0.85],
+            [0.95, 0.05, 0.15, 0.25],
+            [0.45, 0.55, 0.65, 0.75],
+            [0.85, 0.95, 0.05, 0.15],
+            [0.35, 0.45, 0.55, 0.65],
+            [0.75, 0.85, 0.95, 0.05],
+            [0.25, 0.35, 0.45, 0.55],
+            [0.65, 0.75, 0.85, 0.95],
+            [0.05, 0.15, 0.25, 0.35],
+            [1.0, 0.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0, 0.0],
+            [0.99, 0.01, 0.01, 0.99],
+            [0.01, 0.99, 0.99, 0.01],
+            [0.5, 0.5, 0.5, 0.5],
+            [0.25, 0.75, 0.75, 0.25],
+            [0.75, 0.25, 0.25, 0.75],
+            [0.1, 0.9, 0.9, 0.1],
+            [0.9, 0.1, 0.1, 0.9],
+            [0.0, 0.0, 0.0, 0.0],
+        ]
+    )
+    ground_truth = np.array([0, 0.33333334, 0.6666667, 1])
+    scaling = 0.006
+    translation = 7
+    offset = 2
+
+    expected_shape = (30,)
+    result = _reward_cubic(miner_outputs, ground_truth, scaling, translation, offset)
+
+    assert isinstance(result, np.ndarray), "Result should be a numpy array"
+    assert (
+        result.shape == expected_shape
+    ), f"Expected shape {expected_shape}, but got {result.shape}"
+    assert np.all(result >= 0) and np.all(
+        result <= 1
+    ), "All values should be in the range [0, 1]"
+
+    # Visualize the result using _terminal_plot
+    _terminal_plot("Cubic Reward Test Result", result, sort=True)
+
+    print("test_reward_cubic passed.")
+
+
 if __name__ == "__main__":
-    _test_ground_truth_score_v1()
+    # _test_ground_truth_score_v1()
+    _test_reward_cubic()
