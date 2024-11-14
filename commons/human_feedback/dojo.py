@@ -70,7 +70,7 @@ class DojoAPI:
                 return task_results
             except Exception as e:
                 if attempt < max_retries - 1:
-                    delay = base_delay * 2**attempt
+                    delay = base_delay * 2**attempt + random.uniform(0, 1)
                     logger.warning(
                         f"Error occurred while getting task results for task_id {task_id}: {e}. "
                         f"Retrying in {delay:.2f} seconds..."
