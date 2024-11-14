@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 from typing import Dict, List
 
 import httpx
@@ -57,7 +58,7 @@ class DojoAPI:
         # if is_completed is False:
         #     return
 
-        max_retries = 3
+        max_retries = 5
         base_delay = 1
 
         for attempt in range(max_retries):
@@ -184,7 +185,7 @@ class DojoAPI:
                 return task_ids
             except Exception as e:
                 if attempt < max_retries - 1:
-                    delay = base_delay * 2**attempt
+                    delay = base_delay * 2**attempt + random.uniform(0, 1)
                     logger.warning(
                         f"Error occurred: {e}. Retrying in {delay:.2f} seconds..."
                     )
