@@ -108,6 +108,10 @@ class Miner(BaseMinerNeuron):
             assert len(task_ids) == 1
             synapse.dojo_task_id = task_ids[0]
 
+            # Clear completion field in completion_responses to optimize network traffic
+            for completion_response in synapse.completion_responses:
+                completion_response.completion = None
+
         except Exception:
             traceback.print_exc()
             logger.error(
