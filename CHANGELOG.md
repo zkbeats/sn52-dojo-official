@@ -1,3 +1,12 @@
+## [1.4.2](https://github.com/tensorplex-labs/dojo/compare/v1.4.1...v1.4.2) (2024-11-22)
+
+### Performance Improvements
+
+* add retries for dojo api calls ([461214a](https://github.com/tensorplex-labs/dojo/commit/461214aef4b51f42574d920effeaa7cbb58f5a92))
+* extend delay ([97a9b04](https://github.com/tensorplex-labs/dojo/commit/97a9b0417106c4e3cfc11501c9408f15574daf23))
+* extend delay ([69e1974](https://github.com/tensorplex-labs/dojo/commit/69e19742f23fd1a2ac81f197f4e2f07fe9018049))
+* removed unused completions in miner's response to optimize network traffic ([e76ce98](https://github.com/tensorplex-labs/dojo/commit/e76ce98dd2c6e7ef3f52b70225cd0f0e07abf996))
+
 ## [1.4.1](https://github.com/tensorplex-labs/dojo/compare/v1.4.0...v1.4.1) (2024-11-07)
 
 ### Bug Fixes
