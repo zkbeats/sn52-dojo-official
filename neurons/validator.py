@@ -34,6 +34,7 @@ from commons.exceptions import (
 from commons.obfuscation.obfuscation_utils import obfuscate_html_and_js
 from commons.objects import ObjectManager
 from commons.orm import ORM
+from commons.score_storage import ScoreStorage
 from commons.scoring import Scoring
 from commons.utils import (
     _terminal_plot,
@@ -103,10 +104,17 @@ class Validator:
         self.scores: torch.Tensor = torch.zeros(
             len(self.metagraph.hotkeys), dtype=torch.float32
         )
-        # manually always register and always sync metagraph when application starts
         self.check_registered()
-        self.executor = ThreadPoolExecutor(max_workers=2)
 
+        # Run score migration before loading state
+        migration_success = self.loop.run_until_complete(ScoreStorage.migrate_from_db())
+        if not migration_success:
+            logger.error(
+                "Score migration failed - cannot continue without valid scores"
+            )
+            raise RuntimeError("Score migration failed - validator cannot start")
+
+        self.executor = ThreadPoolExecutor(max_workers=2)
         self.load_state()
 
         init_wandb(config=self.config, my_uid=self.uid, wallet=self.wallet)
@@ -713,7 +721,8 @@ class Validator:
                 logger.warning("Scores are all zeros, but saving anyway!")
                 # raise EmptyScores("Skipping save as scores are all empty")
 
-            await ORM.create_or_update_validator_score(self.scores)
+            # await ORM.create_or_update_validator_score(self.scores)
+            await ScoreStorage.save(self.scores)
             logger.success(f"📦 Saved validator state with scores: {self.scores}")
         except EmptyScores as e:
             logger.debug(f"No need to to save validator state: {e}")
@@ -723,7 +732,7 @@ class Validator:
     async def _load_state(self):
         try:
             await connect_db()
-            scores = await ORM.get_validator_score()
+            scores = await ScoreStorage.load()
 
             if scores is None:
                 num_processed_tasks = await ORM.get_num_processed_tasks()
