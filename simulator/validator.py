@@ -1,82 +1,85 @@
-import asyncio
 import traceback
 from typing import List
-
 import aiohttp
-import bittensor as bt
-from bittensor.btlogging import logging as logger
-from tenacity import RetryError
-
 import dojo
 from commons.dataset.synthetic import SyntheticAPI
 from commons.orm import ORM
 from commons.utils import get_epoch_time, get_new_uuid, set_expire_time, ttl_get_block
-from dojo.protocol import (
-    DendriteQueryResponse,
-    FeedbackRequest,
-    MultiScoreCriteria,
-    TaskType,
-)
+from dojo.protocol import FeedbackRequest, TaskType, MultiScoreCriteria, DendriteQueryResponse
 from neurons.validator import Validator
+from bittensor.btlogging import logging as logger
+from tenacity import RetryError
+import bittensor as bt
+import asyncio
 
 
 class ValidatorSim(Validator):
     def __init__(self):
-        super().__init__()
-        logger.info("Starting Validator Simulator")
         self._last_block = None
         self._block_check_attempts = 0
         self.MAX_BLOCK_CHECK_ATTEMPTS = 3
+        self._connection_lock = asyncio.Lock()
+
+        super().__init__()
+        logger.info("Starting Validator Simulator")
 
     async def _try_reconnect_subtensor(self):
-        """Attempt to reconnect to the subtensor network"""
+        self._block_check_attempts += 1
+        if self._block_check_attempts >= self.MAX_BLOCK_CHECK_ATTEMPTS:
+            logger.error(f"Failed to reconnect after {self.MAX_BLOCK_CHECK_ATTEMPTS} attempts")
+            return False
+
         try:
-            logger.info("Attempting to reconnect to subtensor...")
+            logger.info(
+                f"Attempting to reconnect to subtensor (attempt {self._block_check_attempts}/{self.MAX_BLOCK_CHECK_ATTEMPTS})...")
+            if hasattr(self.subtensor.substrate, 'websocket'):
+                self.subtensor.substrate.websocket.close()
+
             self.subtensor = bt.subtensor(self.subtensor.config)
-            self._block_check_attempts = 0
+            await asyncio.sleep(1)
             return True
         except Exception as e:
             logger.error(f"Failed to reconnect to subtensor: {e}")
-            return False
+            return await self._try_reconnect_subtensor()
+
+    async def _ensure_subtensor_connection(self):
+        async with self._connection_lock:
+            try:
+                self.subtensor.get_current_block()
+                self._block_check_attempts = 0
+                return True
+            except (BrokenPipeError, ConnectionError):
+                logger.warning("Connection lost, attempting immediate reconnection")
+                return await self._try_reconnect_subtensor()
+            except Exception as e:
+                logger.error(f"Unexpected error checking connection: {e}")
+                return False
 
     @property
     def block(self):
         try:
+            if not asyncio.get_event_loop().run_until_complete(self._ensure_subtensor_connection()):
+                logger.warning("Subtensor connection failed - returning last known block")
+                return self._last_block if self._last_block is not None else 0
+
             self._last_block = ttl_get_block(self.subtensor)
             self._block_check_attempts = 0
             return self._last_block
-        except BrokenPipeError:
-            self._block_check_attempts += 1
-            if self._block_check_attempts >= self.MAX_BLOCK_CHECK_ATTEMPTS:
-                logger.error(
-                    "Multiple failed attempts to get block number, attempting reconnection"
-                )
-                if asyncio.get_event_loop().run_until_complete(
-                    self._try_reconnect_subtensor()
-                ):
-                    return self.block
-
-            return self._last_block if self._last_block is not None else 0
         except Exception as e:
             logger.error(f"Error getting block number: {e}")
             return self._last_block if self._last_block is not None else 0
 
-    def check_registered(self):
-        new_subtensor = bt.subtensor(self.subtensor.config)
-        if not new_subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
-            hotkey_ss58=self.wallet.hotkey.ss58_address,
-        ):
-            logger.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
-                f" Please register the hotkey using `btcli s register` before trying again"
-            )
-            exit()
+    async def sync(self):
+        has_connection = await self._ensure_subtensor_connection()
+        if not has_connection:
+            logger.warning("Subtensor connection failed - continuing with partial sync")
+
+        await super().sync()
 
     async def send_request(
-        self,
-        synapse: FeedbackRequest | None = None,
-        external_user: bool = False,
+            self,
+            synapse: FeedbackRequest | None = None,
+            external_user: bool = False,
     ):
         start = get_epoch_time()
         # typically the request may come from an external source however,
@@ -93,7 +96,7 @@ class ValidatorSim(Validator):
             self.metagraph.axons[uid]
             for uid in sel_miner_uids
             if self.metagraph.axons[uid].hotkey.casefold()
-            != self.wallet.hotkey.ss58_address.casefold()
+               != self.wallet.hotkey.ss58_address.casefold()
         ]
         if not len(axons):
             logger.warning("🤷 No axons to query ... skipping")
@@ -139,7 +142,7 @@ class ValidatorSim(Validator):
                 prompt=data.prompt,
                 completion_responses=data.responses,
                 expire_at=expire_at,
-                ground_truth=data.ground_truth,  # Added ground truth!!!!!
+                ground_truth=data.ground_truth  # Added ground truth!!!!!
             )
         elif external_user:
             obfuscated_model_to_model = self.obfuscate_model_names(
@@ -221,24 +224,24 @@ class ValidatorSim(Validator):
 
     @staticmethod
     async def _send_shuffled_requests(
-        dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: FeedbackRequest
+            dendrite: bt.dendrite, axons: List[bt.AxonInfo], synapse: FeedbackRequest
     ) -> list[FeedbackRequest]:
         """Send the same request to all miners without shuffling the order.
-        WARNING: This should only be used for testing/debugging as it could allow miners to game the system.
+         WARNING: This should only be used for testing/debugging as it could allow miners to game the system.
 
-        Args:
-            dendrite (bt.dendrite): Communication channel to send requests
-            axons (List[bt.AxonInfo]): List of miner endpoints
-            synapse (FeedbackRequest): The feedback request to send
+         Args:
+             dendrite (bt.dendrite): Communication channel to send requests
+             axons (List[bt.AxonInfo]): List of miner endpoints
+             synapse (FeedbackRequest): The feedback request to send
 
-        Returns:
-            list[FeedbackRequest]: List of miner responses
-        """
+         Returns:
+             list[FeedbackRequest]: List of miner responses
+         """
         all_responses = []
         batch_size = 10
 
         for i in range(0, len(axons), batch_size):
-            batch_axons = axons[i : i + batch_size]
+            batch_axons = axons[i: i + batch_size]
             tasks = []
 
             for axon in batch_axons:
@@ -247,7 +250,7 @@ class ValidatorSim(Validator):
                         axons=[axon],
                         synapse=synapse,
                         deserialize=False,
-                        timeout=12,
+                        timeout=60,
                     )
                 )
 
