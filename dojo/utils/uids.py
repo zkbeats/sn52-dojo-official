@@ -29,7 +29,6 @@ def is_miner(metagraph: bt.metagraph, uid: int) -> bool:
     stakes = metagraph.S.tolist()
     from dojo import VALIDATOR_MIN_STAKE
 
-    print(f"Validator min stake {VALIDATOR_MIN_STAKE}")
     return stakes[uid] < VALIDATOR_MIN_STAKE
 
 

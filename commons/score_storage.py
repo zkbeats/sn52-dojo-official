@@ -12,7 +12,7 @@ class ScoreStorage:
     """Handles persistence of validator scores"""
 
     SCORES_DIR = Path("scores")
-    SCORES_FILE = SCORES_DIR / "validator_scores.pt"
+    SCORES_FILE = SCORES_DIR / "miner_scores.pt"
 
     @classmethod
     async def migrate_from_db(cls) -> bool:

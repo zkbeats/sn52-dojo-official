@@ -46,7 +46,6 @@ from commons.utils import (
     set_expire_time,
     ttl_get_block,
 )
-from database.client import connect_db
 from dojo import __spec_version__
 from dojo.protocol import (
     CompletionResponses,
@@ -731,7 +730,6 @@ class Validator:
 
     async def _load_state(self):
         try:
-            await connect_db()
             scores = await ScoreStorage.load()
 
             if scores is None:
