@@ -1,20 +1,16 @@
-import os
-import redis
-import traceback
-import asyncio
-import random
 import json
+import os
+import random
+import traceback
 from datetime import datetime, timezone
-from dojo.utils.config import get_config
+
+import redis
 from bittensor.btlogging import logging as logger
-from neurons.miner import Miner
-from dojo.protocol import (
-    FeedbackRequest,
-    TaskResultRequest,
-    TaskResult,
-    Result
-)
+
 from commons.utils import get_new_uuid
+from dojo.protocol import FeedbackRequest, Result, TaskResult, TaskResultRequest
+from dojo.utils.config import get_config
+from neurons.miner import Miner
 
 
 class MinerSim(Miner):
@@ -25,10 +21,7 @@ class MinerSim(Miner):
             host = os.getenv("REDIS_HOST", "localhost")
             port = int(os.getenv("REDIS_PORT", 6379))
             self.redis_client = redis.Redis(
-                host=host,
-                port=port,
-                db=0,
-                decode_responses=True
+                host=host, port=port, db=0, decode_responses=True
             )
             logger.info("Redis connection established")
 
@@ -45,12 +38,14 @@ class MinerSim(Miner):
     def _configure_simulation(self):
         """Configure simulation parameters with environment variables or defaults."""
         self.response_behaviors = {
-            'normal': float(os.getenv("SIM_NORMAL_RESP_PROB", 0.8)),
-            'no_response': float(os.getenv("SIM_NO_RESP_PROB", 0.1)),
-            'timeout': float(os.getenv("SIM_TIMEOUT_PROB", 0.1))
+            "normal": float(os.getenv("SIM_NORMAL_RESP_PROB", 0.8)),
+            "no_response": float(os.getenv("SIM_NO_RESP_PROB", 0.1)),
+            "timeout": float(os.getenv("SIM_TIMEOUT_PROB", 0.1)),
         }
 
-    async def forward_feedback_request(self, synapse: FeedbackRequest) -> FeedbackRequest:
+    async def forward_feedback_request(
+        self, synapse: FeedbackRequest
+    ) -> FeedbackRequest:
         try:
             # Validate that synapse, dendrite, dendrite.hotkey, and response are not None
             if not synapse or not synapse.dendrite or not synapse.dendrite.hotkey:
@@ -72,7 +67,7 @@ class MinerSim(Miner):
             self.redis_client.set(
                 redis_key,
                 new_synapse.model_dump_json(),
-                ex=86400  # expire after 24 hours
+                ex=86400,  # expire after 24 hours
             )
             logger.info(f"Stored feedback request {synapse.request_id}")
 
@@ -84,7 +79,9 @@ class MinerSim(Miner):
             traceback.print_exc()
             return synapse
 
-    async def forward_task_result_request(self, synapse: TaskResultRequest) -> TaskResultRequest | None:
+    async def forward_task_result_request(
+        self, synapse: TaskResultRequest
+    ) -> TaskResultRequest | None:
         try:
             logger.info(f"Received TaskResultRequest for task id: {synapse.task_id}")
             if not synapse or not synapse.task_id:
@@ -116,17 +113,17 @@ class MinerSim(Miner):
             for criteria_type in feedback_request.criteria_types:
                 result = Result(
                     type=criteria_type.type,
-                    value=self._generate_scores(feedback_request.ground_truth)
+                    value=self._generate_scores(feedback_request.ground_truth),
                 )
 
                 task_result = TaskResult(
                     id=get_new_uuid(),
-                    status='COMPLETED',
+                    status="COMPLETED",
                     created_at=current_time,
                     updated_at=current_time,
                     result_data=[result],
                     worker_id=get_new_uuid(),
-                    task_id=synapse.task_id
+                    task_id=synapse.task_id,
                 )
                 task_results.append(task_result)
 
@@ -147,7 +144,7 @@ class MinerSim(Miner):
         """Determine the response behavior based on configured probabilities."""
         return random.choices(
             list(self.response_behaviors.keys()),
-            weights=list(self.response_behaviors.values())
+            weights=list(self.response_behaviors.values()),
         )[0]
 
     def _generate_scores(self, ground_truth: dict) -> dict:
