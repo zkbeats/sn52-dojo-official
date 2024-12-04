@@ -1,20 +1,17 @@
-import os
-import redis
-import traceback
 import asyncio
-import random
 import json
+import os
+import random
+import traceback
 from datetime import datetime, timezone
-from dojo.utils.config import get_config
+
+import redis
 from bittensor.btlogging import logging as logger
-from neurons.miner import Miner
-from dojo.protocol import (
-    FeedbackRequest,
-    TaskResultRequest,
-    TaskResult,
-    Result
-)
+
 from commons.utils import get_new_uuid
+from dojo.protocol import FeedbackRequest, Result, TaskResult, TaskResultRequest
+from dojo.utils.config import get_config
+from neurons.miner import Miner
 
 
 class MinerSim(Miner):
