@@ -11,10 +11,12 @@ class ObjectManager:
     def get_miner(cls):
         if get_config().simulation:
             from simulator.miner import MinerSim
+
             if cls._miner is None:
                 cls._miner = MinerSim()
         else:
             from neurons.miner import Miner
+
             if cls._miner is None:
                 cls._miner = Miner()
         return cls._miner
@@ -23,10 +25,12 @@ class ObjectManager:
     def get_validator(cls):
         if get_config().simulation:
             from simulator.validator import ValidatorSim
+
             if cls._validator is None:
                 cls._validator = ValidatorSim()
         else:
             from neurons.validator import Validator
+
             if cls._validator is None:
                 cls._validator = Validator()
         return cls._validator
