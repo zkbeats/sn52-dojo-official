@@ -942,14 +942,10 @@ class Validator:
                 validator_hotkeys: List[str] = self._get_validator_hotkeys()
 
                 # Grab tasks that were expired TASK_DEADLINE duration ago
-                expire_from = (
-                    datetime_as_utc(datetime.now(timezone.utc))
-                    - timedelta(seconds=dojo.TASK_DEADLINE)
-                    - timedelta(hours=2)
+                expire_from = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
+                    hours=2
                 )
-                expire_to = datetime_as_utc(datetime.now(timezone.utc)) - timedelta(
-                    seconds=dojo.TASK_DEADLINE
-                )
+                expire_to = datetime_as_utc(datetime.now(timezone.utc))
                 logger.debug(
                     f"Updating with expire_from: {expire_from} and expire_to: {expire_to}"
                 )
