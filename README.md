@@ -48,6 +48,7 @@
     - [Option 2: Decentralised Method](#option-2-decentralised-method)
     - [Setup Subscription Key for Labellers on UI to connect to Dojo Subnet for scoring](#setup-subscription-key-for-labellers-on-ui-to-connect-to-dojo-subnet-for-scoring)
   - [Validating](#validating)
+  - [Data Collection](#data-collection)
 - [Auto-updater](#auto-updater)
 - [Dojo CLI](#dojo-cli)
 - [For Dojo developerss](#for-dojo-developerss)
@@ -417,6 +418,7 @@ cp .env.validator.example .env.validator
 
 WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
+DATASET_SERVICE_BASE_URL=https://dojo-validator-api.tensorplex.ai
 
 # head to https://wandb.ai/authorize to get your API key
 WANDB_API_KEY="<wandb_key>"
@@ -448,6 +450,15 @@ make validator
 ```
 
 To start with autoupdate for validators (**strongly recommended**), see the [Auto-updater](#auto-updater) section.
+
+## Data Collection
+
+To export all data that has been collected from the validator, ensure that you have the environment variables setup properly as in [validator-setup](#validating), then run the following:
+
+```bash
+make validator-pull
+make extract-dataset
+```
 
 # Auto-updater
 
