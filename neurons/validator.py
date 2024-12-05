@@ -129,7 +129,7 @@ class Validator:
             )
 
         await self.dendrite.forward(
-            axons=axons, synapse=synapse, deserialize=False, timeout=12
+            axons=axons, synapse=synapse, deserialize=False, timeout=30
         )
 
     def obfuscate_model_names(
@@ -161,7 +161,7 @@ class Validator:
                 ]
 
                 responses: List[Heartbeat] = await self.dendrite.forward(  # type: ignore
-                    axons=axons, synapse=Heartbeat(), deserialize=False, timeout=12
+                    axons=axons, synapse=Heartbeat(), deserialize=False, timeout=30
                 )
                 active_hotkeys = [r.axon.hotkey for r in responses if r.ack and r.axon]
                 active_uids = [
@@ -232,7 +232,7 @@ class Validator:
                         axons=[axon],
                         synapse=shuffled_synapse,
                         deserialize=False,
-                        timeout=12,
+                        timeout=30,
                     )
                 )
 
@@ -806,7 +806,10 @@ class Validator:
 
             # Send the request via Dendrite and get the response
             response: list[TaskResultRequest] = await self.dendrite.forward(  # type: ignore
-                axons=[miner_axon], synapse=task_synapse, deserialize=False
+                axons=[miner_axon],
+                synapse=task_synapse,
+                deserialize=False,
+                timeout=30,
             )
 
             if response and response[0]:
