@@ -417,6 +417,12 @@ class Scoring:
         ground_truth_arr = minmax_scale(
             np.array([rank for _, rank in cid_with_rank_sorted])
         ).numpy()
+
+        # reverse order here, because the lowest rank is the best
+        # e.g. ranks: ('cid1', 0), ('cid2', 1), ('cid3', 2), ('cid4', 3)
+        # after minmax scale: [0, 0.33, 0.667, 1]
+        # but we want the reverse, so: [1, 0.667, 0.33, 0], since cid1 is the best
+        ground_truth_arr = ground_truth_arr[::-1]
         logger.debug(f"scoring: ground truth\n{ground_truth_arr}")
 
         logger.info(f"scoring: Miner outputs\n{miner_outputs}")
