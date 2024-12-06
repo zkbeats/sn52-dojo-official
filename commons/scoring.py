@@ -641,8 +641,8 @@ class Scoring:
                 ground_truth = gt_score[i]
 
                 # NOTE: just use ground truth for now
-                hotkey_to_final_score[r.axon.hotkey] = ground_truth / len(
-                    criteria_types
+                hotkey_to_final_score[r.axon.hotkey] = float(
+                    ground_truth / len(criteria_types)
                 )
 
             criteria_to_miner_scores[criteria.type] = Score(
