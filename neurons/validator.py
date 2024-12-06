@@ -1307,7 +1307,7 @@ class Validator:
         )
 
         score_data = {
-            "scores_by_hotkey": hotkey_to_score,
+            "scores_by_hotkey": [hotkey_to_score],
             "mean": {
                 "consensus": mean_weighted_consensus_scores,
                 "ground_truth": mean_weighted_gt_scores,
