@@ -1,3 +1,29 @@
+## [1.5.0](https://github.com/tensorplex-labs/dojo/compare/v1.4.2...v1.5.0) (2024-12-10)
+
+### Features
+
+* add dataset collection endpoint, script to scrape validator db ([#78](https://github.com/tensorplex-labs/dojo/issues/78)) ([1b4ef9e](https://github.com/tensorplex-labs/dojo/commit/1b4ef9e33966beaa94bffae9ba0683711ca4dbf4))
+* added script to inspect score ([f9dd7e4](https://github.com/tensorplex-labs/dojo/commit/f9dd7e4707bedd0f03d66cd26b83bac4934138c5))
+* simulator ([ed110e3](https://github.com/tensorplex-labs/dojo/commit/ed110e3c12f2ad35d99b440f371bd9fa0fc8517a))
+
+### Bug Fixes
+
+* add VALIDATOR_MIN_STAKE in environment ([84774a4](https://github.com/tensorplex-labs/dojo/commit/84774a42afeceb932c823440895f1e3dcc5a8c70))
+* fixed from PR feedback ([23d085a](https://github.com/tensorplex-labs/dojo/commit/23d085a6db8535068254463a5c4e5efd57da567d))
+* fixed linter issue, and commitizen ([553ad66](https://github.com/tensorplex-labs/dojo/commit/553ad66a305c03d4527f56b5483ced2318633656))
+* ground truth arr ordering ([75f008a](https://github.com/tensorplex-labs/dojo/commit/75f008aff492ccc5aa137485ee273a285280016b))
+* minersim task scoring, validatorsim  subtensor retry mechanism and dendrite forward timeout ([956f5cf](https://github.com/tensorplex-labs/dojo/commit/956f5cfd4acaa15a6f8b06c47f6d4afe95db3163))
+* negative stride error from scoring ([#86](https://github.com/tensorplex-labs/dojo/issues/86)) ([50c86c6](https://github.com/tensorplex-labs/dojo/commit/50c86c68b020404f9d3422288f67083bf7ffbd40))
+* scoring interval ([94e050b](https://github.com/tensorplex-labs/dojo/commit/94e050bf049c473a967e78cb61dee45087ae145e))
+* use correct dimension when calculating mean scores ([2f30931](https://github.com/tensorplex-labs/dojo/commit/2f30931f3fdc7ae65bc86c44f69c284a78dd14ed))
+* wandb missing final scores ([#88](https://github.com/tensorplex-labs/dojo/issues/88)) ([0d8b93d](https://github.com/tensorplex-labs/dojo/commit/0d8b93deaf41d31b662a0e1525714c5bc3ff7fef))
+* wandb now storing final scores correctly ([#87](https://github.com/tensorplex-labs/dojo/issues/87)) ([affcd3e](https://github.com/tensorplex-labs/dojo/commit/affcd3e1d54b8d90fb5bb3e9733c66b53f03b0f1))
+
+### Performance Improvements
+
+* add subtensor retries ([#90](https://github.com/tensorplex-labs/dojo/issues/90)) ([ca07d46](https://github.com/tensorplex-labs/dojo/commit/ca07d466536f286ac8e8b82e19c733095c670de1))
+* increase timeout ([23669b7](https://github.com/tensorplex-labs/dojo/commit/23669b7245ba85663fbf2674a86d691603487f89))
+
 ## [1.4.2](https://github.com/tensorplex-labs/dojo/compare/v1.4.1...v1.4.2) (2024-11-22)
 
 ### Performance Improvements
