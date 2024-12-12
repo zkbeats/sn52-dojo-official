@@ -1,3 +1,9 @@
+## [1.5.1](https://github.com/tensorplex-labs/dojo/compare/v1.5.0...v1.5.1) (2024-12-12)
+
+### Bug Fixes
+
+* hotfix for db connection issue ([#95](https://github.com/tensorplex-labs/dojo/issues/95)) ([5251701](https://github.com/tensorplex-labs/dojo/commit/52517013d283fa8bd8b73d37ce4b821aa6949d49))
+
 ## [1.5.0](https://github.com/tensorplex-labs/dojo/compare/v1.4.2...v1.5.0) (2024-12-10)
 
 ### Features
