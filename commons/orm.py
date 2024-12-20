@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator, List
 
 import torch
-from bittensor.btlogging import logging as logger
+from bittensor.utils.btlogging import logging as logger
 
 from commons.exceptions import (
     ExpiredFromMoreThanExpireTo,

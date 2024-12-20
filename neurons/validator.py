@@ -16,7 +16,7 @@ import bittensor as bt
 import numpy as np
 import torch
 import wandb
-from bittensor.btlogging import logging as logger
+from bittensor.utils.btlogging import logging as logger
 from bittensor.utils.weight_utils import process_weights_for_netuid
 from fastapi.encoders import jsonable_encoder
 from tenacity import RetryError
@@ -72,7 +72,7 @@ class Validator:
     _active_miner_uids: set[int] = set()
 
     subtensor: bt.subtensor
-    wallet: bt.wallet
+    wallet: bt.wallet  # type: ignore
     metagraph: bt.metagraph
     spec_version: int = __spec_version__
 
