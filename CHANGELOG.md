@@ -1,3 +1,9 @@
+## [1.6.0](https://github.com/tensorplex-labs/dojo/compare/v1.5.1...v1.6.0) (2024-12-20)
+
+### Features
+
+* enable commit reveal V3 ([#100](https://github.com/tensorplex-labs/dojo/issues/100)) ([42f06f7](https://github.com/tensorplex-labs/dojo/commit/42f06f7dfd9c88cf6faa2a71043af064ebe7fe3c))
+
 ## [1.5.1](https://github.com/tensorplex-labs/dojo/compare/v1.5.0...v1.5.1) (2024-12-12)
 
 ### Bug Fixes
