@@ -30,6 +30,7 @@ ARG TARGETPLATFORM
 RUN echo "Building for TARGETPLATFORM: $TARGETPLATFORM"
 
 RUN git config --global --add safe.directory /app
+RUN git config --unset 'http.https://github.com/.extraheader'
 
 # jank because pytorch has different versions for cpu for darwin VS linux, see pyproject.toml for specifics
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
