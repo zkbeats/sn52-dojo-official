@@ -97,3 +97,15 @@ if [ "$1" = 'dataset-service' ]; then
     --netuid 52 \
     --subtensor.network finney
 fi
+
+if [ "$1" = 'migration' ]; then
+    echo "Environment variables:"
+    echo "DATABASE_URL: ${DATABASE_URL}"
+
+    echo "Running Prisma setup..."
+    prisma generate
+    prisma migrate deploy
+
+    echo "Starting migration..."
+    python migration.py --subtensor.network finney
+fi
