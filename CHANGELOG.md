@@ -1,3 +1,15 @@
+## [1.6.1](https://github.com/tensorplex-labs/dojo/compare/v1.6.0...v1.6.1) (2025-01-23)
+
+### Bug Fixes
+
+* fix typo in README.md ([#89](https://github.com/tensorplex-labs/dojo/issues/89)) ([eb7c534](https://github.com/tensorplex-labs/dojo/commit/eb7c534802d67b13b3f11d3df81d8789fe9a6200))
+* remove old fastapi route ([ffd9a18](https://github.com/tensorplex-labs/dojo/commit/ffd9a184cb7d4e7c649fa2ca1f525f505cce1d20))
+* unset github header in git config ([#105](https://github.com/tensorplex-labs/dojo/issues/105)) ([2d2dc0a](https://github.com/tensorplex-labs/dojo/commit/2d2dc0a76a697ff504ac950d77d64a6782a519a0))
+
+### Performance Improvements
+
+* optimized migration script on miner-response ([#116](https://github.com/tensorplex-labs/dojo/issues/116)) ([76b1759](https://github.com/tensorplex-labs/dojo/commit/76b17599387e5a0c07003e0d3abbecc6926ea516))
+
 ## [1.6.0](https://github.com/tensorplex-labs/dojo/compare/v1.5.1...v1.6.0) (2024-12-20)
 
 ### Features
