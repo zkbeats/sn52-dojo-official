@@ -134,7 +134,11 @@ services:
         condition: service_healthy
       prisma-setup-vali:
         condition: service_completed_successfully
-    logging: *default-logging
+    logging:
+      driver: loki
+      options:
+        loki-url: "https://<DOJO_LOKI_URL>"
+        loki-external-labels: "validator=<VALIDATOR_HOTKEY>"
 
   dataset-service:
     container_name: dataset-service
