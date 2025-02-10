@@ -438,6 +438,10 @@ DB_NAME=db
 DB_USERNAME=#set a non-default username
 DB_PASSWORD=#generate and set a secure password
 DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+
+# dojo loki
+DOJO_LOKI_URL=# get from TPLX TEAM
+VALIDATOR_HOTKEY=# your running validator hotkey address
 ```
 
 > **Note:** To ensure your validator runs smoothly, enable the auto top-up feature for Openrouter, this ensures that your validator will not fail to call synthetic API during task generation. The estimate cost of generating a task is approximately $0.20 USD.

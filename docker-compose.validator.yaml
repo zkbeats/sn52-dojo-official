@@ -137,8 +137,9 @@ services:
     logging:
       driver: loki
       options:
-        loki-url: "https://<DOJO_LOKI_URL>"
-        loki-external-labels: "validator=<VALIDATOR_HOTKEY>"
+        mode: non-blocking
+        loki-url: "https://${DOJO_LOKI_URL}"
+        loki-external-labels: "validator=${VALIDATOR_HOTKEY}"
 
   dataset-service:
     container_name: dataset-service
