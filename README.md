@@ -203,6 +203,9 @@ For Docker Compose installation, see https://docs.docker.com/compose/install/lin
 # verify both docker and docker compose are installed
 docker --version
 docker compose version
+
+# for validator please install docker loki plugin
+docker plugin install grafana/loki-docker-driver:3.3.2-amd64 --alias loki --grant-all-permissions
 ```
 
 4. Start local subtensor node (**optional**)
