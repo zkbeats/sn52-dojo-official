@@ -203,6 +203,9 @@ For Docker Compose installation, see https://docs.docker.com/compose/install/lin
 # verify both docker and docker compose are installed
 docker --version
 docker compose version
+
+# for validator please install docker loki plugin
+docker plugin install grafana/loki-docker-driver:3.3.2-amd64 --alias loki --grant-all-permissions
 ```
 
 4. Start local subtensor node (**optional**)
@@ -438,6 +441,10 @@ DB_NAME=db
 DB_USERNAME=#set a non-default username
 DB_PASSWORD=#generate and set a secure password
 DATABASE_URL=postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}
+
+# dojo loki
+DOJO_LOKI_URL=# get from TPLX TEAM
+VALIDATOR_HOTKEY=# your running validator hotkey address
 ```
 
 > **Note:** To ensure your validator runs smoothly, enable the auto top-up feature for Openrouter, this ensures that your validator will not fail to call synthetic API during task generation. The estimate cost of generating a task is approximately $0.20 USD.
