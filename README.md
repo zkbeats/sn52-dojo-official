@@ -102,7 +102,6 @@ By creating an open platform for gathering human-generated datasets, Tensorplex 
 - docker
 - GNU make
 - openrouter api key
-- wandb api key
 
 ### System Requirements
 
@@ -423,8 +422,6 @@ WALLET_COLDKEY=# the name of the coldkey
 WALLET_HOTKEY=# the name of the hotkey
 DATASET_SERVICE_BASE_URL=https://dojo-validator-api.tensorplex.ai
 
-# head to https://wandb.ai/authorize to get your API key
-WANDB_API_KEY="<wandb_key>"
 
 # for dojo-synthetic-api
 OPENROUTER_API_KEY="sk-or-v1-<KEY>"

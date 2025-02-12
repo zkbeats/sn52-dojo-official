@@ -53,7 +53,6 @@ if [ "$1" = 'validator' ]; then
     echo "SUBTENSOR_NETWORK: ${SUBTENSOR_NETWORK}"
     echo "SUBTENSOR_ENDPOINT: ${SUBTENSOR_ENDPOINT}"
     echo "NETUID: ${NETUID}"
-    echo "WANDB_PROJECT_NAME: ${WANDB_PROJECT_NAME}"
 
     EXTRA_ARGS=""
     if [ "${SIMULATION}" = "true" ]; then
@@ -71,7 +70,6 @@ if [ "$1" = 'validator' ]; then
     --wallet.name ${WALLET_COLDKEY} \
     --wallet.hotkey ${WALLET_HOTKEY} \
     --neuron.type validator \
-    --wandb.project_name ${WANDB_PROJECT_NAME} \
     ${EXTRA_ARGS}
 fi
 
