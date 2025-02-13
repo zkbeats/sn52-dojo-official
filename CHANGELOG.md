@@ -1,3 +1,5 @@
+## [1.6.2](https://github.com/tensorplex-labs/dojo/compare/v1.6.1...v1.6.2) (2025-02-13)
+
 ## [1.6.1](https://github.com/tensorplex-labs/dojo/compare/v1.6.0...v1.6.1) (2025-01-23)
 
 ### Bug Fixes
