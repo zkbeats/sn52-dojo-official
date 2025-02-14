@@ -32,8 +32,8 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
   "aiohttp==3.10.11",
-  "bittensor @ git+https://github.com/opentensor/bittensor.git@release/8.5.1",
-  "bittensor-cli @ git+https://github.com/opentensor/btcli.git@release/8.4.2",
+  "bittensor @ git+https://github.com/opentensor/bittensor.git@release/9.0.0",
+  "bittensor-cli @ git+https://github.com/opentensor/btcli.git@release/9.0.0",
   "fastapi==0.110.1",
   "httpx==0.27.0",
   "loguru==0.7.2",
@@ -53,7 +53,8 @@ dependencies = [
   "prisma==0.15.0",
   "beautifulsoup4==4.12.3",
   "jsmin==3.0.1",
-  "plotext==5.3.2"
+  "plotext==5.3.2",
+  "websocket-client==1.8.0"
 ]
 
 [project.optional-dependencies]
@@ -173,3 +174,6 @@ py-modules = ["dojo_cli"]
 version_scheme = "only-version"
 local_scheme = "no-local-version"
 tag_regex = "^v(?P<scm_version>\\d+\\.\\d+\\.\\d+)"
+
+[tool.uv]
+prerelease = "allow"
