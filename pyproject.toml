@@ -54,13 +54,15 @@ dependencies = [
   "beautifulsoup4==4.12.3",
   "jsmin==3.0.1",
   "plotext==5.3.2",
-  "websocket-client==1.8.0"
+  "websocket-client==1.8.0",
+  "aioboto3==13.4.0",
+  "aiofiles==24.1.0",
+  "python-multipart==0.0.20"
 ]
 
 [project.optional-dependencies]
 dev = ["commitizen", "curlify2", "pytest", "ruff", "tabulate", "termcolor"]
 test = ["pytest", "nox", 'pytest-asyncio==0.25.1']
-dataset = ["aioboto3", "aiofiles", "python-multipart"]
 
 [project.scripts]
 dojo = "dojo_cli:main"
