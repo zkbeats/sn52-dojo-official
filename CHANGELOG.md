@@ -1,3 +1,9 @@
+## [1.6.6](https://github.com/tensorplex-labs/dojo/compare/v1.6.5...v1.6.6) (2025-02-15)
+
+### Bug Fixes
+
+* validator event loop ([#130](https://github.com/tensorplex-labs/dojo/issues/130)) ([53082e7](https://github.com/tensorplex-labs/dojo/commit/53082e72f1f5ae39ec0a96ffbd07a798cb1c1c8e))
+
 ## [1.6.5](https://github.com/tensorplex-labs/dojo/compare/v1.6.4...v1.6.5) (2025-02-14)
 
 ## [1.6.4](https://github.com/tensorplex-labs/dojo/compare/v1.6.3...v1.6.4) (2025-02-14)
