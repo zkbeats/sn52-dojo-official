@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from commons.objects import ObjectManager
 from dojo import VALIDATOR_MIN_STAKE
 
-app = FastAPI(title="Dataset Upload Service")
+app = FastAPI(title="Validator API Service")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
