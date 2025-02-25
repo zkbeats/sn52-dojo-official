@@ -1,3 +1,14 @@
+## [1.7.0](https://github.com/tensorplex-labs/dojo/compare/v1.6.6...v1.7.0) (2025-02-25)
+
+### Features
+
+* docker revamp ([#119](https://github.com/tensorplex-labs/dojo/issues/119)) ([6e36f82](https://github.com/tensorplex-labs/dojo/commit/6e36f82c9a819c6fdf4cd4de3c0eaae06ac49270))
+
+### Bug Fixes
+
+* fix logging endpoint ([#133](https://github.com/tensorplex-labs/dojo/issues/133)) ([91b94fa](https://github.com/tensorplex-labs/dojo/commit/91b94fa14d5c4286d1ae808066ab06b5cf35d5f4))
+* use effective stake (root + alpha), set 5000 for effective stake ([#142](https://github.com/tensorplex-labs/dojo/issues/142)) ([9d151fc](https://github.com/tensorplex-labs/dojo/commit/9d151fcab607fb03c3b8faeb6ca7f9d5de7228a9))
+
 ## [1.6.6](https://github.com/tensorplex-labs/dojo/compare/v1.6.5...v1.6.6) (2025-02-15)
 
 ### Bug Fixes
