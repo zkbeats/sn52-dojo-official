@@ -1,3 +1,9 @@
+## [1.7.1](https://github.com/tensorplex-labs/dojo/compare/v1.7.0...v1.7.1) (2025-03-03)
+
+### Bug Fixes
+
+* removed dojo-task-id check in blacklist func ([#147](https://github.com/tensorplex-labs/dojo/issues/147)) ([9b1a28e](https://github.com/tensorplex-labs/dojo/commit/9b1a28e4edcb603978564178f1a88109b0bc64d7))
+
 ## [1.7.0](https://github.com/tensorplex-labs/dojo/compare/v1.6.6...v1.7.0) (2025-02-25)
 
 ### Features
