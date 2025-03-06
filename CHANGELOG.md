@@ -1,3 +1,9 @@
+## [1.7.2](https://github.com/tensorplex-labs/dojo/compare/v1.7.1...v1.7.2) (2025-03-06)
+
+### Bug Fixes
+
+* hotfix for miner's logs ([#149](https://github.com/tensorplex-labs/dojo/issues/149)) ([9bd225a](https://github.com/tensorplex-labs/dojo/commit/9bd225ab0fef21e8d6c25255ca5253dd25d086e3))
+
 ## [1.7.1](https://github.com/tensorplex-labs/dojo/compare/v1.7.0...v1.7.1) (2025-03-03)
 
 ### Bug Fixes
