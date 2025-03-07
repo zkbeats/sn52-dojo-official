@@ -611,10 +611,7 @@ class Validator:
                 logger.debug(f"Sending heartbeats to {len(all_miner_uids)} miners")
 
                 axons: list[bt.AxonInfo] = [
-                    self.metagraph.axons[uid]
-                    for uid in all_miner_uids
-                    if self.metagraph.axons[uid].hotkey.casefold()
-                    != self.vali_hotkey.casefold()
+                    self.metagraph.axons[uid] for uid in all_miner_uids
                 ]
 
                 # Send heartbeats in batches
@@ -905,12 +902,7 @@ class Validator:
         start = get_epoch_time()
         sel_miner_uids = await self.get_miner_uids()
 
-        axons = [
-            axon
-            for uid in sel_miner_uids
-            if (axon := self.metagraph.axons[uid]).hotkey.casefold()
-            != self.vali_hotkey.casefold()
-        ]
+        axons = [self.metagraph.axons[uid] for uid in sel_miner_uids]
 
         if not axons:
             logger.warning("🤷 No axons to query ... skipping")
