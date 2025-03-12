@@ -1,3 +1,14 @@
+## [1.8.0](https://github.com/tensorplex-labs/dojo/compare/v1.7.2...v1.8.0) (2025-03-12)
+
+### Features
+
+* allow dual mining ([#151](https://github.com/tensorplex-labs/dojo/issues/151)) ([6952e54](https://github.com/tensorplex-labs/dojo/commit/6952e543231fda12efdb3a3b946ad80806e610ab))
+* shutdown validator when syn-API is down ([#132](https://github.com/tensorplex-labs/dojo/issues/132)) ([e8d5a33](https://github.com/tensorplex-labs/dojo/commit/e8d5a330c69cd4676e3ee0df6a510c3ad2c4f8d7))
+
+### Bug Fixes
+
+* fix async issues and update score column correctly ([#143](https://github.com/tensorplex-labs/dojo/issues/143)) ([2c39e0a](https://github.com/tensorplex-labs/dojo/commit/2c39e0a370a7b72e123b81778c27b31940f07241)), closes [#153](https://github.com/tensorplex-labs/dojo/issues/153)
+
 ## [1.7.2](https://github.com/tensorplex-labs/dojo/compare/v1.7.1...v1.7.2) (2025-03-06)
 
 ### Bug Fixes
