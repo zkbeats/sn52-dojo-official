@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/tensorplex-labs/dojo/compare/v1.8.0...v1.9.0) (2025-03-20)
+
+### Features
+
+* analytics API ([#114](https://github.com/tensorplex-labs/dojo/issues/114)) ([#162](https://github.com/tensorplex-labs/dojo/issues/162)) ([619937c](https://github.com/tensorplex-labs/dojo/commit/619937cb12b6860d609824232f0ff14e610f48b6))
+
 ## [1.8.0](https://github.com/tensorplex-labs/dojo/compare/v1.7.2...v1.8.0) (2025-03-12)
 
 ### Features
